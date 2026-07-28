@@ -33,9 +33,9 @@
     CANCELLED_BY_OFFICE: 'cancelled_by_office',
   };
 
-  const CLICK_SETTLE_MS = 800; // popup/dialog open transitions
+  const CLICK_SETTLE_MS = 1200; // popup/dialog open transitions -- real network/render latency
   const HOVER_SETTLE_MS = 400; // confirmed to be enough in Phase 0 discovery
-  const CLOSE_SETTLE_MS = 400;
+  const CLOSE_SETTLE_MS = 500;
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -168,6 +168,19 @@
     return candidates.find((el) => (el.textContent || '').trim() === text) || null;
   }
 
+  function snapshotAllElements() {
+    return new Set(document.querySelectorAll('*'));
+  }
+
+  // Only the outermost new nodes -- skips a new element's children, which
+  // are also "new" but just noise for a short diagnostic text snippet.
+  function findNewTopLevelElements(before, after) {
+    const isNew = (el) => !before.has(el);
+    return Array.from(after)
+      .filter(isNew)
+      .filter((el) => !el.parentElement || !isNew(el.parentElement));
+  }
+
   // Hovers one quick-time link and reads the resulting `._ptip` tooltip node
   // that appears elsewhere on the page -- confirmed via a real Phase 0
   // capture. Removes the tooltip node afterward so repeated runs don't leave
@@ -219,26 +232,63 @@
     return !findSmallestMatch(SIGNALS.editCareLog);
   }
 
+  // Real WellSky markup: each shift's clickable label is a
+  // `.title` element (client name + time) inside the `._event` wrapper --
+  // clicking the wrapper itself was observed opening the calendar's generic
+  // "Add Unavailability" popup instead (a real capture caught this), which
+  // suggests the shift-specific click handler lives on that inner element,
+  // not the outer one.
+  function shiftClickTarget(eventEl) {
+    return eventEl.querySelector('.title') || eventEl;
+  }
+
+  function textSnippet(el, maxLength = 120) {
+    const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+  }
+
   // Returns the four time fields for one completed shift, or null if any
   // step of the click-through didn't find what it expected -- never guesses
-  // a value it isn't sure about.
+  // a value it isn't sure about. Always reports a diagnostic string
+  // explaining what actually happened, so a failure is visible and
+  // debuggable instead of just silently leaving the four fields blank.
   async function enrichCompletedShift(eventEl) {
-    eventEl.click();
+    const before = snapshotAllElements();
+    shiftClickTarget(eventEl).click();
     await sleep(CLICK_SETTLE_MS);
 
     const popup = findSmallestMatch(SIGNALS.summaryPopup);
-    const editLink = popup && findLinkByText(popup, 'Edit');
-    if (!editLink) return { times: null, closedOk: await closeDialog() };
+    if (!popup) {
+      const newEls = findNewTopLevelElements(before, snapshotAllElements());
+      const closedOk = await closeDialog();
+      const seen = newEls.length ? textSnippet(newEls[0]) : '(nothing new appeared)';
+      return { times: null, closedOk, diagnostic: `Expected summary popup didn't open. Instead: ${seen}` };
+    }
+
+    const editLink = findLinkByText(popup, 'Edit');
+    if (!editLink) {
+      const closedOk = await closeDialog();
+      return { times: null, closedOk, diagnostic: `Summary popup opened but no "Edit" link found in it.` };
+    }
 
     editLink.click();
     await sleep(CLICK_SETTLE_MS);
 
     const dialog = findSmallestMatch(SIGNALS.editCareLog);
-    if (!dialog) return { times: null, closedOk: await closeDialog() };
+    if (!dialog) {
+      const closedOk = await closeDialog();
+      return { times: null, closedOk, diagnostic: `Clicked Edit but the Edit Care Log dialog never matched.` };
+    }
 
     const times = await readCareLogTimes(dialog);
     const closedOk = await closeDialog();
-    return { times, closedOk };
+    const missing = Object.entries(times)
+      .filter(([, v]) => !v)
+      .map(([k]) => k);
+    const diagnostic = missing.length
+      ? `Dialog opened but couldn't read: ${missing.join(', ')}`
+      : null;
+    return { times, closedOk, diagnostic };
   }
 
   // ---- Run it ----
@@ -251,13 +301,17 @@
   const skippedTodayOrFuture = allRecords.length - records.length;
 
   let stoppedEarlyReason = null;
+  const enrichmentDiagnostics = [];
   for (const record of records) {
     if (record.status !== 'completed' || !record.event_id) continue;
     const eventEl = eventElsByEventId.get(record.event_id);
     if (!eventEl) continue;
 
-    const { times, closedOk } = await enrichCompletedShift(eventEl);
+    const { times, closedOk, diagnostic } = await enrichCompletedShift(eventEl);
     if (times) Object.assign(record, times);
+    if (diagnostic) {
+      enrichmentDiagnostics.push(`${record.caregiver_name}/${record.client_name} (${record.shift_date}): ${diagnostic}`);
+    }
 
     if (!closedOk) {
       // The dialog didn't close the way we expect -- stop rather than risk
@@ -283,6 +337,7 @@
     rowCount,
     skippedTodayOrFuture,
     stoppedEarlyReason,
+    enrichmentDiagnostics,
     pageUrl: window.location.href,
     scannedAt: new Date().toISOString(),
   };

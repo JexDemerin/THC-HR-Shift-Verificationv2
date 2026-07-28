@@ -166,6 +166,10 @@ async function scanSchedule() {
     if (result.stoppedEarlyReason) {
       addLogEntry(`STOPPED EARLY: ${result.stoppedEarlyReason}`);
     }
+    if (result.enrichmentDiagnostics && result.enrichmentDiagnostics.length > 0) {
+      addLogEntry(`${result.enrichmentDiagnostics.length} completed shift(s) had a read issue:`);
+      for (const line of result.enrichmentDiagnostics) addLogEntry(`  ${line}`);
+    }
 
     const { webhookUrl } = await chrome.storage.local.get('webhookUrl');
     if (!webhookUrl) {
@@ -182,8 +186,22 @@ async function scanSchedule() {
 
     const sheetResult = response && response.result;
     if (response && response.ok && sheetResult && sheetResult.ok) {
-      setStatus(parts.join(' — ') + ` — sent to sheet (${sheetResult.written} written).`);
-      addLogEntry(`Sent to Google Sheet: ${sheetResult.written} row(s) written/updated.`);
+      if (typeof sheetResult.written !== 'number') {
+        // The current apps_script/Code.gs always returns a numeric `written`
+        // -- getting anything else back means the Apps Script project is
+        // very likely still running an older pasted-in version. Re-paste
+        // the current Code.gs and create a NEW deployment (editing the
+        // script alone doesn't update an existing Web App URL).
+        setStatus(parts.join(' — ') + ' — sent to sheet, but got an unexpected response shape.');
+        addLogEntry(
+          'Sent to Google Sheet, but the response didn\'t look like the current Code.gs -- ' +
+            're-paste apps_script/Code.gs into the Apps Script editor and create a NEW deployment ' +
+            '(saving alone doesn\'t update an existing Web App URL).'
+        );
+      } else {
+        setStatus(parts.join(' — ') + ` — sent to sheet (${sheetResult.written} written).`);
+        addLogEntry(`Sent to Google Sheet: ${sheetResult.written} row(s) written/updated.`);
+      }
     } else {
       const errorMessage =
         (sheetResult && sheetResult.error) ||

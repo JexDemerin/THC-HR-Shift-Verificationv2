@@ -265,3 +265,69 @@ test('stops and reports a reason if the Edit Care Log dialog never closes', asyn
   assert.match(result.stoppedEarlyReason, /Barberi, Miku/);
   assert.match(result.stoppedEarlyReason, /stopped early/i);
 });
+
+test('clicks the .title label, not just the outer shift wrapper', async () => {
+  // Regression test for a real observation: clicking the outer ._event div
+  // opened WellSky's "Add Unavailability" popup instead of the shift's own
+  // summary -- meaning the real click handler must live on the inner .title
+  // element, not the wrapper. A listener bound ONLY to .title would never
+  // fire from a click on the wrapper (clicking a parent doesn't trigger a
+  // child's own listener), so this only passes if the wrapper click actually
+  // lands on .title.
+  const calendarHtml = buildFixture({
+    status: 'COMPLETED',
+    dataStart: '2026-07-27T09:00:00.000000',
+    dataEnd: '2026-07-27T16:00:00.000000',
+    clientName: 'Kozuka-Ssenyan, Mia',
+    caregiverName: 'Barberi, Miku',
+    eventId: 'evt-title-click',
+    id: 'shift-el',
+  });
+  const script = `
+    <script>
+      document.querySelector('#shift-el .title').addEventListener('click', function () {
+        var popup = document.createElement('div');
+        popup.innerHTML = '<h4>Care Log</h4><a>Summary</a><a>Notes</a><a id="edit-link">Edit</a><a>Copy</a>';
+        document.body.appendChild(popup);
+      });
+    </script>
+  `;
+
+  const result = await runScanScript(calendarHtml + script, { runScripts: true });
+
+  // The Edit Care Log dialog was never built in this minimal fixture, so
+  // enrichment can't finish -- what matters here is that the summary popup
+  // opened at all (proving .title, not the wrapper, was the click target).
+  assert.equal(result.enrichmentDiagnostics.length, 1);
+  assert.match(result.enrichmentDiagnostics[0], /Edit Care Log dialog never matched/);
+});
+
+test('reports a diagnostic and safely closes when the wrong popup opens', async () => {
+  // Regression test for the real "Add Unavailability" observation: some
+  // unexpected popup opens instead of the shift's summary.
+  const calendarHtml = buildFixture({
+    status: 'COMPLETED',
+    dataStart: '2026-07-27T09:00:00.000000',
+    dataEnd: '2026-07-27T16:00:00.000000',
+    clientName: 'Kozuka-Ssenyan, Mia',
+    caregiverName: 'Barberi, Miku',
+    eventId: 'evt-wrong-popup',
+    id: 'shift-el',
+  });
+  const script = `
+    <script>
+      document.getElementById('shift-el').addEventListener('click', function () {
+        var popup = document.createElement('div');
+        popup.textContent = 'Add Unavailability for this caregiver';
+        document.body.appendChild(popup);
+      });
+    </script>
+  `;
+
+  const result = await runScanScript(calendarHtml + script, { runScripts: true });
+
+  assert.equal(result.stoppedEarlyReason, null);
+  assert.equal(result.records[0].actual_time_in, null);
+  assert.equal(result.enrichmentDiagnostics.length, 1);
+  assert.match(result.enrichmentDiagnostics[0], /Add Unavailability/);
+});

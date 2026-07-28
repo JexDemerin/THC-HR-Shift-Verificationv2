@@ -21,17 +21,23 @@ What's working now:
 - Skips any shift dated today or later — only fully-elapsed days get scanned (a shift with no
   parseable date is kept as `unparsed` rather than silently dropped, since it can't be judged
   past/future either way).
-- For every **completed (green)** shift, it also clicks the shift open, clicks **Edit**, and reads
-  the four real clock times off the Edit Care Log dialog — `actual_time_in`, `scheduled_time_in`,
-  `actual_time_out`, `scheduled_time_out` — then closes the dialog (Escape, or a "Cancel" control;
-  **never Save**) before moving to the next shift. A real capture confirmed the mechanism: hovering
-  `a.actual_start` / `a.scheduled_start` / `a.actual_end` / `a.scheduled_end` makes a brand-new
-  `<div class="_ptip ...">` tooltip node appear elsewhere on the page with the plain timestamp as
-  its text (not a `title` attribute, which is what the first two attempts guessed and got stuck
-  on) — the extension simulates that hover itself, no mouse movement needed.
+- For every **completed (green)** shift, it also clicks the shift's `.title` label open (a real run
+  showed clicking the outer shift wrapper opens WellSky's generic "Add Unavailability" popup
+  instead — the shift-specific click handler lives on the inner label, not the wrapper), clicks
+  **Edit**, and reads the four real clock times off the Edit Care Log dialog —
+  `actual_time_in`, `scheduled_time_in`, `actual_time_out`, `scheduled_time_out` — then closes the
+  dialog (Escape, or a "Cancel" control; **never Save**) before moving to the next shift. A real
+  capture confirmed the mechanism: hovering `a.actual_start` / `a.scheduled_start` /
+  `a.actual_end` / `a.scheduled_end` makes a brand-new `<div class="_ptip ...">` tooltip node
+  appear elsewhere on the page with the plain timestamp as its text (not a `title` attribute,
+  which is what the first two attempts guessed and got stuck on) — the extension simulates that
+  hover itself, no mouse movement needed.
 - If the dialog doesn't visibly close the way expected after reading a shift, scanning **stops
   early** rather than continuing to click on a page that might not be in the state it expects, and
   says why in the popup's log.
+- If any shift's click-through doesn't behave as expected (wrong popup opens, no Edit link found,
+  dialog never matches, a time comes back blank), that's reported as a per-shift diagnostic line in
+  the popup's log instead of just leaving the four fields silently blank.
 - Sends every scanned record — `caregiver_name`, `client_name`, `shift_date`, the four time
   fields, `status`, `status_raw`, `event_id`, `scanned_at` — to a **"Shift Log" tab** (created
   automatically) in your Sheet, via an Apps Script Web App. Re-scanning the same shift updates its
@@ -48,6 +54,13 @@ schedule with many completed shifts visible at once will take a while to finish 
    `apps_script/Code.gs`, then **Deploy → New deployment → Web app** (execute as yourself, access
    per your security needs). Copy the deployment URL.
 3. Click the extension icon → **Settings** → paste the Web App URL → **Save**.
+
+**If you already deployed an earlier version of `Code.gs`** (e.g. from before this project switched
+from the Python screen-bot to the extension), re-paste the current `apps_script/Code.gs` and use
+**Deploy → Manage deployments → Edit (pencil icon) → Version: New version → Deploy**. Just saving
+the script does *not* update an already-published Web App URL — the extension will keep talking to
+whatever code was live at the last deployed version until you publish a new one. The popup will
+warn you if the Sheet's response doesn't look like it came from the current script.
 
 ## Using it
 
