@@ -9,6 +9,12 @@
   "background": {
     "service_worker": "background.js"
   },
+  "commands": {
+    "export-care-log-no-hover": {
+      "suggested_key": { "default": "Ctrl+Shift+E" },
+      "description": "Export Care Log HTML without moving the mouse (use while physically hovering a link)"
+    }
+  },
   "permissions": [
     "activeTab",
     "scripting",

@@ -32,6 +32,7 @@ function buildExportDocument(result) {
     `Captured at: ${result.capturedAt}\n` +
     `Matches found: ${result.matches.map((m) => m.matchedAs).join(', ') || 'none'}\n` +
     `Actual/Scheduled links simulated-hovered: ${result.hoverTargetsTriggered}\n` +
+    `jQuery detected on page: ${result.jQueryDetected}\n` +
     `Floating tooltip-like elements found on the page: ${result.floatingTooltips.length}\n` +
     `-->\n`;
   const body = result.matches

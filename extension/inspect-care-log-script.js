@@ -18,7 +18,7 @@
 
 (async function () {
   const CONTAINER_TAGS = new Set(['DIV', 'SECTION', 'FORM', 'ARTICLE']);
-  const HOVER_SETTLE_MS = 250;
+  const HOVER_SETTLE_MS = 400;
 
   // Strong, content-based signals -- much more reliable than guessing a class
   // name, since WellSky's actual CSS classes for these popups aren't known yet.
@@ -70,13 +70,29 @@
   // Dispatched directly on the target (not just bubbled), so this fires the
   // element's own mouseenter/mouseover listeners regardless of whether the
   // real handler was registered via addEventListener or a library like
-  // jQuery's .hover()/.on('mouseenter').
+  // jQuery's .hover()/.on('mouseenter'). Includes the element's real screen
+  // position (clientX/Y default to 0,0 otherwise), in case the real handler
+  // -- or a tooltip-positioning library -- checks the coordinates rather than
+  // just which element received the event. Also fires jQuery's own event
+  // system in parallel (this page loads jQuery -- Chosen.js's markup is
+  // visible elsewhere in the dialog), since some jQuery-bound handlers only
+  // respond to jQuery's .trigger(), not a raw native dispatchEvent.
   function simulateHover(el) {
-    const opts = { bubbles: true, cancelable: true, view: window };
+    const rect = el.getBoundingClientRect();
+    const clientX = Math.round(rect.left + rect.width / 2);
+    const clientY = Math.round(rect.top + rect.height / 2);
+    const opts = { bubbles: true, cancelable: true, view: window, clientX, clientY };
+
+    el.dispatchEvent(new MouseEvent('mousemove', opts));
     el.dispatchEvent(new MouseEvent('pointerover', opts));
     el.dispatchEvent(new MouseEvent('mouseover', opts));
     el.dispatchEvent(new MouseEvent('mouseenter', opts));
-    el.dispatchEvent(new MouseEvent('mousemove', opts));
+
+    const jq = window.jQuery || window.$;
+    if (jq) {
+      jq(el).trigger('mouseover');
+      jq(el).trigger('mouseenter');
+    }
   }
 
   function findHoverTargets(container) {
@@ -128,6 +144,7 @@
     matches,
     floatingTooltips,
     hoverTargetsTriggered,
+    jQueryDetected: Boolean(window.jQuery || window.$),
     foundAny: matches.length > 0,
     pageUrl: window.location.href,
     pageTitle: document.title,

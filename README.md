@@ -39,13 +39,27 @@ back from "Export Care Log HTML".
 
 ### Next step to unblock actual/scheduled times
 
-1. Load the extension (see Setup below).
-2. On the WellSky schedule, open a **completed (green)** shift → click **Edit** to open the Edit
-   Care Log dialog.
-3. Click the extension icon → **Export Care Log HTML** → send the downloaded file back here.
-4. That markup gets used to write the real Phase 1b parser for the four time fields, and to
-   confirm whether reading them needs a simulated hover event or if they're already present as an
-   attribute.
+A real capture confirmed the dialog's structure: the start-time quick-links are
+`a.actual_start`/`a.scheduled_start`, the end-time ones are `a.actual_end`/`a.scheduled_end`, and
+their `title` attribute is empty until something populates it on hover. The first attempt at
+simulating that hover (dispatching synthetic mouse events) didn't trigger whatever WellSky's JS
+does — all 8 links still came back with `title=""`. Two most likely reasons, both addressed in the
+current version: the synthetic events never carried real screen coordinates (fixed — now computed
+from the element's actual position), and the page loads jQuery, whose event-bound handlers
+sometimes need `.trigger()` rather than a raw `dispatchEvent` (fixed — now tried in parallel).
+
+If the simulated hover still doesn't work, there's a fallback that doesn't depend on guessing the
+right JS trigger at all: **Ctrl+Shift+E** exports the dialog exactly as it currently sits in the
+DOM, with no simulated anything — so you can physically hover a link with the real mouse and press
+the shortcut without having to also move the mouse to click anything.
+
+1. Reload the extension (see Setup below) to pick up the latest fix.
+2. Open a **completed (green)** shift's Edit Care Log dialog.
+3. Try **Export Care Log HTML** from the extension popup first (no hovering needed on your end).
+4. If the export still shows `title=""` on every link, physically hover "Actual" under the start
+   time, then press **Ctrl+Shift+E** without moving the mouse, and send that file instead.
+5. Whichever capture actually shows a filled-in `title` (or a floating tooltip element) gets used
+   to write the real Phase 1b parser for the four time fields.
 
 ## Setup
 
