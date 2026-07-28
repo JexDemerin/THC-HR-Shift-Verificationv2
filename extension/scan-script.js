@@ -240,14 +240,33 @@
     };
   }
 
-  // Never clicks Save. Tries Escape first (closes most modal libraries by
-  // convention), then falls back to a control whose text is exactly
-  // "Cancel" -- never anything containing "Save".
-  async function closeDialog() {
+  // Never clicks Save. Tries, in order: Escape (dispatched both broadly and
+  // directly on the dialog itself, since a real run showed this site uses
+  // jQuery UI Dialog widgets -- seen on the "Add Unavailability" popup,
+  // class="ui-dialog ui-widget..." -- and jQuery UI's own keydown handling
+  // for Escape may be bound to the dialog widget rather than the document,
+  // which a document-only dispatch would never reach); the dialog's
+  // standard jQuery UI titlebar close (X) button, `.ui-dialog-titlebar-close`
+  // -- confirmed present on this site's dialogs; then a control whose text
+  // is exactly "Cancel" -- never anything containing "Save".
+  async function closeDialog(dialogEl) {
     const escOpts = { bubbles: true, cancelable: true, key: 'Escape', code: 'Escape', keyCode: 27 };
     document.dispatchEvent(new KeyboardEvent('keydown', escOpts));
     document.dispatchEvent(new KeyboardEvent('keyup', escOpts));
+    if (dialogEl) {
+      dialogEl.dispatchEvent(new KeyboardEvent('keydown', escOpts));
+      dialogEl.dispatchEvent(new KeyboardEvent('keyup', escOpts));
+    }
     await sleep(CLOSE_SETTLE_MS);
+
+    if (!findSmallestMatch(SIGNALS.editCareLog)) return true;
+
+    const dialogScope = (dialogEl && dialogEl.closest('.ui-dialog')) || document;
+    const titlebarClose = dialogScope.querySelector('.ui-dialog-titlebar-close');
+    if (titlebarClose) {
+      simulateClick(titlebarClose);
+      await sleep(CLOSE_SETTLE_MS);
+    }
 
     if (!findSmallestMatch(SIGNALS.editCareLog)) return true;
 
@@ -315,7 +334,7 @@
     }
 
     const times = await readCareLogTimes(dialog);
-    const closedOk = await closeDialog();
+    const closedOk = await closeDialog(dialog);
     const missing = Object.entries(times)
       .filter(([, v]) => !v)
       .map(([k]) => k);

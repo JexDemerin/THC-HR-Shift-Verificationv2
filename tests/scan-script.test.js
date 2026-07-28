@@ -178,14 +178,46 @@ test('an unparsed shift with no discoverable date is kept, not silently dropped'
 // ---- Full click-through: green shift -> summary popup -> Edit -> read times -> close ----
 
 function buildClickThroughScript({ closable }) {
-  const closeHandler = closable
-    ? `document.addEventListener('keydown', function (e) {
-         if (e.key === 'Escape') {
-           var dialog = document.getElementById('edit-dialog');
-           if (dialog) dialog.remove();
-         }
-       });`
-    : ''; // no close handler at all -- simulates a dialog that won't close
+  // closable === true: document-level Escape handling (registering this
+  // listener doesn't need #edit-dialog to exist yet -- it's only looked up
+  // once Escape is actually pressed, later).
+  const documentLevelCloseHandler =
+    closable === true
+      ? `document.addEventListener('keydown', function (e) {
+           if (e.key === 'Escape') {
+             var dialog = document.getElementById('edit-dialog');
+             if (dialog) dialog.remove();
+           }
+         });`
+      : '';
+
+  // closable === 'dialog-escape-only': Escape handling bound to the dialog
+  // widget itself, not document -- covers a jQuery UI Dialog pattern where a
+  // document-wide keydown dispatch alone would never reach it. This has to
+  // be attached AFTER the dialog element exists, so it's inserted inline
+  // where the dialog is created below, not as a top-level script block.
+  const dialogLevelCloseHandler =
+    closable === 'dialog-escape-only'
+      ? `dialog.addEventListener('keydown', function (e) {
+           if (e.key === 'Escape') dialog.remove();
+         });`
+      : '';
+
+  // closable === 'titlebar': no Escape handling anywhere -- only the
+  // jQuery UI titlebar close (X) button works, wrapped in a .ui-dialog
+  // ancestor as on the real site. closable === false (or unset): nothing
+  // closes it at all, simulating a dialog that won't close no matter what.
+  const dialogHtml =
+    closable === 'titlebar'
+      ? `var wrapper = document.createElement('div');
+         wrapper.className = 'ui-dialog';
+         var closeBtn = document.createElement('button');
+         closeBtn.className = 'ui-dialog-titlebar-close';
+         closeBtn.addEventListener('click', function () { wrapper.remove(); });
+         wrapper.appendChild(closeBtn);
+         wrapper.appendChild(dialog);
+         document.body.appendChild(wrapper);`
+      : `document.body.appendChild(dialog);`;
 
   return `
     <script>
@@ -205,7 +237,8 @@ function buildClickThroughScript({ closable }) {
             '<label>Pay Hours</label><label>Client</label><label>Caregiver</label>' +
             '<a class="actual_start">Actual</a><a class="scheduled_start">Scheduled</a>' +
             '<a class="actual_end">Actual</a><a class="scheduled_end">Scheduled</a>';
-          document.body.appendChild(dialog);
+          ${dialogLevelCloseHandler}
+          ${dialogHtml}
 
           function attachTooltip(selector, text) {
             dialog.querySelector(selector).addEventListener('mouseenter', function () {
@@ -221,7 +254,7 @@ function buildClickThroughScript({ closable }) {
           attachTooltip('.scheduled_end', '07/27/2026 09:00:00 PM');
         });
       });
-      ${closeHandler}
+      ${documentLevelCloseHandler}
     </script>
   `;
 }
@@ -264,6 +297,47 @@ test('stops and reports a reason if the Edit Care Log dialog never closes', asyn
 
   assert.match(result.stoppedEarlyReason, /Barberi, Miku/);
   assert.match(result.stoppedEarlyReason, /stopped early/i);
+});
+
+test('closes via Escape dispatched directly on the dialog, not just document', async () => {
+  // Regression test for a real observation: a shift's times were read
+  // successfully but the scan still stopped early because it couldn't
+  // confirm the dialog closed -- consistent with a jQuery UI Dialog whose
+  // Escape handling is bound to the widget itself, which a document-only
+  // Escape dispatch would never reach.
+  const calendarHtml = buildFixture({
+    status: 'COMPLETED',
+    dataStart: '2026-07-27T09:00:00.000000',
+    dataEnd: '2026-07-27T16:00:00.000000',
+    clientName: 'Kozuka-Ssenyan, Mia',
+    caregiverName: 'Barberi, Miku',
+    eventId: 'evt-dialog-escape',
+    id: 'shift-el',
+  });
+  const html = calendarHtml + buildClickThroughScript({ closable: 'dialog-escape-only' });
+
+  const result = await runScanScript(html, { runScripts: true });
+
+  assert.equal(result.stoppedEarlyReason, null);
+  assert.equal(result.records[0].actual_time_in, '07/27/2026 07:11:25 PM');
+});
+
+test('falls back to the jQuery UI titlebar close button when Escape does nothing', async () => {
+  const calendarHtml = buildFixture({
+    status: 'COMPLETED',
+    dataStart: '2026-07-27T09:00:00.000000',
+    dataEnd: '2026-07-27T16:00:00.000000',
+    clientName: 'Kozuka-Ssenyan, Mia',
+    caregiverName: 'Barberi, Miku',
+    eventId: 'evt-titlebar-close',
+    id: 'shift-el',
+  });
+  const html = calendarHtml + buildClickThroughScript({ closable: 'titlebar' });
+
+  const result = await runScanScript(html, { runScripts: true });
+
+  assert.equal(result.stoppedEarlyReason, null);
+  assert.equal(result.records[0].actual_time_in, '07/27/2026 07:11:25 PM');
 });
 
 test('clicks the .title label, not just the outer shift wrapper', async () => {

@@ -38,6 +38,12 @@ What's working now:
 - Waits for the summary popup, its Edit link, and the Edit Care Log dialog by **polling**, not a
   fixed delay — the shift element's own markup showed a follow-up AJAX fetch (`data-ptip-url`) for
   at least some of its content, so a fixed wait would be fragile against real network latency.
+- Closes the dialog by trying, in order: Escape dispatched both broadly and directly on the dialog
+  itself (this site uses jQuery UI Dialog widgets, whose Escape handling may be bound to the widget
+  rather than the document — a real run had every step succeed, including reading all four times,
+  but still failed to close until this was added), the dialog's standard jQuery UI titlebar close
+  (X) button (`.ui-dialog-titlebar-close`), then a control whose text is exactly "Cancel" — never
+  anything containing "Save".
 - If the dialog doesn't visibly close the way expected after reading a shift, scanning **stops
   early** rather than continuing to click on a page that might not be in the state it expects, and
   says why in the popup's log.
