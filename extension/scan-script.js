@@ -33,12 +33,27 @@
     CANCELLED_BY_OFFICE: 'cancelled_by_office',
   };
 
-  const CLICK_SETTLE_MS = 1200; // popup/dialog open transitions -- real network/render latency
+  const CLICK_SETTLE_MS = 4000; // max time to poll for a popup/dialog/link to appear after a click
   const HOVER_SETTLE_MS = 400; // confirmed to be enough in Phase 0 discovery
   const CLOSE_SETTLE_MS = 500;
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // The shift's summary popup and Edit Care Log dialog can load some of
+  // their content via a follow-up AJAX call (a real capture showed a
+  // `data-ptip-url` fetch on the shift element itself) -- a fixed delay is
+  // fragile against that, so this polls until the condition is true instead
+  // of assuming a fixed wait was long enough.
+  async function waitFor(conditionFn, { timeoutMs = 3000, intervalMs = 150 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    let result = conditionFn();
+    while (!result && Date.now() < deadline) {
+      await sleep(intervalMs);
+      result = conditionFn();
+    }
+    return result || null;
   }
 
   function parseTimestamp(raw) {
@@ -247,14 +262,14 @@
     return !findSmallestMatch(SIGNALS.editCareLog);
   }
 
-  // Still being verified against the real page: clicking the outer ._event
-  // wrapper opened the calendar's generic "Add Unavailability" popup instead
-  // of the shift's own summary, and clicking .title (with plain `.click()`,
-  // no real coordinates) produced nothing detectable at all. Use
-  // inspect-shift-click-script.js's debug tool to compare candidates with
-  // real click coordinates before trusting this is the right target.
+  // Confirmed via inspect-shift-click-script.js's debug tool against a real
+  // shift: `.title` contains TWO links -- a "send email" link first, then
+  // `a.name` (the client name + time) -- and only clicking `a.name`
+  // (with real click coordinates) opens the shift's own summary bubble.
+  // Clicking the wrapper, or `.title` itself, or the first link, all open
+  // something else entirely ("Add Unavailability" or a send-email form).
   function shiftClickTarget(eventEl) {
-    return eventEl.querySelector('.title') || eventEl;
+    return eventEl.querySelector('.title .name') || eventEl.querySelector('.title') || eventEl;
   }
 
   function textSnippet(el, maxLength = 120) {
@@ -270,9 +285,8 @@
   async function enrichCompletedShift(eventEl) {
     const before = snapshotAllElements();
     simulateClick(shiftClickTarget(eventEl));
-    await sleep(CLICK_SETTLE_MS);
 
-    const popup = findSmallestMatch(SIGNALS.summaryPopup);
+    const popup = await waitFor(() => findSmallestMatch(SIGNALS.summaryPopup), { timeoutMs: CLICK_SETTLE_MS });
     if (!popup) {
       const newEls = findNewTopLevelElements(before, snapshotAllElements());
       const closedOk = await closeDialog();
@@ -280,16 +294,21 @@
       return { times: null, closedOk, diagnostic: `Expected summary popup didn't open. Instead: ${seen}` };
     }
 
-    const editLink = findLinkByText(popup, 'Edit');
+    // Re-query rather than trust the first `popup` reference -- some of its
+    // content (like the Edit link) may load in via a follow-up AJAX call
+    // after the popup shell itself already matched.
+    const editLink = await waitFor(() => {
+      const current = findSmallestMatch(SIGNALS.summaryPopup) || popup;
+      return findLinkByText(current, 'Edit');
+    }, { timeoutMs: CLICK_SETTLE_MS });
     if (!editLink) {
       const closedOk = await closeDialog();
       return { times: null, closedOk, diagnostic: `Summary popup opened but no "Edit" link found in it.` };
     }
 
     simulateClick(editLink);
-    await sleep(CLICK_SETTLE_MS);
 
-    const dialog = findSmallestMatch(SIGNALS.editCareLog);
+    const dialog = await waitFor(() => findSmallestMatch(SIGNALS.editCareLog), { timeoutMs: CLICK_SETTLE_MS });
     if (!dialog) {
       const closedOk = await closeDialog();
       return { times: null, closedOk, diagnostic: `Clicked Edit but the Edit Care Log dialog never matched.` };

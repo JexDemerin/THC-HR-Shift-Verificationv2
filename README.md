@@ -21,17 +21,23 @@ What's working now:
 - Skips any shift dated today or later — only fully-elapsed days get scanned (a shift with no
   parseable date is kept as `unparsed` rather than silently dropped, since it can't be judged
   past/future either way).
-- For every **completed (green)** shift, it also clicks the shift's `.title` label open (a real run
-  showed clicking the outer shift wrapper opens WellSky's generic "Add Unavailability" popup
-  instead — the shift-specific click handler lives on the inner label, not the wrapper), clicks
-  **Edit**, and reads the four real clock times off the Edit Care Log dialog —
-  `actual_time_in`, `scheduled_time_in`, `actual_time_out`, `scheduled_time_out` — then closes the
-  dialog (Escape, or a "Cancel" control; **never Save**) before moving to the next shift. A real
-  capture confirmed the mechanism: hovering `a.actual_start` / `a.scheduled_start` /
-  `a.actual_end` / `a.scheduled_end` makes a brand-new `<div class="_ptip ...">` tooltip node
-  appear elsewhere on the page with the plain timestamp as its text (not a `title` attribute,
-  which is what the first two attempts guessed and got stuck on) — the extension simulates that
-  hover itself, no mouse movement needed.
+- For every **completed (green)** shift, it also clicks the shift's `a.name` link open — the
+  client-name/time link nested two levels inside `.title` (`.title` also contains a "send email"
+  link that comes first, and clicking the wrapper or `.title` itself both land on WellSky's generic
+  "Add Unavailability" popup instead, confirmed via the click-target debug tool) — clicks **Edit**,
+  and reads the four real clock times off the Edit Care Log dialog — `actual_time_in`,
+  `scheduled_time_in`, `actual_time_out`, `scheduled_time_out` — then closes the dialog (Escape, or
+  a "Cancel" control; **never Save**) before moving to the next shift. Every click uses the
+  element's real on-screen position, not just which element it targets — the plain `.click()` DOM
+  method always dispatches at 0,0, and WellSky's calendar appears to use click position for more
+  than just hit-testing. A real capture confirmed the time-reading mechanism: hovering
+  `a.actual_start` / `a.scheduled_start` / `a.actual_end` / `a.scheduled_end` makes a brand-new
+  `<div class="_ptip ...">` tooltip node appear elsewhere on the page with the plain timestamp as
+  its text (not a `title` attribute, which is what the first two attempts guessed and got stuck
+  on) — the extension simulates that hover itself, no mouse movement needed.
+- Waits for the summary popup, its Edit link, and the Edit Care Log dialog by **polling**, not a
+  fixed delay — the shift element's own markup showed a follow-up AJAX fetch (`data-ptip-url`) for
+  at least some of its content, so a fixed wait would be fragile against real network latency.
 - If the dialog doesn't visibly close the way expected after reading a shift, scanning **stops
   early** rather than continuing to click on a page that might not be in the state it expects, and
   says why in the popup's log.
