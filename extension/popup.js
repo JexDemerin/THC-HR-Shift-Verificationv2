@@ -31,11 +31,17 @@ function buildExportDocument(result) {
     `Page title: ${result.pageTitle}\n` +
     `Captured at: ${result.capturedAt}\n` +
     `Matches found: ${result.matches.map((m) => m.matchedAs).join(', ') || 'none'}\n` +
+    `Actual/Scheduled links simulated-hovered: ${result.hoverTargetsTriggered}\n` +
+    `Floating tooltip-like elements found on the page: ${result.floatingTooltips.length}\n` +
     `-->\n`;
   const body = result.matches
     .map((m) => `<!-- ===== matched as: ${m.matchedAs} ===== -->\n${m.outerHTML}\n`)
     .join('\n');
-  return header + body;
+  const tooltips = result.floatingTooltips.length
+    ? `\n<!-- ===== floating tooltip-like elements found anywhere on the page ===== -->\n` +
+      result.floatingTooltips.map((html) => `${html}\n`).join('\n')
+    : '';
+  return header + body + tooltips;
 }
 
 function downloadHtmlExport(result) {
@@ -77,8 +83,14 @@ async function exportCareLogHtml() {
     const sizeKb = Math.round(
       result.matches.reduce((sum, m) => sum + m.byteLength, 0) / 1024
     );
-    setStatus(`Captured ~${sizeKb} KB (${result.matches.map((m) => m.matchedAs).join(', ')}). Downloaded.`);
-    addLogEntry(`${new Date(result.capturedAt).toLocaleTimeString()} — care log export — ${sizeKb} KB`);
+    setStatus(
+      `Captured ~${sizeKb} KB (${result.matches.map((m) => m.matchedAs).join(', ')}), ` +
+        `hovered ${result.hoverTargetsTriggered} Actual/Scheduled link(s). Downloaded.`
+    );
+    addLogEntry(
+      `${new Date(result.capturedAt).toLocaleTimeString()} — care log export — ${sizeKb} KB — ` +
+        `${result.hoverTargetsTriggered} link(s) hovered — ${result.floatingTooltips.length} floating tooltip(s) found`
+    );
   } catch (err) {
     setStatus(`Error: ${err.message}`);
   } finally {

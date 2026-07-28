@@ -9,10 +9,16 @@
 // outerHTML back -- a human opens the popup first, then clicks "Export Care
 // Log HTML" in the extension popup.
 //
+// It simulates hovering every "Actual"/"Scheduled" link itself (dispatching
+// synthetic pointer/mouse events) before capturing -- there's no need for a
+// human to physically hold the mouse over a link while also clicking the
+// extension icon, which isn't even physically possible.
+//
 // This file only ever runs when injected on demand -- never on page load.
 
-(function () {
+(async function () {
   const CONTAINER_TAGS = new Set(['DIV', 'SECTION', 'FORM', 'ARTICLE']);
+  const HOVER_SETTLE_MS = 250;
 
   // Strong, content-based signals -- much more reliable than guessing a class
   // name, since WellSky's actual CSS classes for these popups aren't known yet.
@@ -30,6 +36,10 @@
     },
     { name: 'summary-popup', mustContain: ['Care Log', 'Summary', 'Notes', 'Edit', 'Copy'] },
   ];
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
   function containsAll(text, phrases) {
     return phrases.every((p) => text.includes(p));
@@ -57,20 +67,67 @@
     return best;
   }
 
+  // Dispatched directly on the target (not just bubbled), so this fires the
+  // element's own mouseenter/mouseover listeners regardless of whether the
+  // real handler was registered via addEventListener or a library like
+  // jQuery's .hover()/.on('mouseenter').
+  function simulateHover(el) {
+    const opts = { bubbles: true, cancelable: true, view: window };
+    el.dispatchEvent(new MouseEvent('pointerover', opts));
+    el.dispatchEvent(new MouseEvent('mouseover', opts));
+    el.dispatchEvent(new MouseEvent('mouseenter', opts));
+    el.dispatchEvent(new MouseEvent('mousemove', opts));
+  }
+
+  function findHoverTargets(container) {
+    const candidates = Array.from(container.querySelectorAll('a, span, button, [role="button"]'));
+    return candidates.filter((el) => {
+      const text = (el.textContent || '').trim();
+      return text === 'Actual' || text === 'Scheduled';
+    });
+  }
+
+  async function hoverEveryActualScheduledLink(container) {
+    const targets = findHoverTargets(container);
+    for (const target of targets) {
+      simulateHover(target);
+      await sleep(HOVER_SETTLE_MS);
+    }
+    return targets.length;
+  }
+
+  // Some tooltip implementations append a floating element to <body> instead
+  // of nesting it inside the dialog -- catch those too, in case the dialog's
+  // own outerHTML capture (below) doesn't show anything even after hovering.
+  function findFloatingTooltips() {
+    const selector = '[role="tooltip"], .tooltip, .ui-tooltip, [class*="tooltip" i]';
+    return Array.from(document.querySelectorAll(selector)).map((el) => el.outerHTML);
+  }
+
   const matches = [];
+  let hoverTargetsTriggered = 0;
+
   for (const signal of SIGNALS) {
     const el = findSmallestMatch(signal.mustContain);
-    if (el) {
-      matches.push({
-        matchedAs: signal.name,
-        outerHTML: el.outerHTML,
-        byteLength: el.outerHTML.length,
-      });
+    if (!el) continue;
+
+    if (signal.name === 'edit-care-log') {
+      hoverTargetsTriggered += await hoverEveryActualScheduledLink(el);
     }
+
+    matches.push({
+      matchedAs: signal.name,
+      outerHTML: el.outerHTML, // re-read after hovering, so any attribute/DOM changes are included
+      byteLength: el.outerHTML.length,
+    });
   }
+
+  const floatingTooltips = findFloatingTooltips();
 
   return {
     matches,
+    floatingTooltips,
+    hoverTargetsTriggered,
     foundAny: matches.length > 0,
     pageUrl: window.location.href,
     pageTitle: document.title,
