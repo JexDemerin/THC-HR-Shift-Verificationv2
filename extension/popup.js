@@ -155,6 +155,7 @@ async function scanSchedule() {
     const parts = [`${summary.total} shifts found`];
     if (summary.unparsed > 0) parts.push(`${summary.unparsed} unparsed`);
     if (result.skippedTodayOrFuture > 0) parts.push(`${result.skippedTodayOrFuture} skipped (today/future)`);
+    if (result.stoppedEarlyReason) parts.push('stopped early, see log');
     setStatus(parts.join(' — '));
     addLogEntry(
       `${new Date(result.scannedAt).toLocaleTimeString()} — scan — ${summary.total} total, ` +
@@ -162,6 +163,9 @@ async function scanSchedule() {
         `${summary.ongoing} ongoing, ${summary.cancelled} cancelled, ${summary.unparsed} unparsed, ` +
         `${result.skippedTodayOrFuture} skipped (today/future)`
     );
+    if (result.stoppedEarlyReason) {
+      addLogEntry(`STOPPED EARLY: ${result.stoppedEarlyReason}`);
+    }
 
     const { webhookUrl } = await chrome.storage.local.get('webhookUrl');
     if (!webhookUrl) {

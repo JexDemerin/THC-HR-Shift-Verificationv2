@@ -1,20 +1,27 @@
-// Real shift scanner — calendar-level fields only, so far.
+// Real shift scanner.
 //
 // Runs only when injected on demand from popup.js after the user clicks
-// "Scan Schedule" — never automatically. Reuses the markup confirmed for the
-// original WellSky Shift Scanner: each caregiver is a <tr class="sched_row">,
-// and each shift is a <div class="_event STATUS_TOKEN ajSet" data-event-id
-// data-event-type data-start data-end> living inside a <td class="day-data">.
+// "Scan Schedule" — never automatically. Calendar-level parsing reuses the
+// markup confirmed for the original WellSky Shift Scanner: each caregiver is
+// a <tr class="sched_row">, and each shift is a <div class="_event
+// STATUS_TOKEN ajSet" data-event-id data-event-type data-start data-end>
+// living inside a <td class="day-data">.
 //
-// actual_time_in / scheduled_time_in / actual_time_out / scheduled_time_out
-// are left null here on purpose. Those live in the "Edit Care Log" popup
-// (Official start/end plus separate Actual/Scheduled links per side), whose
-// real markup hasn't been captured yet -- see inspect-care-log-script.js.
-// Guessing at that structure risks silently mis-recording payroll timestamps,
-// so real Phase 1b parsing for those four fields waits until a real capture
-// comes back.
+// For each COMPLETED (green) shift, this also clicks it open, clicks Edit,
+// and reads the four Actual/Scheduled clock times -- a real capture (Phase 0
+// discovery via inspect-care-log-script.js) confirmed the mechanism: hovering
+// a.actual_start / a.scheduled_start / a.actual_end / a.scheduled_end makes
+// a brand-new `<div class="_ptip ...">` appear elsewhere on the page with the
+// plain timestamp as its text, and it's a fresh element each time rather than
+// one that gets reused/updated in place. Everything else (red/incomplete
+// shifts, all other statuses) is never clicked -- only completed shifts have
+// anything worth reading here, and touching the page for records that don't
+// need it is needless risk against a real payroll system.
+//
+// Only ever closes via Escape or a "Cancel"-labeled control -- never Save.
+// This is a read-only inspection pass; it must never alter WellSky's data.
 
-(function () {
+(async function () {
   const STATUS_MAP = {
     SCHEDULED: 'upcoming',
     IN_PROGRESS: 'ongoing',
@@ -25,6 +32,14 @@
     CANCELLED_BY_CLIENT: 'cancelled_by_client',
     CANCELLED_BY_OFFICE: 'cancelled_by_office',
   };
+
+  const CLICK_SETTLE_MS = 800; // popup/dialog open transitions
+  const HOVER_SETTLE_MS = 400; // confirmed to be enough in Phase 0 discovery
+  const CLOSE_SETTLE_MS = 400;
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
   function parseTimestamp(raw) {
     if (!raw) return null;
@@ -60,7 +75,7 @@
       caregiver_name: caregiverName || null,
       client_name: clientName,
       shift_date: shiftDate,
-      actual_time_in: null, // pending Phase 1b -- see inspect-care-log-script.js
+      actual_time_in: null,
       scheduled_time_in: null,
       actual_time_out: null,
       scheduled_time_out: null,
@@ -74,6 +89,7 @@
   function scan() {
     const rows = Array.from(document.querySelectorAll('tr.sched_row'));
     const records = [];
+    const eventElsByEventId = new Map();
 
     for (const row of rows) {
       const caregiverAnchor = row.querySelector('.person-name a');
@@ -83,11 +99,13 @@
 
       const events = Array.from(row.querySelectorAll('.day-data ._event'));
       for (const eventEl of events) {
-        records.push(extractRecord(caregiverName, eventEl));
+        const record = extractRecord(caregiverName, eventEl);
+        records.push(record);
+        if (record.event_id) eventElsByEventId.set(record.event_id, eventEl);
       }
     }
 
-    return { records, rowCount: rows.length };
+    return { records, rowCount: rows.length, eventElsByEventId };
   }
 
   // Today/future days are still in progress or haven't happened -- only
@@ -102,12 +120,152 @@
     return `${y}-${m}-${d}`;
   }
 
-  const { records: allRecords, rowCount } = scan();
+  // ---- Reading a completed shift's Edit Care Log times ----
+
+  const CONTAINER_TAGS = new Set(['DIV', 'SECTION', 'FORM', 'ARTICLE']);
+  const SIGNALS = {
+    summaryPopup: ['Care Log', 'Summary', 'Notes', 'Edit', 'Copy'],
+    editCareLog: ['Official', 'Bill Hours', 'Pay Hours', 'Status', 'Client', 'Caregiver'],
+  };
+
+  function containsAll(text, phrases) {
+    return phrases.every((p) => text.includes(p));
+  }
+
+  function findSmallestMatch(mustContain) {
+    if (!document.body) return null;
+    const candidates = Array.from(document.body.querySelectorAll('*')).filter((el) =>
+      CONTAINER_TAGS.has(el.tagName)
+    );
+    let best = null;
+    let bestSize = Infinity;
+    for (const el of candidates) {
+      const text = el.textContent || '';
+      if (containsAll(text, mustContain)) {
+        const size = el.outerHTML.length;
+        if (size < bestSize) {
+          bestSize = size;
+          best = el;
+        }
+      }
+    }
+    return best;
+  }
+
+  function simulateHover(el) {
+    const rect = el.getBoundingClientRect();
+    const clientX = Math.round(rect.left + rect.width / 2);
+    const clientY = Math.round(rect.top + rect.height / 2);
+    const opts = { bubbles: true, cancelable: true, view: window, clientX, clientY };
+    el.dispatchEvent(new MouseEvent('mousemove', opts));
+    el.dispatchEvent(new MouseEvent('pointerover', opts));
+    el.dispatchEvent(new MouseEvent('mouseover', opts));
+    el.dispatchEvent(new MouseEvent('mouseenter', opts));
+  }
+
+  function findLinkByText(container, text) {
+    const candidates = Array.from(container.querySelectorAll('a, span, button, [role="button"]'));
+    return candidates.find((el) => (el.textContent || '').trim() === text) || null;
+  }
+
+  // Hovers one quick-time link and reads the resulting `._ptip` tooltip node
+  // that appears elsewhere on the page -- confirmed via a real Phase 0
+  // capture. Removes the tooltip node afterward so repeated runs don't leave
+  // a growing pile of stray floating timestamp divs on the page.
+  async function readQuickTime(dialogEl, linkClass) {
+    const link = dialogEl.querySelector(`a.${linkClass}`);
+    if (!link) return null;
+
+    const before = new Set(document.querySelectorAll('._ptip'));
+    simulateHover(link);
+    await sleep(HOVER_SETTLE_MS);
+    const after = Array.from(document.querySelectorAll('._ptip'));
+    const tooltip = after.find((el) => !before.has(el));
+    if (!tooltip) return null;
+
+    const text = (tooltip.textContent || '').trim();
+    tooltip.remove();
+    return text || null;
+  }
+
+  async function readCareLogTimes(dialogEl) {
+    return {
+      actual_time_in: await readQuickTime(dialogEl, 'actual_start'),
+      scheduled_time_in: await readQuickTime(dialogEl, 'scheduled_start'),
+      actual_time_out: await readQuickTime(dialogEl, 'actual_end'),
+      scheduled_time_out: await readQuickTime(dialogEl, 'scheduled_end'),
+    };
+  }
+
+  // Never clicks Save. Tries Escape first (closes most modal libraries by
+  // convention), then falls back to a control whose text is exactly
+  // "Cancel" -- never anything containing "Save".
+  async function closeDialog() {
+    const escOpts = { bubbles: true, cancelable: true, key: 'Escape', code: 'Escape', keyCode: 27 };
+    document.dispatchEvent(new KeyboardEvent('keydown', escOpts));
+    document.dispatchEvent(new KeyboardEvent('keyup', escOpts));
+    await sleep(CLOSE_SETTLE_MS);
+
+    if (!findSmallestMatch(SIGNALS.editCareLog)) return true;
+
+    const cancelLink = Array.from(document.querySelectorAll('a, button')).find(
+      (el) => (el.textContent || '').trim() === 'Cancel'
+    );
+    if (cancelLink) {
+      cancelLink.click();
+      await sleep(CLOSE_SETTLE_MS);
+    }
+
+    return !findSmallestMatch(SIGNALS.editCareLog);
+  }
+
+  // Returns the four time fields for one completed shift, or null if any
+  // step of the click-through didn't find what it expected -- never guesses
+  // a value it isn't sure about.
+  async function enrichCompletedShift(eventEl) {
+    eventEl.click();
+    await sleep(CLICK_SETTLE_MS);
+
+    const popup = findSmallestMatch(SIGNALS.summaryPopup);
+    const editLink = popup && findLinkByText(popup, 'Edit');
+    if (!editLink) return { times: null, closedOk: await closeDialog() };
+
+    editLink.click();
+    await sleep(CLICK_SETTLE_MS);
+
+    const dialog = findSmallestMatch(SIGNALS.editCareLog);
+    if (!dialog) return { times: null, closedOk: await closeDialog() };
+
+    const times = await readCareLogTimes(dialog);
+    const closedOk = await closeDialog();
+    return { times, closedOk };
+  }
+
+  // ---- Run it ----
+
+  const { records: allRecords, rowCount, eventElsByEventId } = scan();
   const today = todayIso();
   // Keep anything without a parseable date too (rather than silently dropping
   // it) -- it's already flagged as "unparsed" and needs a human look either way.
   const records = allRecords.filter((r) => !r.shift_date || r.shift_date < today);
   const skippedTodayOrFuture = allRecords.length - records.length;
+
+  let stoppedEarlyReason = null;
+  for (const record of records) {
+    if (record.status !== 'completed' || !record.event_id) continue;
+    const eventEl = eventElsByEventId.get(record.event_id);
+    if (!eventEl) continue;
+
+    const { times, closedOk } = await enrichCompletedShift(eventEl);
+    if (times) Object.assign(record, times);
+
+    if (!closedOk) {
+      // The dialog didn't close the way we expect -- stop rather than risk
+      // clicking blindly into whatever state the page is actually in now.
+      stoppedEarlyReason = `Could not confirm the Edit Care Log dialog closed after reading ${record.caregiver_name}/${record.client_name} (${record.shift_date}). Stopped early -- reload the WellSky page and re-scan.`;
+      break;
+    }
+  }
 
   const summary = {
     total: records.length,
@@ -124,6 +282,7 @@
     summary,
     rowCount,
     skippedTodayOrFuture,
+    stoppedEarlyReason,
     pageUrl: window.location.href,
     scannedAt: new Date().toISOString(),
   };

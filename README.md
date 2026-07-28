@@ -11,55 +11,34 @@ real DOM elements, so a Chrome extension's content script can read them directly
 OCR, no AI vision API calls (so no API key or per-call cost, and no Python install needed), no
 simulated mouse movement, and no risk of a misjudged click coordinate in a real payroll system.
 
-### Status: Phase 0 (discovery) + calendar-level scanning
+### Status: full scan, including actual/scheduled clock times
 
 What's working now:
 - **"Scan Schedule"** reads every shift currently visible in the WellSky weekly calendar (built on
   the markup already confirmed in the original WellSky Shift Scanner project: one
   `<tr class="sched_row">` per caregiver, one `<div class="_event STATUS" data-event-id
-  data-start data-end>` per shift) and reports, per shift: `caregiver_name`, `client_name`,
-  `shift_date`, `status`, `status_raw`, `event_id`, `scanned_at`.
+  data-start data-end>` per shift).
 - Skips any shift dated today or later — only fully-elapsed days get scanned (a shift with no
   parseable date is kept as `unparsed` rather than silently dropped, since it can't be judged
   past/future either way).
-- **"Export Care Log HTML"** is a Phase 0 discovery tool — open a shift's Edit Care Log popup (or
-  the summary popup) yourself, click this button, and it downloads that popup's real markup.
-- Sends scanned records to a new **"Shift Log" tab** (created automatically) in your Sheet, via an
-  Apps Script Web App. Re-scanning the same shift updates its existing row (matched by
-  `event_id`) instead of duplicating it.
+- For every **completed (green)** shift, it also clicks the shift open, clicks **Edit**, and reads
+  the four real clock times off the Edit Care Log dialog — `actual_time_in`, `scheduled_time_in`,
+  `actual_time_out`, `scheduled_time_out` — then closes the dialog (Escape, or a "Cancel" control;
+  **never Save**) before moving to the next shift. A real capture confirmed the mechanism: hovering
+  `a.actual_start` / `a.scheduled_start` / `a.actual_end` / `a.scheduled_end` makes a brand-new
+  `<div class="_ptip ...">` tooltip node appear elsewhere on the page with the plain timestamp as
+  its text (not a `title` attribute, which is what the first two attempts guessed and got stuck
+  on) — the extension simulates that hover itself, no mouse movement needed.
+- If the dialog doesn't visibly close the way expected after reading a shift, scanning **stops
+  early** rather than continuing to click on a page that might not be in the state it expects, and
+  says why in the popup's log.
+- Sends every scanned record — `caregiver_name`, `client_name`, `shift_date`, the four time
+  fields, `status`, `status_raw`, `event_id`, `scanned_at` — to a **"Shift Log" tab** (created
+  automatically) in your Sheet, via an Apps Script Web App. Re-scanning the same shift updates its
+  existing row (matched by `event_id`) instead of duplicating it.
 
-What's **not built yet, on purpose**: `actual_time_in`, `scheduled_time_in`, `actual_time_out`,
-and `scheduled_time_out` are currently always blank. WellSky exposes those four values via
-"Actual"/"Scheduled" links under the Official start/end fields in the Edit Care Log dialog — but
-nobody has captured that dialog's real markup yet, so the exact selectors (and whether the tooltip
-values live in a `title` attribute already in the DOM, or only appear once triggered) aren't known.
-Guessing here risks silently mis-recording payroll timestamps — exactly what the original project's
-spec warned against — so the real parser for those four fields waits until a real capture comes
-back from "Export Care Log HTML".
-
-### Next step to unblock actual/scheduled times
-
-A real capture confirmed the dialog's structure: the start-time quick-links are
-`a.actual_start`/`a.scheduled_start`, the end-time ones are `a.actual_end`/`a.scheduled_end`, and
-their `title` attribute is empty until something populates it on hover. The first attempt at
-simulating that hover (dispatching synthetic mouse events) didn't trigger whatever WellSky's JS
-does — all 8 links still came back with `title=""`. Two most likely reasons, both addressed in the
-current version: the synthetic events never carried real screen coordinates (fixed — now computed
-from the element's actual position), and the page loads jQuery, whose event-bound handlers
-sometimes need `.trigger()` rather than a raw `dispatchEvent` (fixed — now tried in parallel).
-
-If the simulated hover still doesn't work, there's a fallback that doesn't depend on guessing the
-right JS trigger at all: **Ctrl+Shift+E** exports the dialog exactly as it currently sits in the
-DOM, with no simulated anything — so you can physically hover a link with the real mouse and press
-the shortcut without having to also move the mouse to click anything.
-
-1. Reload the extension (see Setup below) to pick up the latest fix.
-2. Open a **completed (green)** shift's Edit Care Log dialog.
-3. Try **Export Care Log HTML** from the extension popup first (no hovering needed on your end).
-4. If the export still shows `title=""` on every link, physically hover "Actual" under the start
-   time, then press **Ctrl+Shift+E** without moving the mouse, and send that file instead.
-5. Whichever capture actually shows a filled-in `title` (or a floating tooltip element) gets used
-   to write the real Phase 1b parser for the four time fields.
+Scanning a shift with a click-through now takes a few seconds each (open, read, close), so a
+schedule with many completed shifts visible at once will take a while to finish — that's expected.
 
 ## Setup
 
@@ -74,19 +53,33 @@ the shortcut without having to also move the mouse to click anything.
 
 1. Log into WellSky and go to the weekly schedule view.
 2. Click the extension icon → **Scan Schedule**. Records get written to the "Shift Log" tab.
+   Completed shifts take a few seconds each while it clicks through and reads their times — watch
+   the popup's log for progress, and don't touch the WellSky tab while it's running.
 3. Scroll/change the view (different week, different caregiver group) and scan again to cover
    more — it only reads what's currently on screen, same as the original scanner.
+
+If a scan stops early with a message about not being able to confirm the dialog closed, reload the
+WellSky page before re-scanning — better to stop than keep clicking on a page that might not be in
+the state the script expects.
+
+## Debugging tools
+
+- **"Export Care Log HTML"** — captures whatever the Edit Care Log (or summary) popup currently
+  looks like, plus a per-link probe of what changes when each Actual/Scheduled link is hovered.
+  Useful if WellSky's markup ever changes and the real scanner stops finding what it expects.
+- **Ctrl+Shift+E** — same idea, but captured exactly as-is with nothing simulated, for physically
+  hovering a link with the real mouse and triggering the export via keyboard (since a mouse can't
+  hover and click at the same time).
 
 ## Testing
 
 `npm test` (needs `npm install` once first) runs `tests/*.test.js` — these use `jsdom` to build
-fixture HTML matching WellSky's confirmed markup and check `scan-script.js` and
-`inspect-care-log-script.js`'s parsing/discovery logic, without needing a browser or real WellSky
-access.
+fixture HTML matching WellSky's confirmed markup (including a full simulated click-through: open a
+shift, click Edit, hover each time link, read the resulting tooltip, close the dialog) and check
+`scan-script.js` and the discovery tools' logic, without needing a browser or real WellSky access.
 
 ## What's not built yet
 
-- The four actual/scheduled time fields (see "Next step" above).
 - Since today/future shifts are already skipped, in-progress (yellow) and scheduled/upcoming
   (blue) statuses shouldn't normally appear in scan results at all — if one ever does (e.g. an
   overnight shift spanning midnight), it's still included rather than dropped, so it's visible for
