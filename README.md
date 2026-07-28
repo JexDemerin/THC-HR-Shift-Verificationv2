@@ -40,10 +40,15 @@ What's working now:
   at least some of its content, so a fixed wait would be fragile against real network latency.
 - Closes the dialog by trying, in order: Escape dispatched both broadly and directly on the dialog
   itself (this site uses jQuery UI Dialog widgets, whose Escape handling may be bound to the widget
-  rather than the document — a real run had every step succeed, including reading all four times,
-  but still failed to close until this was added), the dialog's standard jQuery UI titlebar close
-  (X) button (`.ui-dialog-titlebar-close`), then a control whose text is exactly "Cancel" — never
-  anything containing "Save".
+  rather than the document), the dialog's standard jQuery UI titlebar close (X) button
+  (`.ui-dialog-titlebar-close`), then a control whose text is exactly "Cancel" — never anything
+  containing "Save".
+- Treats a **hidden** dialog as closed. jQuery UI closes a dialog by setting `display:none` and
+  leaving it in the DOM, so an is-it-still-in-the-page check can't tell "closed" from "never
+  closed" — that's what made a real run read all four times successfully and *still* stop early
+  every time, skipping every later shift. Visibility is determined by walking the ancestor chain's
+  computed `display`/`visibility` rather than `offsetParent`/`getBoundingClientRect`, since those
+  need real layout and would report everything as hidden in a test environment.
 - If the dialog doesn't visibly close the way expected after reading a shift, scanning **stops
   early** rather than continuing to click on a page that might not be in the state it expects, and
   says why in the popup's log.

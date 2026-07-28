@@ -205,19 +205,37 @@ function buildClickThroughScript({ closable }) {
 
   // closable === 'titlebar': no Escape handling anywhere -- only the
   // jQuery UI titlebar close (X) button works, wrapped in a .ui-dialog
-  // ancestor as on the real site. closable === false (or unset): nothing
-  // closes it at all, simulating a dialog that won't close no matter what.
-  const dialogHtml =
-    closable === 'titlebar'
-      ? `var wrapper = document.createElement('div');
+  // ancestor as on the real site.
+  //
+  // closable === 'hides-not-removes': the real jQuery UI behavior -- closing
+  // sets display:none on the .ui-dialog wrapper and LEAVES the dialog in the
+  // DOM. A text-only "is it still there" check can't tell this apart from a
+  // dialog that never closed.
+  //
+  // closable === false (or unset): nothing closes it at all, simulating a
+  // dialog that won't close no matter what.
+  let dialogHtml = `document.body.appendChild(dialog);`;
+  if (closable === 'titlebar') {
+    dialogHtml = `var wrapper = document.createElement('div');
          wrapper.className = 'ui-dialog';
          var closeBtn = document.createElement('button');
          closeBtn.className = 'ui-dialog-titlebar-close';
          closeBtn.addEventListener('click', function () { wrapper.remove(); });
          wrapper.appendChild(closeBtn);
          wrapper.appendChild(dialog);
-         document.body.appendChild(wrapper);`
-      : `document.body.appendChild(dialog);`;
+         document.body.appendChild(wrapper);`;
+  } else if (closable === 'hides-not-removes') {
+    dialogHtml = `var wrapper = document.createElement('div');
+         wrapper.className = 'ui-dialog';
+         var closeBtn = document.createElement('button');
+         closeBtn.className = 'ui-dialog-titlebar-close';
+         closeBtn.addEventListener('click', function () {
+           wrapper.style.display = 'none';
+         });
+         wrapper.appendChild(closeBtn);
+         wrapper.appendChild(dialog);
+         document.body.appendChild(wrapper);`;
+  }
 
   return `
     <script>
@@ -337,6 +355,30 @@ test('falls back to the jQuery UI titlebar close button when Escape does nothing
   const result = await runScanScript(html, { runScripts: true });
 
   assert.equal(result.stoppedEarlyReason, null);
+  assert.equal(result.records[0].actual_time_in, '07/27/2026 07:11:25 PM');
+});
+
+test('treats a hidden-but-still-present dialog as closed, and keeps going', async () => {
+  // Regression test for the real failure: the same shift read all four times
+  // successfully, yet the scan stopped early every run claiming the dialog
+  // never closed. jQuery UI closes a dialog by setting display:none and
+  // leaving it in the DOM -- so a text-only presence check can't distinguish
+  // "closed" from "never closed", and every later shift got skipped.
+  const yesterday = isoDateOffsetFromToday(-1);
+  const calendarHtml = buildFixture({
+    status: 'COMPLETED',
+    dataStart: `${yesterday}T09:00:00.000000`,
+    dataEnd: `${yesterday}T16:00:00.000000`,
+    clientName: 'Kozuka-Ssenyan, Mia',
+    caregiverName: 'Barberi, Miku',
+    eventId: 'evt-hidden-close',
+    id: 'shift-el',
+  });
+  const html = calendarHtml + buildClickThroughScript({ closable: 'hides-not-removes' });
+
+  const result = await runScanScript(html, { runScripts: true });
+
+  assert.equal(result.stoppedEarlyReason, null, 'a hidden dialog must count as closed');
   assert.equal(result.records[0].actual_time_in, '07/27/2026 07:11:25 PM');
 });
 

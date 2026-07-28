@@ -147,7 +147,28 @@
     return phrases.every((p) => text.includes(p));
   }
 
-  function findSmallestMatch(mustContain) {
+  // jQuery UI dialogs (which this site uses) stay in the DOM when closed and
+  // are merely hidden -- so a text-only match would still "find" a dialog
+  // that's already been dismissed, which is exactly what made a successful
+  // close look like a failure to close.
+  //
+  // Walks the ancestor chain checking computed display/visibility rather than
+  // using offsetParent or getBoundingClientRect: those depend on real layout,
+  // which means they'd also be the only thing standing between this working
+  // and silently treating everything as hidden in any non-layout environment.
+  // display:none doesn't cascade into a child's own computed style, hence the
+  // walk instead of a single check.
+  function isVisible(el) {
+    let node = el;
+    while (node && node.nodeType === 1) {
+      const style = window.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      node = node.parentElement;
+    }
+    return true;
+  }
+
+  function findSmallestMatch(mustContain, { requireVisible = true } = {}) {
     if (!document.body) return null;
     const candidates = Array.from(document.body.querySelectorAll('*')).filter((el) =>
       CONTAINER_TAGS.has(el.tagName)
@@ -157,6 +178,7 @@
     for (const el of candidates) {
       const text = el.textContent || '';
       if (containsAll(text, mustContain)) {
+        if (requireVisible && !isVisible(el)) continue;
         const size = el.outerHTML.length;
         if (size < bestSize) {
           bestSize = size;
@@ -261,8 +283,15 @@
 
     if (!findSmallestMatch(SIGNALS.editCareLog)) return true;
 
-    const dialogScope = (dialogEl && dialogEl.closest('.ui-dialog')) || document;
-    const titlebarClose = dialogScope.querySelector('.ui-dialog-titlebar-close');
+    // Scope to THIS dialog's own .ui-dialog wrapper where possible -- the page
+    // can hold several jQuery UI dialogs at once (closed ones stay in the DOM,
+    // merely hidden), so an unscoped lookup could grab a different dialog's
+    // close button. Falling back to a document-wide search, only visible
+    // controls are considered, for the same reason.
+    const dialogWrapper = dialogEl && dialogEl.closest('.ui-dialog');
+    const titlebarClose = dialogWrapper
+      ? dialogWrapper.querySelector('.ui-dialog-titlebar-close')
+      : Array.from(document.querySelectorAll('.ui-dialog-titlebar-close')).find(isVisible);
     if (titlebarClose) {
       simulateClick(titlebarClose);
       await sleep(CLOSE_SETTLE_MS);
@@ -270,8 +299,9 @@
 
     if (!findSmallestMatch(SIGNALS.editCareLog)) return true;
 
-    const cancelLink = Array.from(document.querySelectorAll('a, button')).find(
-      (el) => (el.textContent || '').trim() === 'Cancel'
+    const cancelScope = dialogWrapper || document;
+    const cancelLink = Array.from(cancelScope.querySelectorAll('a, button')).find(
+      (el) => (el.textContent || '').trim() === 'Cancel' && isVisible(el)
     );
     if (cancelLink) {
       simulateClick(cancelLink);
@@ -369,7 +399,16 @@
     if (!closedOk) {
       // The dialog didn't close the way we expect -- stop rather than risk
       // clicking blindly into whatever state the page is actually in now.
-      stoppedEarlyReason = `Could not confirm the Edit Care Log dialog closed after reading ${record.caregiver_name}/${record.client_name} (${record.shift_date}). Stopped early -- reload the WellSky page and re-scan.`;
+      // Include what's actually still matching, so a repeat of this is
+      // diagnosable from the log alone instead of needing another debug run.
+      const stillOpen = findSmallestMatch(SIGNALS.editCareLog);
+      const stillOpenDesc = stillOpen
+        ? `still matching: <${stillOpen.tagName.toLowerCase()} class="${stillOpen.className}">`
+        : 'nothing visible still matches (so this may be a false alarm)';
+      stoppedEarlyReason =
+        `Could not confirm the Edit Care Log dialog closed after reading ${record.caregiver_name}/` +
+        `${record.client_name} (${record.shift_date}) -- ${stillOpenDesc}. ` +
+        `Stopped early -- reload the WellSky page and re-scan.`;
       break;
     }
   }
