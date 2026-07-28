@@ -31,18 +31,37 @@ function buildExportDocument(result) {
     `Page title: ${result.pageTitle}\n` +
     `Captured at: ${result.capturedAt}\n` +
     `Matches found: ${result.matches.map((m) => m.matchedAs).join(', ') || 'none'}\n` +
-    `Actual/Scheduled links simulated-hovered: ${result.hoverTargetsTriggered}\n` +
+    `Actual/Scheduled links probed (hovered one at a time): ${result.hoverTargetsTriggered}\n` +
     `jQuery detected on page: ${result.jQueryDetected}\n` +
-    `Floating tooltip-like elements found on the page: ${result.floatingTooltips.length}\n` +
     `-->\n`;
   const body = result.matches
     .map((m) => `<!-- ===== matched as: ${m.matchedAs} ===== -->\n${m.outerHTML}\n`)
     .join('\n');
-  const tooltips = result.floatingTooltips.length
-    ? `\n<!-- ===== floating tooltip-like elements found anywhere on the page ===== -->\n` +
-      result.floatingTooltips.map((html) => `${html}\n`).join('\n')
-    : '';
-  return header + body + tooltips;
+  const probes = buildProbeReport(result.hoverProbes);
+  return header + body + probes;
+}
+
+function buildProbeReport(hoverProbes) {
+  if (!hoverProbes || hoverProbes.length === 0) return '';
+
+  const sections = hoverProbes.map((probe, i) => {
+    const attrLines = Object.entries(probe.changedAttributes || {})
+      .map(([name, { before, after }]) => `    ${name}: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`)
+      .join('\n');
+    const newElLines = (probe.newElements || []).map((html) => `    ${html}`).join('\n');
+
+    return (
+      `<!--\n` +
+      `  Link ${i + 1}: class="${probe.linkClass}" text="${probe.linkText}"\n` +
+      `  Changed attributes on the link itself after hovering:\n` +
+      (attrLines || '    (none)\n') +
+      `\n  New elements that appeared anywhere on the page after hovering:\n` +
+      (newElLines || '    (none)\n') +
+      `\n-->`
+    );
+  });
+
+  return `\n<!-- ===== per-link hover probe results ===== -->\n${sections.join('\n')}\n`;
 }
 
 function downloadHtmlExport(result) {
@@ -88,9 +107,12 @@ async function exportCareLogHtml() {
       `Captured ~${sizeKb} KB (${result.matches.map((m) => m.matchedAs).join(', ')}), ` +
         `hovered ${result.hoverTargetsTriggered} Actual/Scheduled link(s). Downloaded.`
     );
+    const changesSeen = (result.hoverProbes || []).filter(
+      (p) => Object.keys(p.changedAttributes || {}).length > 0 || (p.newElements || []).length > 0
+    ).length;
     addLogEntry(
       `${new Date(result.capturedAt).toLocaleTimeString()} — care log export — ${sizeKb} KB — ` +
-        `${result.hoverTargetsTriggered} link(s) hovered — ${result.floatingTooltips.length} floating tooltip(s) found`
+        `${result.hoverTargetsTriggered} link(s) probed — ${changesSeen} showed a real change`
     );
   } catch (err) {
     setStatus(`Error: ${err.message}`);

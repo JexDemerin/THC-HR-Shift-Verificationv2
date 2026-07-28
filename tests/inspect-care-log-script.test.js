@@ -112,12 +112,12 @@ test('reports foundAny false when neither popup is open', async () => {
   assert.deepEqual(result.matches, []);
 });
 
-test('simulates a hover on every Actual/Scheduled link and re-captures afterward', async () => {
+test('probes each link individually and reports its own changed attributes', async () => {
   // A stand-in for whatever WellSky's real handler does: fill in the title
   // attribute once hovered. This checks the *mechanism* (dispatching a
   // synthetic hover actually reaches a real mouseenter listener, no physical
-  // mouse needed) -- not WellSky's specific real implementation, which is
-  // still unknown until a real capture confirms it.
+  // mouse needed, and the per-link before/after diff catches the change) --
+  // not WellSky's specific real implementation, which is still unknown.
   const html = `
     <div class="edit-care-log-dialog">
       <label>Status:</label>
@@ -142,12 +142,18 @@ test('simulates a hover on every Actual/Scheduled link and re-captures afterward
   const result = await run(html, { runScripts: true });
 
   assert.equal(result.hoverTargetsTriggered, 2);
-  const match = result.matches.find((m) => m.matchedAs === 'edit-care-log');
-  assert.match(match.outerHTML, /title="07\/27\/2026 01:35:33 PM"/);
-  assert.match(match.outerHTML, /title="07\/27\/2026 09:00:00 AM"/);
+  const actualProbe = result.hoverProbes.find((p) => p.linkText === 'Actual');
+  const scheduledProbe = result.hoverProbes.find((p) => p.linkText === 'Scheduled');
+  assert.ok(actualProbe);
+  assert.ok(scheduledProbe);
+  assert.equal(actualProbe.changedAttributes.title.after, '07/27/2026 01:35:33 PM');
+  assert.equal(scheduledProbe.changedAttributes.title.after, '07/27/2026 09:00:00 AM');
 });
 
-test('also captures floating tooltip-like elements appended anywhere on the page', async () => {
+test('reports a brand-new element appended anywhere on the page during a specific hover', async () => {
+  // Covers the case where the real mechanism isn't an attribute at all, but
+  // a whole new tooltip node inserted somewhere else in the document (e.g.
+  // appended to <body>) -- caught generically, without guessing a class name.
   const html = `
     <div class="edit-care-log-dialog">
       <label>Status</label>
@@ -156,12 +162,22 @@ test('also captures floating tooltip-like elements appended anywhere on the page
       <label>Pay Hours</label>
       <label>Client</label>
       <label>Caregiver</label>
+      <a id="actual-link">Actual</a>
+      <script>
+        document.getElementById('actual-link').addEventListener('mouseenter', function () {
+          var tip = document.createElement('div');
+          tip.className = 'floating-tooltip';
+          tip.textContent = '07/27/2026 01:35:33 PM';
+          document.body.appendChild(tip);
+        });
+      </script>
     </div>
-    <div class="floating-tooltip" role="tooltip" style="position: absolute;">07/27/2026 01:35:33 PM</div>
   `;
 
-  const result = await run(html);
+  const result = await run(html, { runScripts: true });
 
-  assert.equal(result.floatingTooltips.length, 1);
-  assert.match(result.floatingTooltips[0], /01:35:33 PM/);
+  const probe = result.hoverProbes.find((p) => p.linkText === 'Actual');
+  assert.ok(probe);
+  assert.equal(probe.newElements.length, 1);
+  assert.match(probe.newElements[0], /01:35:33 PM/);
 });

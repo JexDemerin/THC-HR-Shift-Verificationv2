@@ -1,18 +1,25 @@
 // Phase 0 — DOM discovery for the shift summary popup and Edit Care Log dialog.
 //
-// We don't yet know the real markup for these two popups -- in particular how
-// the "Actual" / "Scheduled" links under the Official start/end fields expose
-// their tooltip values (a title attribute already present in the DOM? a
-// separate element that only appears on hover? something else?). Guessing
-// here risks silently mis-recording payroll timestamps, so this script only
-// ever captures whatever popup is currently open on screen and hands its
-// outerHTML back -- a human opens the popup first, then clicks "Export Care
-// Log HTML" in the extension popup.
+// We don't yet know the real mechanism behind the "Actual" / "Scheduled"
+// links under the Official start/end fields -- a real capture ruled out the
+// obvious guess (a `title` attribute) since it stayed empty even after a
+// user visually confirmed the real tooltip appeared during a simulated
+// hover. Rather than guess a second attribute name, this probes each link
+// individually: snapshot every attribute and every element on the page
+// immediately before and after hovering JUST that one link, and report
+// whatever actually changed. Guessing here risks silently mis-recording
+// payroll timestamps, so this only ever captures what's really happening --
+// a human opens the popup first, then clicks "Export Care Log HTML".
 //
 // It simulates hovering every "Actual"/"Scheduled" link itself (dispatching
 // synthetic pointer/mouse events) before capturing -- there's no need for a
 // human to physically hold the mouse over a link while also clicking the
-// extension icon, which isn't even physically possible.
+// extension icon, which isn't even physically possible. A prior version
+// checked once at the very end, after hovering all 8 links in sequence --
+// if whatever shows the tooltip also clears it again once a *different*
+// element gets hovered next, that would explain why nothing showed up
+// there even though the tooltip is real. This version checks right after
+// each individual hover instead.
 //
 // This file only ever runs when injected on demand -- never on page load.
 
@@ -74,9 +81,8 @@
   // position (clientX/Y default to 0,0 otherwise), in case the real handler
   // -- or a tooltip-positioning library -- checks the coordinates rather than
   // just which element received the event. Also fires jQuery's own event
-  // system in parallel (this page loads jQuery -- Chosen.js's markup is
-  // visible elsewhere in the dialog), since some jQuery-bound handlers only
-  // respond to jQuery's .trigger(), not a raw native dispatchEvent.
+  // system in parallel, in case jQuery is present and some handler only
+  // responds to jQuery's .trigger(), not a raw native dispatchEvent.
   function simulateHover(el) {
     const rect = el.getBoundingClientRect();
     const clientX = Math.round(rect.left + rect.width / 2);
@@ -103,47 +109,89 @@
     });
   }
 
-  async function hoverEveryActualScheduledLink(container) {
-    const targets = findHoverTargets(container);
-    for (const target of targets) {
-      simulateHover(target);
-      await sleep(HOVER_SETTLE_MS);
-    }
-    return targets.length;
+  function snapshotAttributes(el) {
+    const result = {};
+    for (const attr of el.attributes) result[attr.name] = attr.value;
+    return result;
   }
 
-  // Some tooltip implementations append a floating element to <body> instead
-  // of nesting it inside the dialog -- catch those too, in case the dialog's
-  // own outerHTML capture (below) doesn't show anything even after hovering.
-  function findFloatingTooltips() {
-    const selector = '[role="tooltip"], .tooltip, .ui-tooltip, [class*="tooltip" i]';
-    return Array.from(document.querySelectorAll(selector)).map((el) => el.outerHTML);
+  function diffAttributes(before, after) {
+    const changed = {};
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    for (const key of keys) {
+      if (before[key] !== after[key]) {
+        changed[key] = { before: before[key] ?? null, after: after[key] ?? null };
+      }
+    }
+    return changed;
+  }
+
+  // Generic "what showed up" check -- catches a tooltip implemented as a
+  // brand-new DOM node anywhere on the page, without needing to guess its
+  // class name or where it gets attached.
+  function snapshotAllElements() {
+    return new Set(document.querySelectorAll('*'));
+  }
+
+  function findNewTopLevelElements(before, after) {
+    const isNew = (el) => !before.has(el);
+    const newEls = Array.from(after).filter(isNew);
+    // Skip an element if its parent is also new -- keeps the report to just
+    // the outermost new node instead of every descendant of it too.
+    return newEls.filter((el) => !el.parentElement || !isNew(el.parentElement));
+  }
+
+  // Probes one link at a time: snapshot -> hover -> settle -> snapshot again
+  // -> diff, immediately, before moving to the next link. This is what
+  // catches a value that gets set and then cleared again once a *different*
+  // element receives the next hover.
+  async function probeHoverTargets(container) {
+    const targets = findHoverTargets(container);
+    const probes = [];
+
+    for (const target of targets) {
+      const attrsBefore = snapshotAttributes(target);
+      const elsBefore = snapshotAllElements();
+
+      simulateHover(target);
+      await sleep(HOVER_SETTLE_MS);
+
+      const attrsAfter = snapshotAttributes(target);
+      const elsAfter = snapshotAllElements();
+
+      probes.push({
+        linkClass: target.className || null,
+        linkText: (target.textContent || '').trim(),
+        changedAttributes: diffAttributes(attrsBefore, attrsAfter),
+        newElements: findNewTopLevelElements(elsBefore, elsAfter).map((el) => el.outerHTML),
+      });
+    }
+
+    return probes;
   }
 
   const matches = [];
-  let hoverTargetsTriggered = 0;
+  let hoverProbes = [];
 
   for (const signal of SIGNALS) {
     const el = findSmallestMatch(signal.mustContain);
     if (!el) continue;
 
     if (signal.name === 'edit-care-log') {
-      hoverTargetsTriggered += await hoverEveryActualScheduledLink(el);
+      hoverProbes = await probeHoverTargets(el);
     }
 
     matches.push({
       matchedAs: signal.name,
-      outerHTML: el.outerHTML, // re-read after hovering, so any attribute/DOM changes are included
+      outerHTML: el.outerHTML,
       byteLength: el.outerHTML.length,
     });
   }
 
-  const floatingTooltips = findFloatingTooltips();
-
   return {
     matches,
-    floatingTooltips,
-    hoverTargetsTriggered,
+    hoverProbes,
+    hoverTargetsTriggered: hoverProbes.length,
     jQueryDetected: Boolean(window.jQuery || window.$),
     foundAny: matches.length > 0,
     pageUrl: window.location.href,
