@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "THC WellSky Shift Log",
+  "version": "0.1.0",
+  "description": "Mirrors WellSky shift records (caregiver, client, date, actual/scheduled clock times, status) into a Google Sheet.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ]
+}
