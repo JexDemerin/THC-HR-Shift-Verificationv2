@@ -16,8 +16,18 @@
 
   // Strong, content-based signals -- much more reliable than guessing a class
   // name, since WellSky's actual CSS classes for these popups aren't known yet.
+  //
+  // The Edit Care Log dialog also contains a "Bill Hours"/"Pay Hours" hour
+  // -override sub-widget that has its own nested "Official"/"Bill Hours"/
+  // "Pay Hours" text, which used to satisfy this same signal on its own --
+  // "smallest matching container" then grabbed that sub-widget instead of the
+  // whole dialog. Requiring Status/Client/Caregiver too (only present in the
+  // outer dialog, not that sub-widget) forces the match up to the real dialog.
   const SIGNALS = [
-    { name: 'edit-care-log', mustContain: ['Official', 'Bill Hours', 'Pay Hours'] },
+    {
+      name: 'edit-care-log',
+      mustContain: ['Official', 'Bill Hours', 'Pay Hours', 'Status', 'Client', 'Caregiver'],
+    },
     { name: 'summary-popup', mustContain: ['Care Log', 'Summary', 'Notes', 'Edit', 'Copy'] },
   ];
 
