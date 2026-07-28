@@ -233,33 +233,65 @@
       .filter((el) => !el.parentElement || !isNew(el.parentElement));
   }
 
+  // Recorded in place of a scheduled time when the shift genuinely has no
+  // scheduled time to read -- confirmed against a real shift whose dialog
+  // showed "Set to: Actual" with no "| Scheduled" link beside it at all.
+  // That's a real property of the shift, not a read failure, so it gets its
+  // own explicit value rather than being left blank (which would be
+  // indistinguishable from something having gone wrong).
+  const NO_SCHEDULED_VALUE = 'only had actual hours';
+
   // Hovers one quick-time link and reads the resulting `._ptip` tooltip node
   // that appears elsewhere on the page -- confirmed via a real Phase 0
   // capture. Removes the tooltip node afterward so repeated runs don't leave
   // a growing pile of stray floating timestamp divs on the page.
+  //
+  // Returns { present: false } when the link isn't in the dialog at all
+  // (nothing to read -- expected for a shift with no scheduled time), versus
+  // { present: true, value: null } when the link IS there but hovering it
+  // didn't produce a tooltip (a real problem worth reporting).
   async function readQuickTime(dialogEl, linkClass) {
     const link = dialogEl.querySelector(`a.${linkClass}`);
-    if (!link) return null;
+    if (!link) return { present: false, value: null };
 
     const before = new Set(document.querySelectorAll('._ptip'));
     simulateHover(link);
     await sleep(HOVER_SETTLE_MS);
     const after = Array.from(document.querySelectorAll('._ptip'));
     const tooltip = after.find((el) => !before.has(el));
-    if (!tooltip) return null;
+    if (!tooltip) return { present: true, value: null };
 
     const text = (tooltip.textContent || '').trim();
     tooltip.remove();
-    return text || null;
+    return { present: true, value: text || null };
   }
 
+  // Returns the four time values plus the list of fields that failed to read
+  // for a reason worth flagging -- a genuinely-absent scheduled time isn't
+  // one of those, it's recorded as NO_SCHEDULED_VALUE instead.
   async function readCareLogTimes(dialogEl) {
-    return {
+    const reads = {
       actual_time_in: await readQuickTime(dialogEl, 'actual_start'),
       scheduled_time_in: await readQuickTime(dialogEl, 'scheduled_start'),
       actual_time_out: await readQuickTime(dialogEl, 'actual_end'),
       scheduled_time_out: await readQuickTime(dialogEl, 'scheduled_end'),
     };
+
+    const times = {};
+    const unreadable = [];
+    for (const [field, read] of Object.entries(reads)) {
+      const isScheduledField = field.startsWith('scheduled_');
+      if (read.value) {
+        times[field] = read.value;
+      } else if (!read.present && isScheduledField) {
+        times[field] = NO_SCHEDULED_VALUE;
+      } else {
+        times[field] = null;
+        unreadable.push(field);
+      }
+    }
+
+    return { times, unreadable };
   }
 
   // Never clicks Save. Tries, in order: Escape (dispatched both broadly and
@@ -363,13 +395,10 @@
       return { times: null, closedOk, diagnostic: `Clicked Edit but the Edit Care Log dialog never matched.` };
     }
 
-    const times = await readCareLogTimes(dialog);
+    const { times, unreadable } = await readCareLogTimes(dialog);
     const closedOk = await closeDialog(dialog);
-    const missing = Object.entries(times)
-      .filter(([, v]) => !v)
-      .map(([k]) => k);
-    const diagnostic = missing.length
-      ? `Dialog opened but couldn't read: ${missing.join(', ')}`
+    const diagnostic = unreadable.length
+      ? `Dialog opened but couldn't read: ${unreadable.join(', ')}`
       : null;
     return { times, closedOk, diagnostic };
   }

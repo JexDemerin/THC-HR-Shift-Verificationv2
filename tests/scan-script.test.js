@@ -177,7 +177,7 @@ test('an unparsed shift with no discoverable date is kept, not silently dropped'
 
 // ---- Full click-through: green shift -> summary popup -> Edit -> read times -> close ----
 
-function buildClickThroughScript({ closable }) {
+function buildClickThroughScript({ closable, scheduledLinks = 'present' }) {
   // closable === true: document-level Escape handling (registering this
   // listener doesn't need #edit-dialog to exist yet -- it's only looked up
   // once Escape is actually pressed, later).
@@ -253,13 +253,17 @@ function buildClickThroughScript({ closable }) {
           dialog.innerHTML =
             '<label>Status</label><label>Official</label><label>Bill Hours</label>' +
             '<label>Pay Hours</label><label>Client</label><label>Caregiver</label>' +
-            '<a class="actual_start">Actual</a><a class="scheduled_start">Scheduled</a>' +
-            '<a class="actual_end">Actual</a><a class="scheduled_end">Scheduled</a>';
+            '<a class="actual_start">Actual</a>' +
+            ${scheduledLinks === 'absent' ? "''" : `'<a class="scheduled_start">Scheduled</a>'`} +
+            '<a class="actual_end">Actual</a>' +
+            ${scheduledLinks === 'absent' ? "''" : `'<a class="scheduled_end">Scheduled</a>'`};
           ${dialogLevelCloseHandler}
           ${dialogHtml}
 
           function attachTooltip(selector, text) {
-            dialog.querySelector(selector).addEventListener('mouseenter', function () {
+            var el = dialog.querySelector(selector);
+            if (!el) return;
+            el.addEventListener('mouseenter', function () {
               var tip = document.createElement('div');
               tip.className = '_ptip side_b';
               tip.textContent = text;
@@ -267,9 +271,13 @@ function buildClickThroughScript({ closable }) {
             });
           }
           attachTooltip('.actual_start', '07/27/2026 07:11:25 PM');
-          attachTooltip('.scheduled_start', '07/27/2026 07:00:00 PM');
           attachTooltip('.actual_end', '07/27/2026 09:11:43 PM');
-          attachTooltip('.scheduled_end', '07/27/2026 09:00:00 PM');
+          ${
+            scheduledLinks === 'present-but-silent'
+              ? '// links exist but never produce a tooltip -- a real read failure'
+              : `attachTooltip('.scheduled_start', '07/27/2026 07:00:00 PM');
+                 attachTooltip('.scheduled_end', '07/27/2026 09:00:00 PM');`
+          }
         });
       });
       ${documentLevelCloseHandler}
@@ -446,4 +454,58 @@ test('reports a diagnostic and safely closes when the wrong popup opens', async 
   assert.equal(result.records[0].actual_time_in, null);
   assert.equal(result.enrichmentDiagnostics.length, 1);
   assert.match(result.enrichmentDiagnostics[0], /Add Unavailability/);
+});
+
+test('records "only had actual hours" when a shift genuinely has no scheduled time', async () => {
+  // Confirmed against a real shift whose Edit Care Log dialog showed
+  // "Set to: Actual" with no "| Scheduled" link beside it at all -- there's
+  // no scheduled time to read, which is a real property of that shift rather
+  // than a read failure, so it must not be reported as one.
+  const calendarHtml = buildFixture({
+    status: 'COMPLETED',
+    dataStart: '2026-07-27T10:30:00.000000',
+    dataEnd: '2026-07-27T14:30:00.000000',
+    clientName: 'Chiang, Ryan',
+    caregiverName: 'Toki, Kaliya',
+    eventId: 'evt-actual-only',
+    id: 'shift-el',
+  });
+  const html =
+    calendarHtml + buildClickThroughScript({ closable: true, scheduledLinks: 'absent' });
+
+  const result = await runScanScript(html, { runScripts: true });
+
+  const record = result.records[0];
+  assert.equal(record.actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(record.actual_time_out, '07/27/2026 09:11:43 PM');
+  assert.equal(record.scheduled_time_in, 'only had actual hours');
+  assert.equal(record.scheduled_time_out, 'only had actual hours');
+  assert.deepEqual(result.enrichmentDiagnostics, [], 'an absent scheduled time is not a failure');
+});
+
+test('still flags a scheduled link that exists but cannot be read', async () => {
+  // The other side of the coin: if the link IS there and hovering it produces
+  // nothing, that's a genuine problem and must stay visible rather than being
+  // quietly written off as "no scheduled time".
+  const calendarHtml = buildFixture({
+    status: 'COMPLETED',
+    dataStart: '2026-07-27T10:30:00.000000',
+    dataEnd: '2026-07-27T14:30:00.000000',
+    clientName: 'Chiang, Ryan',
+    caregiverName: 'Toki, Kaliya',
+    eventId: 'evt-silent-link',
+    id: 'shift-el',
+  });
+  const html =
+    calendarHtml +
+    buildClickThroughScript({ closable: true, scheduledLinks: 'present-but-silent' });
+
+  const result = await runScanScript(html, { runScripts: true });
+
+  const record = result.records[0];
+  assert.equal(record.actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(record.scheduled_time_in, null);
+  assert.equal(result.enrichmentDiagnostics.length, 1);
+  assert.match(result.enrichmentDiagnostics[0], /scheduled_time_in/);
+  assert.match(result.enrichmentDiagnostics[0], /scheduled_time_out/);
 });

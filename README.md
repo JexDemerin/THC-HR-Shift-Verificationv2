@@ -52,9 +52,14 @@ What's working now:
 - If the dialog doesn't visibly close the way expected after reading a shift, scanning **stops
   early** rather than continuing to click on a page that might not be in the state it expects, and
   says why in the popup's log.
+- Some shifts genuinely have no scheduled time — their dialog shows "Set to: Actual" with no
+  "| Scheduled" link at all. Those record **`only had actual hours`** in the two scheduled columns,
+  which is a real property of the shift rather than a failure, so it isn't reported as one. A
+  scheduled link that *is* present but produces nothing when hovered still gets flagged.
 - If any shift's click-through doesn't behave as expected (wrong popup opens, no Edit link found,
-  dialog never matches, a time comes back blank), that's reported as a per-shift diagnostic line in
-  the popup's log instead of just leaving the four fields silently blank.
+  dialog never matches, a time that should be readable comes back blank), that's reported as a
+  per-shift diagnostic line in the popup's log instead of just leaving the four fields silently
+  blank.
 - Sends every scanned record — `caregiver_name`, `client_name`, `shift_date`, the four time
   fields, `status`, `status_raw`, `event_id`, `scanned_at` — to a **"Shift Log" tab** (created
   automatically) in your Sheet, via an Apps Script Web App. Re-scanning the same shift updates its
