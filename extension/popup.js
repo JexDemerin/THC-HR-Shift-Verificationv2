@@ -2,6 +2,7 @@ const statusEl = document.getElementById('status');
 const logEl = document.getElementById('log');
 const exportBtn = document.getElementById('exportBtn');
 const scanBtn = document.getElementById('scanBtn');
+const inspectClickBtn = document.getElementById('inspectClickBtn');
 const webhookInput = document.getElementById('webhookUrl');
 const saveWebhookBtn = document.getElementById('saveWebhookBtn');
 
@@ -217,6 +218,92 @@ async function scanSchedule() {
   }
 }
 
+// ---- Debug: Inspect Shift Click ----
+
+function buildInspectClickReport(result) {
+  if (!result.found) {
+    return `<!--\nNo completed shift found.\nReason: ${result.reason}\nCaptured at: ${result.capturedAt}\n-->`;
+  }
+
+  const header =
+    `<!--\n` +
+    `WellSky Shift Click Inspection (debug)\n` +
+    `Page URL: ${result.pageUrl}\n` +
+    `Captured at: ${result.capturedAt}\n` +
+    `-->\n`;
+
+  const shiftHtml = `<!-- ===== the shift element itself ===== -->\n${result.shiftOuterHTML}\n`;
+
+  const resultsText = result.results
+    .map((r) => {
+      if (!r.tried) return `<!--\n  ${r.label}: not tried -- ${r.reason}\n-->`;
+      const newEls = r.newElementsSnippets.length
+        ? r.newElementsSnippets.map((s) => `    ${s}`).join('\n')
+        : '    (none)';
+      const newlyVisible = r.newlyVisibleSnippets.length
+        ? r.newlyVisibleSnippets.map((s) => `    ${s}`).join('\n')
+        : '    (none)';
+      return (
+        `<!--\n  ${r.label}:\n` +
+        `  New elements that appeared (${r.newElementsCount}):\n${newEls}\n` +
+        `  Previously-hidden elements that became visible (${r.newlyVisibleCount}):\n${newlyVisible}\n-->`
+      );
+    })
+    .join('\n');
+
+  return header + shiftHtml + `\n<!-- ===== per-target click results ===== -->\n${resultsText}\n`;
+}
+
+function downloadInspectClickReport(result) {
+  const doc = buildInspectClickReport(result);
+  const blob = new Blob([doc], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const safeTimestamp = result.capturedAt.replace(/[:.]/g, '-');
+  const filename = `wellsky-shift-click-inspect-${safeTimestamp}.html`;
+
+  chrome.downloads.download({ url, filename, saveAs: false }, () => {
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
+  });
+}
+
+async function inspectShiftClick() {
+  inspectClickBtn.disabled = true;
+  setStatus('Trying a few click targets on one completed shift...');
+
+  try {
+    const tab = await getActiveTab();
+    if (!tab || !tab.id) {
+      setStatus('No active tab found.');
+      return;
+    }
+
+    const injectionResults = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['inspect-shift-click-script.js'],
+    });
+
+    const result = injectionResults && injectionResults[0] && injectionResults[0].result;
+    if (!result) {
+      setStatus('Could not run the inspection on this page.');
+      return;
+    }
+
+    downloadInspectClickReport(result);
+
+    if (!result.found) {
+      setStatus(`No completed shift found to test. ${result.reason}`);
+      return;
+    }
+
+    setStatus(`Tried ${result.results.length} click target(s). Downloaded the report -- reload the WellSky tab now.`);
+    addLogEntry(`${new Date(result.capturedAt).toLocaleTimeString()} — shift click inspection downloaded.`);
+  } catch (err) {
+    setStatus(`Error: ${err.message}`);
+  } finally {
+    inspectClickBtn.disabled = false;
+  }
+}
+
 // ---- Settings ----
 
 async function loadWebhookUrl() {
@@ -258,5 +345,6 @@ async function saveWebhookUrl() {
 
 exportBtn.addEventListener('click', exportCareLogHtml);
 scanBtn.addEventListener('click', scanSchedule);
+inspectClickBtn.addEventListener('click', inspectShiftClick);
 saveWebhookBtn.addEventListener('click', saveWebhookUrl);
 loadWebhookUrl();

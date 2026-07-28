@@ -163,6 +163,21 @@
     el.dispatchEvent(new MouseEvent('mouseenter', opts));
   }
 
+  // The plain `.click()` DOM method dispatches a click with clientX/clientY
+  // stuck at 0,0 -- if WellSky's calendar uses the click's screen position
+  // for anything (not just which element was clicked), that alone could make
+  // a synthetic click behave differently from a real one. Matches the
+  // coordinate-aware approach already confirmed to matter for hover.
+  function simulateClick(el) {
+    const rect = el.getBoundingClientRect();
+    const clientX = Math.round(rect.left + rect.width / 2);
+    const clientY = Math.round(rect.top + rect.height / 2);
+    const opts = { bubbles: true, cancelable: true, view: window, clientX, clientY, button: 0 };
+    el.dispatchEvent(new MouseEvent('mousedown', opts));
+    el.dispatchEvent(new MouseEvent('mouseup', opts));
+    el.dispatchEvent(new MouseEvent('click', opts));
+  }
+
   function findLinkByText(container, text) {
     const candidates = Array.from(container.querySelectorAll('a, span, button, [role="button"]'));
     return candidates.find((el) => (el.textContent || '').trim() === text) || null;
@@ -225,19 +240,19 @@
       (el) => (el.textContent || '').trim() === 'Cancel'
     );
     if (cancelLink) {
-      cancelLink.click();
+      simulateClick(cancelLink);
       await sleep(CLOSE_SETTLE_MS);
     }
 
     return !findSmallestMatch(SIGNALS.editCareLog);
   }
 
-  // Real WellSky markup: each shift's clickable label is a
-  // `.title` element (client name + time) inside the `._event` wrapper --
-  // clicking the wrapper itself was observed opening the calendar's generic
-  // "Add Unavailability" popup instead (a real capture caught this), which
-  // suggests the shift-specific click handler lives on that inner element,
-  // not the outer one.
+  // Still being verified against the real page: clicking the outer ._event
+  // wrapper opened the calendar's generic "Add Unavailability" popup instead
+  // of the shift's own summary, and clicking .title (with plain `.click()`,
+  // no real coordinates) produced nothing detectable at all. Use
+  // inspect-shift-click-script.js's debug tool to compare candidates with
+  // real click coordinates before trusting this is the right target.
   function shiftClickTarget(eventEl) {
     return eventEl.querySelector('.title') || eventEl;
   }
@@ -254,7 +269,7 @@
   // debuggable instead of just silently leaving the four fields blank.
   async function enrichCompletedShift(eventEl) {
     const before = snapshotAllElements();
-    shiftClickTarget(eventEl).click();
+    simulateClick(shiftClickTarget(eventEl));
     await sleep(CLICK_SETTLE_MS);
 
     const popup = findSmallestMatch(SIGNALS.summaryPopup);
@@ -271,7 +286,7 @@
       return { times: null, closedOk, diagnostic: `Summary popup opened but no "Edit" link found in it.` };
     }
 
-    editLink.click();
+    simulateClick(editLink);
     await sleep(CLICK_SETTLE_MS);
 
     const dialog = findSmallestMatch(SIGNALS.editCareLog);

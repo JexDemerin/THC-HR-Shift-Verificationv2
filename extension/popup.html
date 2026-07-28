@@ -108,10 +108,13 @@
     <p class="subtitle">Together Homecare — mirrors WellSky shift records into a Sheet</p>
 
     <button id="scanBtn" class="primary">Scan Schedule</button>
-    <span class="phase-tag">Reads caregiver/client/date/status from what's visible. Actual/Scheduled clock times are not filled in yet (see Export tool below).</span>
+    <span class="phase-tag">Reads every visible past shift and, for completed ones, clicks through to read the real clock times.</span>
 
     <button id="exportBtn">Export Care Log HTML</button>
     <span class="phase-tag">DOM discovery tool — open a shift's Edit Care Log popup first, then click this to capture its real markup.</span>
+
+    <button id="inspectClickBtn">Debug: Inspect Shift Click</button>
+    <span class="phase-tag">Diagnostic only — tries a few click targets on one completed shift and reports what each one actually does. Reload the WellSky tab afterward regardless of the result.</span>
 
     <div id="status">Ready.</div>
     <div id="log"></div>

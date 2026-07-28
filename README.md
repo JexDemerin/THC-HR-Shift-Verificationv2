@@ -83,6 +83,15 @@ the state the script expects.
 - **Ctrl+Shift+E** — same idea, but captured exactly as-is with nothing simulated, for physically
   hovering a link with the real mouse and triggering the export via keyboard (since a mouse can't
   hover and click at the same time).
+- **"Debug: Inspect Shift Click"** — for the still-unsolved part of this: a real run showed
+  clicking the outer shift wrapper opens WellSky's generic "Add Unavailability" popup instead of
+  the shift's own summary, and clicking `.title` produced nothing detectable. This tool tries
+  several candidate click targets on one completed shift (the wrapper, `.title`, the name/time
+  spans inside it, any nested link) using a real click position — not the plain `.click()` method,
+  which always dispatches at 0,0 — and reports, for each, whether anything new appeared anywhere on
+  the page, including a pre-rendered element that was hidden and became visible instead of a brand
+  new node being created. **This is diagnostic only — reload the WellSky tab afterward regardless
+  of the result**, since it may leave something open if Escape didn't close it.
 
 ## Testing
 
