@@ -76,8 +76,11 @@ Two tabs per month, created automatically, keyed off each record's own `shift_da
 spanning a month boundary files each row in the right month:
 
 - **`2026-07 Log`** — one row per shift (or per idle caregiver/day, reading `-`), with
-  `caregiver_name`, `client_name`, `shift_date`, `time_in`, `time_out`, `duration_minutes`, the four
-  actual/scheduled times, `status`, `status_raw`, `note`, `event_id`, `row_key`, `scanned_at`.
+  `caregiver_name`, `client_name`, `shift_date`, `time_in`, `time_out`, `duration_minutes`,
+  `label_duration_minutes`, the four actual/scheduled times, `status`, `status_raw`, `note`,
+  `event_id`, `row_key`, `scanned_at`. (`duration_minutes` is the payable span — zero for a missed
+  clock-in/out — while `label_duration_minutes` keeps the scheduled span regardless of status, so
+  the payroll note can show it without it reaching the total.)
   Re-scanning updates an existing row rather than duplicating it, and a caregiver/day that gains a
   real shift has its stale `-` row removed.
 - **`2026-07 Payroll`** — caregivers down the left, **every** date in the month across the top as
@@ -102,8 +105,21 @@ quarter-hour rounding applied to the day's total (0–7 leftover minutes → `.0
 
 If a caregiver had more than one shift that day, the **most urgent status wins** the color, so an
 incomplete log can never hide behind a completed one. Hover any cell for a per-client breakdown,
-one line each: `1:00pm - 5:05pm = 4h5m (Chiang, Ryan)`. Incomplete shifts get no note line — their
-start/end times are WellSky placeholders, not hours anyone actually worked.
+one line each: `1:00pm - 5:05pm = 4h5m (Chiang, Ryan)`.
+
+An **incomplete** shift's cell reads `0`, but its note line still shows the scheduled span, total,
+and client so the office knows what was supposed to happen — marked
+`— scheduled; clock in/out missing`, since those hours haven't been verified as worked and
+deliberately don't reach the cell total.
+
+**Sibling care** is detected and counted once: one caregiver looking after two siblings over the
+*exact* same hours shows up as two shifts with identical start and end times, and those hours were
+only worked once. So `1:00pm-4:00pm` for two siblings totals **3 hours, not 6**. Both clients still
+appear in the note, followed by `Sibling care: identical times counted once.` so the arithmetic
+explains itself. Only exactly-identical times count — back-to-back or partially overlapping shifts
+are both counted in full. If a shared time range has one incomplete and one completed shift, the
+completed shift's real hours survive (the total takes the highest for that range, so a zero can't
+swallow them), while the cell still reads `0` because incomplete outranks completed.
 
 A date with no record at all (not yet scanned, or still in the future) is left **blank** rather than
 `-`, since `-` specifically means "scanned, and they didn't work".

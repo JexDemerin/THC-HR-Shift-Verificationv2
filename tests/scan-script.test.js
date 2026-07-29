@@ -763,3 +763,21 @@ test('a shift with no note marker is not reported as a problem', async () => {
   const noteDiagnostics = result.enrichmentDiagnostics.filter((d) => /activity note marker/.test(d));
   assert.deepEqual(noteDiagnostics, [], 'no note marker means nothing to report');
 });
+
+test('keeps an incomplete shift\'s scheduled span even though it earns no hours', async () => {
+  const date = isoDateOffsetFromToday(-1);
+  const html = buildGrid(
+    [
+      { name: 'Missed, Morgan', shifts: [
+        { date, status: 'MISSED_CLOCK_IN', start: '11:00:00.000000', end: '18:00:00.000000', client: 'Joyner, Yusuf', eventId: 'miss2' },
+      ] },
+    ],
+    [date]
+  );
+
+  const result = await runScanScript(html);
+  const shift = result.records.find((r) => r.event_id === 'miss2');
+
+  assert.equal(shift.duration_minutes, 0, 'no payable hours for a missing clock-in');
+  assert.equal(shift.label_duration_minutes, 420, 'the scheduled 7h span is still kept for the note');
+});

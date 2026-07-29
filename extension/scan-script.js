@@ -132,10 +132,16 @@
     const isConfident = Boolean(caregiverName && clientName && mappedStatus && shiftDate);
     const finalStatus = isConfident ? mappedStatus : 'unparsed';
 
+    // The span the label shows, whatever the status -- kept even for a missed
+    // clock-in/out, where it's the *scheduled* span rather than hours worked,
+    // so the payroll cell's hover note can still show what was supposed to
+    // happen while the cell total itself stays zero.
+    const labelDurationMinutes = minutesBetween(start, end);
+
     // A missed clock-in/out earns no hours regardless of what WellSky's
     // placeholder start/end times say -- it's zero until someone verifies the
     // real hours with the client, which is the whole point of flagging it.
-    const durationMinutes = finalStatus === 'incomplete' ? 0 : minutesBetween(start, end);
+    const durationMinutes = finalStatus === 'incomplete' ? 0 : labelDurationMinutes;
 
     return {
       caregiver_name: caregiverName || null,
@@ -144,6 +150,7 @@
       time_in: formatTime12h(start),
       time_out: formatTime12h(end),
       duration_minutes: durationMinutes,
+      label_duration_minutes: labelDurationMinutes,
       actual_time_in: null,
       scheduled_time_in: null,
       actual_time_out: null,
@@ -167,6 +174,7 @@
       time_in: '-',
       time_out: '-',
       duration_minutes: null,
+      label_duration_minutes: null,
       actual_time_in: '-',
       scheduled_time_in: '-',
       actual_time_out: '-',

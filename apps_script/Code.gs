@@ -24,7 +24,7 @@
 
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
-  'time_in', 'time_out', 'duration_minutes',
+  'time_in', 'time_out', 'duration_minutes', 'label_duration_minutes',
   'actual_time_in', 'scheduled_time_in',
   'actual_time_out', 'scheduled_time_out',
   'status', 'status_raw', 'note', 'event_id', 'row_key', 'scanned_at'
@@ -268,7 +268,22 @@ function aggregateByCaregiverAndDate_(records) {
 
     if (!byCaregiver[caregiver]) byCaregiver[caregiver] = {};
     if (!byCaregiver[caregiver][date]) {
-      byCaregiver[caregiver][date] = { totalMinutes: 0, statuses: [], noteLines: [], hasRealShift: false };
+      byCaregiver[caregiver][date] = {
+        totalMinutes: 0,
+        statuses: [],
+        noteLines: [],
+        hasRealShift: false,
+        // Sibling care: one caregiver looking after two siblings in the same
+        // house over the exact same hours shows up as two separate shifts
+        // with identical start AND end times. Those hours were only worked
+        // once, so minutes are tracked PER DISTINCT TIME RANGE and summed at
+        // the end -- deliberately not "first one wins", which would zero out
+        // a real shift that happened to share its times with an incomplete
+        // one processed just before it. Both clients still show in the note.
+        minutesByTimeRange: {},
+        timeRangeCounts: {},
+        siblingCare: false
+      };
     }
     var cell = byCaregiver[caregiver][date];
     cell.statuses.push(record.status);
@@ -276,27 +291,60 @@ function aggregateByCaregiverAndDate_(records) {
     if (record.status === 'no_shift') return;
     cell.hasRealShift = true;
 
-    var minutes = record.duration_minutes === '' || record.duration_minutes === null
-      ? null
-      : Number(record.duration_minutes);
-    if (minutes !== null && !isNaN(minutes)) {
-      cell.totalMinutes += minutes;
+    var minutes = toMinutes_(record.duration_minutes);
+    // For a missed clock-in/out this is the *scheduled* span rather than
+    // hours worked -- shown in the note so the office can see what was
+    // supposed to happen, while the cell total stays zero.
+    var labelMinutes = toMinutes_(record.label_duration_minutes);
+    var noteMinutes = labelMinutes !== null ? labelMinutes : minutes;
+
+    var timeRangeKey = String(record.time_in) + '|' + String(record.time_out);
+    cell.timeRangeCounts[timeRangeKey] = (cell.timeRangeCounts[timeRangeKey] || 0) + 1;
+    if (cell.timeRangeCounts[timeRangeKey] > 1) cell.siblingCare = true;
+
+    if (minutes !== null) {
+      // Highest wins for a shared time range, so a completed shift's real
+      // hours aren't lost to an incomplete sibling shift's zero.
+      var existing = cell.minutesByTimeRange[timeRangeKey];
+      if (existing === undefined || minutes > existing) {
+        cell.minutesByTimeRange[timeRangeKey] = minutes;
+      }
     }
 
-    // An incomplete (missed clock-in/out) shift gets no note: there are no
-    // real clocked times to break down, and showing WellSky's placeholder
-    // times as if they were worked hours would be actively misleading for
-    // payroll. Same for a cell with no readable duration.
-    if (record.status !== 'incomplete' && minutes !== null && !isNaN(minutes)) {
+    if (noteMinutes !== null) {
       // e.g. "1:00pm - 5:05pm = 4h5m (Chiang, Ryan)"
-      cell.noteLines.push(
+      var line =
         (record.time_in || '?') + ' - ' + (record.time_out || '?') +
-        ' = ' + formatHoursMinutes_(minutes) +
-        ' (' + (record.client_name || 'unknown client') + ')'
-      );
+        ' = ' + formatHoursMinutes_(noteMinutes) +
+        ' (' + (record.client_name || 'unknown client') + ')';
+      // Spell out that an incomplete shift's times are the schedule, not
+      // hours anyone clocked -- the cell reads 0 for exactly that reason.
+      if (record.status === 'incomplete') line += ' — scheduled; clock in/out missing';
+      cell.noteLines.push(line);
     }
   });
+
+  Object.keys(byCaregiver).forEach(function (caregiver) {
+    Object.keys(byCaregiver[caregiver]).forEach(function (date) {
+      var cell = byCaregiver[caregiver][date];
+      cell.totalMinutes = Object.keys(cell.minutesByTimeRange).reduce(function (sum, key) {
+        return sum + cell.minutesByTimeRange[key];
+      }, 0);
+      // Flagged on the note rather than left implicit, so a cell showing
+      // fewer hours than its own breakdown adds up to is self-explaining.
+      if (cell.siblingCare) {
+        cell.noteLines.push('Sibling care: identical times counted once.');
+      }
+    });
+  });
+
   return byCaregiver;
+}
+
+function toMinutes_(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  var number = Number(value);
+  return isNaN(number) ? null : number;
 }
 
 function cellValueFor_(status, totalMinutes, hasRealShift) {

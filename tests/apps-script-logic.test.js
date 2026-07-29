@@ -174,18 +174,21 @@ test('sums a day across two clients and notes each visit separately', () => {
   ]);
 });
 
-test('an incomplete shift contributes no note line', () => {
+test('an incomplete shift contributes no hours to the day total', () => {
   const records = [
     {
       caregiver_name: 'Amato, Savani', client_name: 'Joyner, Yusuf', shift_date: '2026-07-27',
-      time_in: '11:00am', time_out: '6:00pm', duration_minutes: 0, status: 'incomplete',
+      time_in: '11:00am', time_out: '6:00pm',
+      duration_minutes: 0, label_duration_minutes: 420, status: 'incomplete',
     },
   ];
 
   const byCaregiver = code.aggregateByCaregiverAndDate_(records);
   const cell = byCaregiver['Amato, Savani']['2026-07-27'];
 
-  assert.deepEqual(local(cell.noteLines), [], 'placeholder times must not read as worked hours');
+  // The scheduled span appears in the note (see the test below) but must not
+  // reach the total, since nobody has verified those hours were worked.
+  assert.equal(cell.totalMinutes, 0);
   assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 0);
 });
 
@@ -211,4 +214,151 @@ test('every status that can reach a cell has a color', () => {
     (status) => status !== 'no_shift' && !code.STATUS_COLORS[status]
   );
   assert.deepEqual(colorless, []);
+});
+
+// ---- Incomplete shifts keep their scheduled breakdown in the note ----
+
+test('an incomplete shift shows its scheduled span and client in the note, cell still 0', () => {
+  const records = [
+    {
+      caregiver_name: 'Amato, Savani', client_name: 'Joyner, Yusuf', shift_date: '2026-07-27',
+      time_in: '11:00am', time_out: '6:00pm',
+      duration_minutes: 0,        // no payable hours until someone verifies them
+      label_duration_minutes: 420, // but the schedule said 7h
+      status: 'incomplete',
+    },
+  ];
+
+  const byCaregiver = code.aggregateByCaregiverAndDate_(records);
+  const cell = byCaregiver['Amato, Savani']['2026-07-27'];
+
+  assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 0);
+  assert.equal(local(cell.noteLines).length, 1);
+  assert.match(cell.noteLines[0], /11:00am - 6:00pm = 7h \(Joyner, Yusuf\)/);
+  // The note must not pass the scheduled span off as hours actually worked.
+  assert.match(cell.noteLines[0], /scheduled; clock in\/out missing/);
+});
+
+// ---- Sibling care ----
+
+test('sibling care counts identical times once, not per client', () => {
+  // Same caregiver, same day, two siblings, exactly the same hours -- those
+  // three hours were only worked once.
+  const records = [
+    {
+      caregiver_name: 'Foketi, Ma\'ata', client_name: 'Pallapati, Samson', shift_date: '2026-07-27',
+      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      status: 'completed',
+    },
+    {
+      caregiver_name: 'Foketi, Ma\'ata', client_name: 'Pallapati, Aaron', shift_date: '2026-07-27',
+      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      status: 'completed',
+    },
+  ];
+
+  const byCaregiver = code.aggregateByCaregiverAndDate_(records);
+  const cell = byCaregiver['Foketi, Ma\'ata']['2026-07-27'];
+
+  assert.equal(cell.totalMinutes, 180, 'three hours, not six');
+  assert.equal(code.cellValueFor_('completed', cell.totalMinutes, true), 3);
+  assert.equal(cell.siblingCare, true);
+
+  // Both siblings still appear, with a line explaining the arithmetic.
+  const lines = local(cell.noteLines);
+  assert.match(lines[0], /Pallapati, Samson/);
+  assert.match(lines[1], /Pallapati, Aaron/);
+  assert.match(lines[2], /Sibling care: identical times counted once/);
+});
+
+test('two shifts at different times are NOT treated as sibling care', () => {
+  const records = [
+    {
+      caregiver_name: 'Barberi, Miku', client_name: 'A. Palapati', shift_date: '2026-07-27',
+      time_in: '3:00pm', time_out: '6:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      status: 'completed',
+    },
+    {
+      caregiver_name: 'Barberi, Miku', client_name: 'S. Palapati', shift_date: '2026-07-27',
+      time_in: '6:15pm', time_out: '9:00pm', duration_minutes: 165, label_duration_minutes: 165,
+      status: 'completed',
+    },
+  ];
+
+  const byCaregiver = code.aggregateByCaregiverAndDate_(records);
+  const cell = byCaregiver['Barberi, Miku']['2026-07-27'];
+
+  assert.equal(cell.totalMinutes, 345, 'back-to-back shifts both count');
+  assert.equal(cell.siblingCare, false);
+  assert.equal(local(cell.noteLines).length, 2, 'no sibling-care line added');
+});
+
+test('a partial overlap is not sibling care -- only exactly identical times are', () => {
+  const records = [
+    {
+      caregiver_name: 'Overlap, Olive', client_name: 'Client A', shift_date: '2026-07-27',
+      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      status: 'completed',
+    },
+    {
+      caregiver_name: 'Overlap, Olive', client_name: 'Client B', shift_date: '2026-07-27',
+      time_in: '1:00pm', time_out: '3:00pm', duration_minutes: 120, label_duration_minutes: 120,
+      status: 'completed',
+    },
+  ];
+
+  const byCaregiver = code.aggregateByCaregiverAndDate_(records);
+  const cell = byCaregiver['Overlap, Olive']['2026-07-27'];
+
+  assert.equal(cell.totalMinutes, 300, 'same start but different end -- both counted');
+  assert.equal(cell.siblingCare, false);
+});
+
+test('sibling care on different days is counted separately per day', () => {
+  const makePair = (date) => [
+    {
+      caregiver_name: 'Daily, Dana', client_name: 'Sib One', shift_date: date,
+      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      status: 'completed',
+    },
+    {
+      caregiver_name: 'Daily, Dana', client_name: 'Sib Two', shift_date: date,
+      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      status: 'completed',
+    },
+  ];
+
+  const byCaregiver = code.aggregateByCaregiverAndDate_([
+    ...makePair('2026-07-27'),
+    ...makePair('2026-07-28'),
+  ]);
+
+  assert.equal(byCaregiver['Daily, Dana']['2026-07-27'].totalMinutes, 180);
+  assert.equal(byCaregiver['Daily, Dana']['2026-07-28'].totalMinutes, 180);
+});
+
+test('a completed shift keeps its hours when an incomplete sibling shares its times', () => {
+  // Order matters here: a naive "first one wins" dedup would let the
+  // incomplete shift's zero swallow the completed shift's real hours.
+  const records = [
+    {
+      caregiver_name: 'Mixed, Morgan', client_name: 'Sib One', shift_date: '2026-07-27',
+      time_in: '1:00pm', time_out: '4:00pm',
+      duration_minutes: 0, label_duration_minutes: 180, status: 'incomplete',
+    },
+    {
+      caregiver_name: 'Mixed, Morgan', client_name: 'Sib Two', shift_date: '2026-07-27',
+      time_in: '1:00pm', time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+  ];
+
+  const byCaregiver = code.aggregateByCaregiverAndDate_(records);
+  const cell = byCaregiver['Mixed, Morgan']['2026-07-27'];
+
+  assert.equal(cell.totalMinutes, 180, 'the real hours survive, counted once');
+  // The cell itself still reads 0, because incomplete outranks completed --
+  // a missing clock-in has to stay visible for follow-up.
+  assert.equal(code.mostUrgentStatus_(local(cell.statuses)), 'incomplete');
+  assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 0);
 });
