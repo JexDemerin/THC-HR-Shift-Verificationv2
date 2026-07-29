@@ -66,14 +66,29 @@ What's working now:
   who was idle instead of silently omitting them. Column dates are derived by counting from any
   column whose date is known, so a day where *nobody* worked still gets its `-` rows.
 - Reads each shift's **activity note** — the text behind the small marker in a shift label's corner
-  (`._pop_note.note_exists`) — into a `note` column, via the same simulated-hover mechanism.
+  — into a `note` column, by fetching that marker's `data-ptip-url` (the same same-origin GET the
+  page itself makes on hover). Unlike the clock times, this one genuinely *can't* be done by
+  simulating a hover: the marker sits at `display:none` until the shift is hovered, and that
+  visibility comes from a CSS `:hover` rule, which follows the real pointer and is never triggered
+  by dispatched events. A marker with an empty response just means that shift has no note; only a
+  real fetch failure is reported.
 - Records come out sorted **by date, then caregiver name alphabetically** (all of 7/27 A–Z, then all
   of 7/28 A–Z, …), so that's the order they land in the sheet.
 
 ### What lands in the Sheet
 
-Two tabs per month, created automatically, keyed off each record's own `shift_date` — so a scan
-spanning a month boundary files each row in the right month:
+Two tabs per month, created automatically and named `YYYY-MM Log` / `YYYY-MM Payroll` (zero-padded
+so the tabs sort chronologically), keyed off each record's own `shift_date` — so a scan spanning a
+month boundary files each row in the right month.
+
+**Headers are verified on every write, not just when a tab is created.** If a tab's header row was
+deleted or edited by hand, it's restored. If a tab predates a column being added, its existing rows
+are **remapped by column name** rather than the header row simply being overwritten — otherwise
+every value after an inserted column would silently shift one place and end up labelled as the wrong
+field, which for payroll timestamps is worse than an outright failure. Values whose column no longer
+exists are dropped rather than shifted; genuinely new columns start blank. The Payroll tab is fully
+rebuilt each scan (notes included, since a stale note would strand an old breakdown on a changed
+cell), so its date/weekday header rows can't drift.
 
 - **`2026-07 Log`** — one row per shift (or per idle caregiver/day, reading `-`), with
   `caregiver_name`, `client_name`, `shift_date`, `time_in`, `time_out`, `duration_minutes`,

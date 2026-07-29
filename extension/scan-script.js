@@ -97,26 +97,60 @@
   }
 
   // The Activity Note behind the small marker in a shift label's corner.
-  // Confirmed markup: `<div class="_pop_note note_exists" data-ptip-url="...">`
-  // -- only shifts carrying `note_exists` have one. The note element itself
-  // sits at display:none until the shift is hovered, so the shift wrapper is
-  // hovered first to bring the marker out, then the marker itself.
+  // Confirmed markup:
+  //   <div class="_pop_note note_exists"
+  //        data-ptip-url="/scheduling/note/get/?carelog=846292420&..."
+  //        style="display:none">
+  //
+  // Read by fetching that `data-ptip-url` -- the same same-origin GET the page
+  // itself makes when the marker is hovered -- rather than by simulating a
+  // hover like the Actual/Scheduled times are.
+  //
+  // Hovering genuinely cannot work for this one: the marker sits at
+  // display:none until the shift is hovered, and that visibility is driven by
+  // a CSS :hover rule. CSS :hover follows the real pointer and is NOT
+  // triggered by dispatched events, so no synthetic hover can ever reveal the
+  // marker -- which is why an earlier hover-based attempt reported "couldn't
+  // be read" for every single shift on the schedule. The note text also
+  // arrives over the network here, unlike the clock times which are already
+  // local by the time the tooltip appears.
+  function noteUrlFor(eventEl) {
+    const noteEl = eventEl.querySelector('._pop_note[data-ptip-url]');
+    return noteEl ? noteEl.getAttribute('data-ptip-url') : null;
+  }
+
+  function htmlToPlainText(html) {
+    return html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   async function readActivityNote(eventEl) {
-    const noteEl = eventEl.querySelector('._pop_note.note_exists');
-    if (!noteEl) return { present: false, value: null };
+    const url = noteUrlFor(eventEl);
+    if (!url) return { present: false, value: null };
 
-    const before = new Set(document.querySelectorAll('._ptip'));
-    simulateHover(eventEl);
-    await sleep(HOVER_SETTLE_MS);
-    simulateHover(noteEl);
-    await sleep(HOVER_SETTLE_MS);
-
-    const tooltip = Array.from(document.querySelectorAll('._ptip')).find((el) => !before.has(el));
-    if (!tooltip) return { present: true, value: null };
-
-    const text = (tooltip.textContent || '').replace(/\s+/g, ' ').trim();
-    tooltip.remove();
-    return { present: true, value: text || null };
+    try {
+      const response = await window.fetch(url, { credentials: 'same-origin' });
+      if (!response.ok) {
+        return { present: true, value: null, error: `HTTP ${response.status}` };
+      }
+      const text = htmlToPlainText(await response.text());
+      // Plenty of shifts carry the marker element with nothing behind it, so
+      // an empty response means "no note", not a failure.
+      return { present: true, value: text || null, empty: !text };
+    } catch (err) {
+      return { present: true, value: null, error: err.message };
+    }
   }
 
   function extractRecord(caregiverName, eventEl) {
@@ -586,9 +620,11 @@
     const note = await readActivityNote(eventEl);
     if (note.value) {
       record.note = note.value;
-    } else if (note.present) {
+    } else if (note.error) {
+      // Only a genuine failure is worth reporting. A marker with nothing
+      // behind it just means that shift has no note.
       enrichmentDiagnostics.push(
-        `${record.caregiver_name}/${record.client_name} (${record.shift_date}): has an activity note marker but its text couldn't be read.`
+        `${record.caregiver_name}/${record.client_name} (${record.shift_date}): couldn't read its activity note (${note.error}).`
       );
     }
   }

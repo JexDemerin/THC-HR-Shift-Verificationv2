@@ -27,12 +27,17 @@ function buildFixture({ status, dataStart, dataEnd, clientName, caregiverName, e
   `;
 }
 
-async function runScanScript(bodyHtml, { runScripts = false } = {}) {
+async function runScanScript(bodyHtml, { runScripts = false, fetchImpl } = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${bodyHtml}</body></html>`, {
     url: 'https://togetherhomecare.clearcareonline.com/dashboard/live/weekly/caregivers/',
     pretendToBeVisual: true,
     runScripts: runScripts ? 'dangerously' : undefined,
   });
+  // Activity notes are read by fetching the marker's data-ptip-url, so tests
+  // supply their own fetch. Defaults to one that always fails, so a test that
+  // doesn't opt in can't accidentally depend on real network access.
+  dom.window.fetch =
+    fetchImpl || (() => Promise.reject(new Error('fetch not stubbed in this test')));
   global.document = dom.window.document;
   global.window = dom.window;
   global.MouseEvent = dom.window.MouseEvent;
@@ -542,7 +547,12 @@ function buildGrid(caregivers, dates) {
                   <div class="title">
                     <a class="name">${s.client}<span class="time">x</span></a>
                   </div>
-                  ${s.note ? '<div class="_pop_note note_exists" style="display:none">&nbsp;</div>' : ''}
+                  ${
+                    s.note
+                      ? `<div class="_pop_note note_exists" style="display:none"
+                              data-ptip-url="/scheduling/note/get/?carelog=${s.eventId}">&nbsp;</div>`
+                      : ''
+                  }
                 </div>`
             )
             .join('');
@@ -700,68 +710,107 @@ test('handles an overnight shift without producing negative hours', async () => 
   assert.equal(shift.duration_minutes, 480, '10pm to 6am is 8 hours, not a negative span');
 });
 
-test('reads the activity note from the shift note marker', async () => {
+// The note marker is display:none until the shift is hovered, and that
+// visibility is a CSS :hover rule -- which dispatched events cannot trigger,
+// so a simulated hover can never reveal it. The note is read by fetching the
+// marker's data-ptip-url instead, the same request the page itself makes.
+function noteFixture(caregiverName, eventId, extra = {}) {
   const date = isoDateOffsetFromToday(-1);
-  const grid = buildGrid(
+  return buildGrid(
     [
-      { name: 'Noted, Nora', shifts: [
-        { date, start: '17:00:00.000000', end: '20:00:00.000000', client: 'Pallapati, Samson', eventId: 'n1', note: true },
+      { name: caregiverName, shifts: [
+        {
+          date, start: '17:00:00.000000', end: '20:00:00.000000',
+          client: 'Pallapati, Samson', eventId, ...extra,
+        },
       ] },
     ],
     [date]
   );
-  const script = `
-    <script>
-      document.querySelector('._pop_note').addEventListener('mouseenter', function () {
-        var tip = document.createElement('div');
-        tip.className = '_ptip side_b';
-        tip.textContent = '07/14/26: On a vacation with their father, July 22-31';
-        document.body.appendChild(tip);
-      });
-    </script>
-  `;
+}
 
-  const result = await runScanScript(grid + script, { runScripts: true });
+const NOTE_DIAGNOSTIC = /couldn't read its activity note/;
+
+test('reads the activity note by fetching the marker\'s data-ptip-url', async () => {
+  const requested = [];
+  const fetchImpl = (url) => {
+    requested.push(url);
+    return Promise.resolve({
+      ok: true,
+      text: () =>
+        Promise.resolve(
+          '<div class="note">07/14/26: On a vacation with their father, July 22-31<br>' +
+            '(Added to shift that Occurs once on 07/27/2026)</div>'
+        ),
+    });
+  };
+
+  const result = await runScanScript(noteFixture('Noted, Nora', 'n1', { note: true }), { fetchImpl });
   const shift = result.records.find((r) => r.event_id === 'n1');
 
-  assert.match(shift.note, /On a vacation with their father/);
+  assert.deepEqual(requested, ['/scheduling/note/get/?carelog=n1']);
+  // Markup stripped, entities decoded, whitespace collapsed to one line.
+  assert.equal(
+    shift.note,
+    '07/14/26: On a vacation with their father, July 22-31 (Added to shift that Occurs once on 07/27/2026)'
+  );
+  assert.deepEqual(
+    result.enrichmentDiagnostics.filter((d) => NOTE_DIAGNOSTIC.test(d)),
+    []
+  );
 });
 
-test('flags a note marker whose text cannot be read, rather than dropping it', async () => {
-  const date = isoDateOffsetFromToday(-1);
-  const html = buildGrid(
-    [
-      { name: 'Silent, Sam', shifts: [
-        { date, start: '17:00:00.000000', end: '20:00:00.000000', client: 'Client S', eventId: 's1', note: true },
-      ] },
-    ],
-    [date]
+test('an empty note response means "no note", not a failure', async () => {
+  // Most shifts carry the marker element with nothing behind it, so an empty
+  // body must not be reported -- that was the bug that flagged every single
+  // shift on the schedule at once.
+  const fetchImpl = () => Promise.resolve({ ok: true, text: () => Promise.resolve('  &nbsp; ') });
+
+  const result = await runScanScript(noteFixture('Blank, Bailey', 'b1', { note: true }), { fetchImpl });
+
+  assert.equal(result.records.find((r) => r.event_id === 'b1').note, null);
+  assert.deepEqual(
+    result.enrichmentDiagnostics.filter((d) => NOTE_DIAGNOSTIC.test(d)),
+    [],
+    'a marker with nothing behind it is not a problem'
   );
+});
 
-  const result = await runScanScript(html); // no handler -> marker present, no tooltip
+test('reports a genuine note fetch failure', async () => {
+  const fetchImpl = () => Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('') });
 
-  assert.equal(result.records.find((r) => r.event_id === 's1').note, null);
-  // Scoped to note diagnostics: this fixture has no Edit Care Log dialog
-  // either, so the click-through correctly reports its own separate issue.
-  const noteDiagnostics = result.enrichmentDiagnostics.filter((d) => /activity note marker/.test(d));
+  const result = await runScanScript(noteFixture('Broken, Bea', 'x1', { note: true }), { fetchImpl });
+
+  assert.equal(result.records.find((r) => r.event_id === 'x1').note, null);
+  const noteDiagnostics = result.enrichmentDiagnostics.filter((d) => NOTE_DIAGNOSTIC.test(d));
   assert.equal(noteDiagnostics.length, 1);
+  assert.match(noteDiagnostics[0], /HTTP 500/);
 });
 
-test('a shift with no note marker is not reported as a problem', async () => {
-  const date = isoDateOffsetFromToday(-1);
-  const html = buildGrid(
-    [
-      { name: 'Plain, Pat', shifts: [
-        { date, start: '17:00:00.000000', end: '20:00:00.000000', client: 'Client P', eventId: 'p1' },
-      ] },
-    ],
-    [date]
+test('reports a network error while reading a note', async () => {
+  const fetchImpl = () => Promise.reject(new Error('network down'));
+
+  const result = await runScanScript(noteFixture('Offline, Ollie', 'o1', { note: true }), { fetchImpl });
+
+  const noteDiagnostics = result.enrichmentDiagnostics.filter((d) => NOTE_DIAGNOSTIC.test(d));
+  assert.equal(noteDiagnostics.length, 1);
+  assert.match(noteDiagnostics[0], /network down/);
+});
+
+test('a shift with no note marker is never fetched or reported', async () => {
+  let called = false;
+  const fetchImpl = () => {
+    called = true;
+    return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+  };
+
+  const result = await runScanScript(noteFixture('Plain, Pat', 'p1'), { fetchImpl });
+
+  assert.equal(called, false, 'no marker means no request at all');
+  assert.deepEqual(
+    result.enrichmentDiagnostics.filter((d) => NOTE_DIAGNOSTIC.test(d)),
+    []
   );
-
-  const result = await runScanScript(html);
-
-  const noteDiagnostics = result.enrichmentDiagnostics.filter((d) => /activity note marker/.test(d));
-  assert.deepEqual(noteDiagnostics, [], 'no note marker means nothing to report');
 });
 
 test('keeps an incomplete shift\'s scheduled span even though it earns no hours', async () => {

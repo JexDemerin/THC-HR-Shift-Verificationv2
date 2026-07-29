@@ -79,14 +79,68 @@ function payrollSheetName_(monthKey) {
 function getOrCreateSheet_(name, headers) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-    if (headers) {
-      sheet.appendRow(headers);
-      sheet.setFrozenRows(1);
+  if (!sheet) sheet = ss.insertSheet(name);
+  if (headers) ensureHeaderRow_(sheet, headers);
+  return sheet;
+}
+
+// Checked on EVERY write, not just when a tab is first created: a tab may have
+// been made by an older version of this script (fewer columns), or had its
+// header row edited or cleared by hand.
+//
+// Where the headers differ, existing data rows are REMAPPED by their old
+// column names rather than left in place. Simply stamping the new header row
+// over the old one would leave every existing value under whatever column name
+// now happens to sit at that position -- e.g. adding a column in the middle
+// would silently relabel real payroll timestamps as durations. Values whose
+// column no longer exists are dropped; genuinely new columns start blank.
+function headersMatch_(current, headers) {
+  for (var i = 0; i < headers.length; i++) {
+    if (String(current[i] === undefined || current[i] === null ? '' : current[i]) !== headers[i]) {
+      return false;
     }
   }
-  return sheet;
+  return true;
+}
+
+function ensureHeaderRow_(sheet, headers) {
+  var width = headers.length;
+  var lastColumn = sheet.getLastColumn();
+  var lastRow = sheet.getLastRow();
+
+  var current = lastColumn > 0 ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0] : [];
+  if (headersMatch_(current, headers) && lastColumn >= width) return;
+
+  if (sheet.getMaxColumns() < width) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), width - sheet.getMaxColumns());
+  }
+
+  // Nothing but a header row (or an empty sheet) -- just write the headers.
+  var hasOldHeaders = current.some(function (value) { return String(value || '') !== ''; });
+  if (lastRow < 2 || !hasOldHeaders) {
+    sheet.getRange(1, 1, 1, width).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    return;
+  }
+
+  var oldRows = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+  var remapped = oldRows.map(function (row) {
+    var byOldName = {};
+    current.forEach(function (name, index) {
+      if (name) byOldName[String(name)] = row[index];
+    });
+    return headers.map(function (name) {
+      var value = byOldName[name];
+      return value === undefined ? '' : value;
+    });
+  });
+
+  sheet.clear();
+  sheet.getRange(1, 1, 1, width).setValues([headers]).setFontWeight('bold');
+  if (remapped.length) {
+    sheet.getRange(2, 1, remapped.length, width).setValues(remapped);
+  }
+  sheet.setFrozenRows(1);
 }
 
 // Payroll's official quarter-hour rounding table: 0-7 leftover minutes round
@@ -216,13 +270,18 @@ function readLogRecords_(monthKey) {
   var sheet = ss.getSheetByName(logSheetName_(monthKey));
   if (!sheet) return [];
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
+  var lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) return [];
 
-  var values = sheet.getRange(2, 1, lastRow - 1, LOG_HEADERS.length).getValues();
+  // Read by the header row actually present rather than assuming LOG_HEADERS'
+  // order, so this can't quietly misread a tab whose columns have been
+  // reordered or that predates a column being added.
+  var headerRow = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  var values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
   return values.map(function (row) {
     var record = {};
-    LOG_HEADERS.forEach(function (key, index) {
-      record[key] = row[index];
+    headerRow.forEach(function (key, index) {
+      if (key) record[String(key)] = row[index];
     });
     return record;
   });
@@ -353,7 +412,13 @@ function cellValueFor_(status, totalMinutes, hasRealShift) {
 function rebuildPayrollSheet_(monthKey) {
   var records = readLogRecords_(monthKey);
   var sheet = getOrCreateSheet_(payrollSheetName_(monthKey), null);
+  // clear() drops values and formatting but leaves cell notes behind, which
+  // would strand an old hours breakdown on a cell whose data has since
+  // changed -- so notes are cleared explicitly. The whole tab is rebuilt from
+  // the Log tab each time, so its date/weekday header rows are always
+  // rewritten fresh and can't drift or go missing.
   sheet.clear();
+  sheet.clearNotes();
 
   var columns = buildPayrollColumns_(monthKey);
   var byCaregiver = aggregateByCaregiverAndDate_(records);

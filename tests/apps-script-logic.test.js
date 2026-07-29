@@ -362,3 +362,130 @@ test('a completed shift keeps its hours when an incomplete sibling shares its ti
   assert.equal(code.mostUrgentStatus_(local(cell.statuses)), 'incomplete');
   assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 0);
 });
+
+// ---- Header row integrity ----
+
+// A deliberately small stand-in for a Sheets sheet: enough surface for
+// ensureHeaderRow_ to be exercised for real, since getting this wrong would
+// silently misalign payroll columns.
+function makeFakeSheet(grid) {
+  const cells = grid.map((row) => row.slice());
+  let maxColumns = Math.max(8, ...cells.map((r) => r.length));
+  let frozenRows = 0;
+
+  const widthOf = () => Math.max(0, ...cells.map((r) => r.length));
+
+  return {
+    _cells: cells,
+    getLastRow: () => cells.length,
+    getLastColumn: () => widthOf(),
+    getMaxColumns: () => maxColumns,
+    insertColumnsAfter: (_after, count) => { maxColumns += count; },
+    setFrozenRows: (n) => { frozenRows = n; },
+    getFrozenRows: () => frozenRows,
+    clear: () => { cells.length = 0; },
+    getRange: (row, col, numRows, numCols) => ({
+      getValues: () => {
+        const out = [];
+        for (let r = 0; r < numRows; r++) {
+          const source = cells[row - 1 + r] || [];
+          const line = [];
+          for (let c = 0; c < numCols; c++) line.push(source[col - 1 + c] ?? '');
+          out.push(line);
+        }
+        return out;
+      },
+      setValues: (values) => {
+        values.forEach((line, r) => {
+          const target = row - 1 + r;
+          while (cells.length <= target) cells.push([]);
+          line.forEach((value, c) => { cells[target][col - 1 + c] = value; });
+        });
+        return { setFontWeight: () => {} };
+      },
+    }),
+  };
+}
+
+test('writes the header row into a brand new tab', () => {
+  const sheet = makeFakeSheet([]);
+
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+
+  assert.deepEqual(local(sheet._cells[0]), local(code.LOG_HEADERS));
+  assert.equal(sheet.getFrozenRows(), 1);
+});
+
+test('restores a header row that was deleted by hand, keeping the data', () => {
+  // Someone cleared row 1 but the data rows are still there.
+  const sheet = makeFakeSheet([
+    code.LOG_HEADERS.map(() => ''),
+    ['Barberi, Miku', 'Kozuka-Ssenyan, Mia', '2026-07-27'],
+  ]);
+
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+
+  assert.deepEqual(local(sheet._cells[0]), local(code.LOG_HEADERS));
+  assert.equal(sheet._cells[1][0], 'Barberi, Miku', 'the data row survived');
+});
+
+test('leaves a correct header row alone', () => {
+  const sheet = makeFakeSheet([
+    local(code.LOG_HEADERS),
+    ['Barberi, Miku', 'Kozuka-Ssenyan, Mia', '2026-07-27'],
+  ]);
+
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+
+  assert.deepEqual(local(sheet._cells[0]), local(code.LOG_HEADERS));
+  assert.equal(sheet._cells.length, 2, 'nothing was rewritten');
+});
+
+test('migrates rows by column name when an older tab is missing a column', () => {
+  // The real case: a tab written before label_duration_minutes existed. Its
+  // values must follow their column NAMES, not their old positions -- else
+  // every field after the inserted column silently shifts one place left.
+  const oldHeaders = local(code.LOG_HEADERS).filter((h) => h !== 'label_duration_minutes');
+  const oldRow = oldHeaders.map((header) => 'value:' + header);
+  const sheet = makeFakeSheet([oldHeaders, oldRow]);
+
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+
+  assert.deepEqual(local(sheet._cells[0]), local(code.LOG_HEADERS));
+
+  const migrated = {};
+  code.LOG_HEADERS.forEach((header, index) => { migrated[header] = sheet._cells[1][index]; });
+
+  // Every pre-existing value still sits under its own column name...
+  oldHeaders.forEach((header) => {
+    assert.equal(migrated[header], 'value:' + header, `${header} kept its value`);
+  });
+  // ...and the newly added column is simply blank rather than stealing the
+  // value of whatever used to occupy its position.
+  assert.equal(migrated.label_duration_minutes, '');
+});
+
+test('drops a column that no longer exists rather than shifting everything', () => {
+  const oldHeaders = ['caregiver_name', 'a_retired_column', 'client_name'];
+  const sheet = makeFakeSheet([oldHeaders, ['Barberi, Miku', 'stale', 'Kozuka-Ssenyan, Mia']]);
+
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+
+  const migrated = {};
+  code.LOG_HEADERS.forEach((header, index) => { migrated[header] = sheet._cells[1][index]; });
+
+  assert.equal(migrated.caregiver_name, 'Barberi, Miku');
+  assert.equal(migrated.client_name, 'Kozuka-Ssenyan, Mia');
+  assert.equal(local(sheet._cells[1]).indexOf('stale'), -1, 'the retired value is gone, not moved');
+});
+
+// ---- Tab naming ----
+
+test('names the tabs per month, in a stable sortable form', () => {
+  assert.equal(code.logSheetName_('2026-07'), '2026-07 Log');
+  assert.equal(code.payrollSheetName_('2026-07'), '2026-07 Payroll');
+  assert.equal(code.logSheetName_('2026-12'), '2026-12 Log');
+  // Zero-padded so the tabs sort chronologically rather than 1, 10, 11, 2...
+  assert.equal(code.monthKeyOf_('2026-01-05'), '2026-01');
+  assert.equal(code.logSheetName_(code.monthKeyOf_('2026-01-05')), '2026-01 Log');
+});
