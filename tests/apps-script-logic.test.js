@@ -233,10 +233,9 @@ test('an incomplete shift shows its scheduled span and client in the note, cell 
   const cell = byCaregiver['Amato, Savani']['2026-07-27'];
 
   assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 0);
-  assert.equal(local(cell.noteLines).length, 1);
-  assert.match(cell.noteLines[0], /11:00am - 6:00pm = 7h \(Joyner, Yusuf\)/);
-  // The note must not pass the scheduled span off as hours actually worked.
-  assert.match(cell.noteLines[0], /scheduled; clock in\/out missing/);
+  // Same plain format as any other line -- the red cell already signals that
+  // this one needs follow-up, so the note doesn't restate it.
+  assert.deepEqual(local(cell.noteLines), ['11:00am - 6:00pm = 7h (Joyner, Yusuf)']);
 });
 
 // ---- Sibling care ----
@@ -264,11 +263,12 @@ test('sibling care counts identical times once, not per client', () => {
   assert.equal(code.cellValueFor_('completed', cell.totalMinutes, true), 3);
   assert.equal(cell.siblingCare, true);
 
-  // Both siblings still appear, with a line explaining the arithmetic.
-  const lines = local(cell.noteLines);
-  assert.match(lines[0], /Pallapati, Samson/);
-  assert.match(lines[1], /Pallapati, Aaron/);
-  assert.match(lines[2], /Sibling care: identical times counted once/);
+  // Both siblings still get their own plain note line, and nothing else is
+  // appended -- the hours being counted once is intentional, not annotated.
+  assert.deepEqual(local(cell.noteLines), [
+    '1:00pm - 4:00pm = 3h (Pallapati, Samson)',
+    '1:00pm - 4:00pm = 3h (Pallapati, Aaron)',
+  ]);
 });
 
 test('two shifts at different times are NOT treated as sibling care', () => {
@@ -290,7 +290,7 @@ test('two shifts at different times are NOT treated as sibling care', () => {
 
   assert.equal(cell.totalMinutes, 345, 'back-to-back shifts both count');
   assert.equal(cell.siblingCare, false);
-  assert.equal(local(cell.noteLines).length, 2, 'no sibling-care line added');
+  assert.equal(local(cell.noteLines).length, 2, 'one line per shift');
 });
 
 test('a partial overlap is not sibling care -- only exactly identical times are', () => {

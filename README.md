@@ -105,21 +105,18 @@ quarter-hour rounding applied to the day's total (0–7 leftover minutes → `.0
 
 If a caregiver had more than one shift that day, the **most urgent status wins** the color, so an
 incomplete log can never hide behind a completed one. Hover any cell for a per-client breakdown,
-one line each: `1:00pm - 5:05pm = 4h5m (Chiang, Ryan)`.
+one line per shift in a single consistent format — `1:00pm - 5:05pm = 4h5m (Chiang, Ryan)` — with
+nothing else appended; the cell's own color already says which shifts need follow-up.
 
 An **incomplete** shift's cell reads `0`, but its note line still shows the scheduled span, total,
-and client so the office knows what was supposed to happen — marked
-`— scheduled; clock in/out missing`, since those hours haven't been verified as worked and
-deliberately don't reach the cell total.
+and client so the office knows what was supposed to happen. Those hours deliberately don't reach the
+cell total, since nobody has verified them yet.
 
 **Sibling care** is detected and counted once: one caregiver looking after two siblings over the
-*exact* same hours shows up as two shifts with identical start and end times, and those hours were
-only worked once. So `1:00pm-4:00pm` for two siblings totals **3 hours, not 6**. Both clients still
-appear in the note, followed by `Sibling care: identical times counted once.` so the arithmetic
-explains itself. Only exactly-identical times count — back-to-back or partially overlapping shifts
-are both counted in full. If a shared time range has one incomplete and one completed shift, the
-completed shift's real hours survive (the total takes the highest for that range, so a zero can't
-swallow them), while the cell still reads `0` because incomplete outranks completed.
+same hours shows up as two shifts with identical start and end times, and those hours were only
+worked once. So `1:00pm-4:00pm` for two siblings totals **3 hours, not 6**. Both clients still get
+their own note line. Only exactly-identical times count — back-to-back or partially overlapping
+shifts are both counted in full.
 
 A date with no record at all (not yet scanned, or still in the future) is left **blank** rather than
 `-`, since `-` specifically means "scanned, and they didn't work".

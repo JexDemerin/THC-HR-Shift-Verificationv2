@@ -312,15 +312,14 @@ function aggregateByCaregiverAndDate_(records) {
     }
 
     if (noteMinutes !== null) {
-      // e.g. "1:00pm - 5:05pm = 4h5m (Chiang, Ryan)"
-      var line =
+      // One consistent format for every line, whatever the status -- the
+      // cell's own color already says which shifts need follow-up, so the
+      // note doesn't repeat it. e.g. "1:00pm - 5:05pm = 4h5m (Chiang, Ryan)"
+      cell.noteLines.push(
         (record.time_in || '?') + ' - ' + (record.time_out || '?') +
         ' = ' + formatHoursMinutes_(noteMinutes) +
-        ' (' + (record.client_name || 'unknown client') + ')';
-      // Spell out that an incomplete shift's times are the schedule, not
-      // hours anyone clocked -- the cell reads 0 for exactly that reason.
-      if (record.status === 'incomplete') line += ' — scheduled; clock in/out missing';
-      cell.noteLines.push(line);
+        ' (' + (record.client_name || 'unknown client') + ')'
+      );
     }
   });
 
@@ -330,11 +329,6 @@ function aggregateByCaregiverAndDate_(records) {
       cell.totalMinutes = Object.keys(cell.minutesByTimeRange).reduce(function (sum, key) {
         return sum + cell.minutesByTimeRange[key];
       }, 0);
-      // Flagged on the note rather than left implicit, so a cell showing
-      // fewer hours than its own breakdown adds up to is self-explaining.
-      if (cell.siblingCare) {
-        cell.noteLines.push('Sibling care: identical times counted once.');
-      }
     });
   });
 
