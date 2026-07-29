@@ -60,7 +60,30 @@
     if (!raw) return null;
     const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(\.\d+)?/);
     if (!m) return null;
-    return { date: `${m[1]}-${m[2]}-${m[3]}` };
+    return {
+      date: `${m[1]}-${m[2]}-${m[3]}`,
+      hour: parseInt(m[4], 10),
+      minute: parseInt(m[5], 10),
+    };
+  }
+
+  // Lowercase am/pm to match the format asked for in the payroll cell notes
+  // (e.g. "1:00pm - 5:05pm = 4h5m (Client Name)").
+  function formatTime12h(t) {
+    if (!t) return null;
+    const h12 = ((t.hour + 11) % 12) + 1;
+    const ampm = t.hour < 12 ? 'am' : 'pm';
+    return `${h12}:${String(t.minute).padStart(2, '0')}${ampm}`;
+  }
+
+  function minutesBetween(start, end) {
+    if (!start || !end) return null;
+    const startMinutes = start.hour * 60 + start.minute;
+    let endMinutes = end.hour * 60 + end.minute;
+    // An end date after the start date means the shift crossed midnight.
+    if (end.date > start.date) endMinutes += 24 * 60;
+    const diff = endMinutes - startMinutes;
+    return diff >= 0 ? diff : null;
   }
 
   function extractClientName(eventEl) {
@@ -71,6 +94,29 @@
     if (timeSpan) timeSpan.remove();
     const text = clone.textContent.replace(/\s+/g, ' ').trim();
     return text || null;
+  }
+
+  // The Activity Note behind the small marker in a shift label's corner.
+  // Confirmed markup: `<div class="_pop_note note_exists" data-ptip-url="...">`
+  // -- only shifts carrying `note_exists` have one. The note element itself
+  // sits at display:none until the shift is hovered, so the shift wrapper is
+  // hovered first to bring the marker out, then the marker itself.
+  async function readActivityNote(eventEl) {
+    const noteEl = eventEl.querySelector('._pop_note.note_exists');
+    if (!noteEl) return { present: false, value: null };
+
+    const before = new Set(document.querySelectorAll('._ptip'));
+    simulateHover(eventEl);
+    await sleep(HOVER_SETTLE_MS);
+    simulateHover(noteEl);
+    await sleep(HOVER_SETTLE_MS);
+
+    const tooltip = Array.from(document.querySelectorAll('._ptip')).find((el) => !before.has(el));
+    if (!tooltip) return { present: true, value: null };
+
+    const text = (tooltip.textContent || '').replace(/\s+/g, ' ').trim();
+    tooltip.remove();
+    return { present: true, value: text || null };
   }
 
   function extractRecord(caregiverName, eventEl) {
@@ -86,25 +132,104 @@
     const isConfident = Boolean(caregiverName && clientName && mappedStatus && shiftDate);
     const finalStatus = isConfident ? mappedStatus : 'unparsed';
 
+    // A missed clock-in/out earns no hours regardless of what WellSky's
+    // placeholder start/end times say -- it's zero until someone verifies the
+    // real hours with the client, which is the whole point of flagging it.
+    const durationMinutes = finalStatus === 'incomplete' ? 0 : minutesBetween(start, end);
+
     return {
       caregiver_name: caregiverName || null,
       client_name: clientName,
       shift_date: shiftDate,
+      time_in: formatTime12h(start),
+      time_out: formatTime12h(end),
+      duration_minutes: durationMinutes,
       actual_time_in: null,
       scheduled_time_in: null,
       actual_time_out: null,
       scheduled_time_out: null,
       status: finalStatus,
       status_raw: statusToken || eventEl.className,
+      note: null,
       event_id: eventEl.getAttribute('data-event-id') || null,
+      row_key: eventEl.getAttribute('data-event-id') || null,
       scanned_at: new Date().toISOString(),
     };
+  }
+
+  // A caregiver with no shift at all on a given date still gets a row, so the
+  // log shows "-" rather than silently omitting them.
+  function buildNoShiftRecord(caregiverName, date) {
+    return {
+      caregiver_name: caregiverName,
+      client_name: '-',
+      shift_date: date,
+      time_in: '-',
+      time_out: '-',
+      duration_minutes: null,
+      actual_time_in: '-',
+      scheduled_time_in: '-',
+      actual_time_out: '-',
+      scheduled_time_out: '-',
+      status: 'no_shift',
+      status_raw: '-',
+      note: '-',
+      event_id: null,
+      // Placeholder rows have no event id to dedup on, so they get a
+      // deterministic synthetic key instead.
+      row_key: `no-shift:${caregiverName}:${date}`,
+      scanned_at: new Date().toISOString(),
+    };
+  }
+
+  function addDays(isoDate, days) {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + days);
+    return dt.toISOString().slice(0, 10);
+  }
+
+  // Which date does each day column represent? The visible columns are
+  // consecutive days in order, so it's enough to learn ONE column's date from
+  // any shift sitting in it and derive the rest by offset. Deriving dates from
+  // shift data alone (rather than parsing column headers, whose markup isn't
+  // confirmed) means a day where nobody worked still gets its date -- which is
+  // exactly the case that needs "-" rows the most.
+  function mapColumnsToDates(rows) {
+    let columnCount = 0;
+    const knownDateByColumn = new Map();
+
+    for (const row of rows) {
+      const dayCells = Array.from(row.querySelectorAll('td.day-data'));
+      columnCount = Math.max(columnCount, dayCells.length);
+
+      dayCells.forEach((cell, index) => {
+        if (knownDateByColumn.has(index)) return;
+        const eventEl = cell.querySelector('._event');
+        if (!eventEl) return;
+        const start = parseTimestamp(eventEl.getAttribute('data-start'));
+        const end = parseTimestamp(eventEl.getAttribute('data-end'));
+        const date = (start && start.date) || (end && end.date);
+        if (date) knownDateByColumn.set(index, date);
+      });
+    }
+
+    if (knownDateByColumn.size === 0) return [];
+
+    const anchorIndex = Math.min(...knownDateByColumn.keys());
+    const anchorDate = knownDateByColumn.get(anchorIndex);
+    const dates = [];
+    for (let i = 0; i < columnCount; i++) {
+      dates.push(knownDateByColumn.get(i) || addDays(anchorDate, i - anchorIndex));
+    }
+    return dates;
   }
 
   function scan() {
     const rows = Array.from(document.querySelectorAll('tr.sched_row'));
     const records = [];
     const eventElsByEventId = new Map();
+    const columnDates = mapColumnsToDates(rows);
 
     for (const row of rows) {
       const caregiverAnchor = row.querySelector('.person-name a');
@@ -113,14 +238,42 @@
         : null;
 
       const events = Array.from(row.querySelectorAll('.day-data ._event'));
+      const datesWithShifts = new Set();
       for (const eventEl of events) {
         const record = extractRecord(caregiverName, eventEl);
         records.push(record);
+        if (record.shift_date) datesWithShifts.add(record.shift_date);
         if (record.event_id) eventElsByEventId.set(record.event_id, eventEl);
+      }
+
+      // Every caregiver on screen gets a row for every visible date, so a
+      // caregiver with no shift that day shows "-" instead of being missing.
+      if (caregiverName) {
+        for (const date of columnDates) {
+          if (!datesWithShifts.has(date)) {
+            records.push(buildNoShiftRecord(caregiverName, date));
+          }
+        }
       }
     }
 
-    return { records, rowCount: rows.length, eventElsByEventId };
+    return { records, rowCount: rows.length, eventElsByEventId, columnDates };
+  }
+
+  // Date first (chronological), then caregiver name (alphabetical) within each
+  // date -- so the log reads as all of 7/27 A-Z, then all of 7/28 A-Z, etc.
+  function sortRecords(records) {
+    return records.slice().sort((a, b) => {
+      const dateA = a.shift_date || '';
+      const dateB = b.shift_date || '';
+      if (dateA !== dateB) return dateA < dateB ? -1 : 1;
+      const nameA = (a.caregiver_name || '').toLowerCase();
+      const nameB = (b.caregiver_name || '').toLowerCase();
+      if (nameA !== nameB) return nameA < nameB ? -1 : 1;
+      // Same caregiver, same day, two clients -- keep a stable, predictable
+      // order rather than leaving it to scan order.
+      return (a.client_name || '').toLowerCase() < (b.client_name || '').toLowerCase() ? -1 : 1;
+    });
   }
 
   // Today/future days are still in progress or haven't happened -- only
@@ -405,15 +558,33 @@
 
   // ---- Run it ----
 
-  const { records: allRecords, rowCount, eventElsByEventId } = scan();
+  const { records: allRecords, rowCount, eventElsByEventId, columnDates } = scan();
   const today = todayIso();
   // Keep anything without a parseable date too (rather than silently dropping
   // it) -- it's already flagged as "unparsed" and needs a human look either way.
-  const records = allRecords.filter((r) => !r.shift_date || r.shift_date < today);
+  const records = sortRecords(allRecords.filter((r) => !r.shift_date || r.shift_date < today));
   const skippedTodayOrFuture = allRecords.length - records.length;
 
   let stoppedEarlyReason = null;
   const enrichmentDiagnostics = [];
+
+  // Activity notes first: reading one only needs hovers, no dialogs, so doing
+  // this pass separately keeps it clear of the click-through's popup state.
+  for (const record of records) {
+    if (!record.event_id) continue;
+    const eventEl = eventElsByEventId.get(record.event_id);
+    if (!eventEl) continue;
+
+    const note = await readActivityNote(eventEl);
+    if (note.value) {
+      record.note = note.value;
+    } else if (note.present) {
+      enrichmentDiagnostics.push(
+        `${record.caregiver_name}/${record.client_name} (${record.shift_date}): has an activity note marker but its text couldn't be read.`
+      );
+    }
+  }
+
   for (const record of records) {
     if (record.status !== 'completed' || !record.event_id) continue;
     const eventEl = eventElsByEventId.get(record.event_id);
@@ -450,12 +621,14 @@
     ongoing: records.filter((r) => r.status === 'ongoing').length,
     cancelled: records.filter((r) => r.status.startsWith('cancelled_')).length,
     unparsed: records.filter((r) => r.status === 'unparsed').length,
+    no_shift: records.filter((r) => r.status === 'no_shift').length,
   };
 
   return {
     records,
     summary,
     rowCount,
+    columnDates,
     skippedTodayOrFuture,
     stoppedEarlyReason,
     enrichmentDiagnostics,

@@ -1,7 +1,8 @@
 # THC-HR-Shift-Verificationv2 — WellSky Shift Log
 
-A Chrome extension that mirrors WellSky shift records — caregiver, client, date, status, and
-exact actual/scheduled clock-in/out times — into a Google Sheet, one row per shift.
+A Chrome extension that mirrors WellSky shift records — caregiver, client, date, status, exact
+actual/scheduled clock-in/out times, and activity notes — into a Google Sheet, as a per-month
+**Log** tab (one row per shift) plus a per-month **Payroll** tab (caregiver × date grid of hours).
 
 ## Approach: DOM-based extension (`extension/`)
 
@@ -60,13 +61,56 @@ What's working now:
   dialog never matches, a time that should be readable comes back blank), that's reported as a
   per-shift diagnostic line in the popup's log instead of just leaving the four fields silently
   blank.
-- Sends every scanned record — `caregiver_name`, `client_name`, `shift_date`, the four time
-  fields, `status`, `status_raw`, `event_id`, `scanned_at` — to a **"Shift Log" tab** (created
-  automatically) in your Sheet, via an Apps Script Web App. Re-scanning the same shift updates its
-  existing row (matched by `event_id`) instead of duplicating it.
+- **Every caregiver in the left-hand column gets a row for every visible past date**, not just the
+  ones who worked. A caregiver with no shift that day reads `-` across the row, so the log shows
+  who was idle instead of silently omitting them. Column dates are derived by counting from any
+  column whose date is known, so a day where *nobody* worked still gets its `-` rows.
+- Reads each shift's **activity note** — the text behind the small marker in a shift label's corner
+  (`._pop_note.note_exists`) — into a `note` column, via the same simulated-hover mechanism.
+- Records come out sorted **by date, then caregiver name alphabetically** (all of 7/27 A–Z, then all
+  of 7/28 A–Z, …), so that's the order they land in the sheet.
 
-Scanning a shift with a click-through now takes a few seconds each (open, read, close), so a
-schedule with many completed shifts visible at once will take a while to finish — that's expected.
+### What lands in the Sheet
+
+Two tabs per month, created automatically, keyed off each record's own `shift_date` — so a scan
+spanning a month boundary files each row in the right month:
+
+- **`2026-07 Log`** — one row per shift (or per idle caregiver/day, reading `-`), with
+  `caregiver_name`, `client_name`, `shift_date`, `time_in`, `time_out`, `duration_minutes`, the four
+  actual/scheduled times, `status`, `status_raw`, `note`, `event_id`, `row_key`, `scanned_at`.
+  Re-scanning updates an existing row rather than duplicating it, and a caregiver/day that gains a
+  real shift has its stale `-` row removed.
+- **`2026-07 Payroll`** — caregivers down the left, **every** date in the month across the top as
+  `7/1`, `7/2`, … with its weekday (`Mon`, `Tue`, …) beneath, and a shaded spacer column between
+  each Saturday and Sunday so weeks read separately. The whole month's grid exists upfront; each
+  scan drops data into the right columns, so it fills in progressively as you scan more weeks.
+
+Each payroll cell holds that caregiver's **total hours for the day** as a decimal, using payroll's
+quarter-hour rounding applied to the day's total (0–7 leftover minutes → `.00`, 8–22 → `.25`,
+23–37 → `.50`, 38–52 → `.75`, 53+ → next full hour), colored to match the WellSky legend:
+
+| Status | Cell | Color |
+|---|---|---|
+| completed | rounded decimal hours | green |
+| incomplete (missed clock in/out) | `0` | red |
+| ongoing | `ongoing` | yellow |
+| upcoming/scheduled | *(blank)* | dark blue |
+| cancelled by caregiver | `0` | orange |
+| cancelled by office | `0` | darker orange |
+| cancelled by client | `0` | sky blue |
+| no shift that day | `-` | none |
+
+If a caregiver had more than one shift that day, the **most urgent status wins** the color, so an
+incomplete log can never hide behind a completed one. Hover any cell for a per-client breakdown,
+one line each: `1:00pm - 5:05pm = 4h5m (Chiang, Ryan)`. Incomplete shifts get no note line — their
+start/end times are WellSky placeholders, not hours anyone actually worked.
+
+A date with no record at all (not yet scanned, or still in the future) is left **blank** rather than
+`-`, since `-` specifically means "scanned, and they didn't work".
+
+Scanning a shift with a click-through takes a few seconds each (open, read, close), so a schedule
+with many completed shifts visible at once will take a while to finish — that's expected. Since each
+scan only sees one visible week, a full month's Payroll tab fills in over several scans.
 
 ## Setup
 
@@ -87,11 +131,12 @@ warn you if the Sheet's response doesn't look like it came from the current scri
 ## Using it
 
 1. Log into WellSky and go to the weekly schedule view.
-2. Click the extension icon → **Scan Schedule**. Records get written to the "Shift Log" tab.
-   Completed shifts take a few seconds each while it clicks through and reads their times — watch
-   the popup's log for progress, and don't touch the WellSky tab while it's running.
+2. Click the extension icon → **Scan Schedule**. Records get written to that month's Log and
+   Payroll tabs. Completed shifts take a few seconds each while it clicks through and reads their
+   times — watch the popup's log for progress, and don't touch the WellSky tab while it's running.
 3. Scroll/change the view (different week, different caregiver group) and scan again to cover
-   more — it only reads what's currently on screen, same as the original scanner.
+   more — it only reads what's currently on screen, same as the original scanner. Repeat across the
+   weeks of a month to fill in that month's Payroll grid.
 
 If a scan stops early with a message about not being able to confirm the dialog closed, reload the
 WellSky page before re-scanning — better to stop than keep clicking on a page that might not be in
@@ -117,18 +162,23 @@ the state the script expects.
 
 ## Testing
 
-`npm test` (needs `npm install` once first) runs `tests/*.test.js` — these use `jsdom` to build
-fixture HTML matching WellSky's confirmed markup (including a full simulated click-through: open a
-shift, click Edit, hover each time link, read the resulting tooltip, close the dialog) and check
-`scan-script.js` and the discovery tools' logic, without needing a browser or real WellSky access.
+`npm test` (needs `npm install` once first) runs `tests/*.test.js`, none of which need a browser,
+an API key, or real WellSky access:
+
+- **Scanner tests** use `jsdom` against fixture HTML matching WellSky's confirmed markup —
+  including a full simulated click-through (open a shift, click Edit, hover each time link, read the
+  resulting tooltip, close the dialog), the `-` rows for idle caregivers, date/name sort order,
+  overnight shifts, and activity-note reading.
+- **Apps Script tests** load `apps_script/Code.gs` directly in Node (it's plain ES5) with the Sheets
+  globals stubbed, and check the pure logic: quarter-hour rounding, month lengths, the payroll
+  column layout and Sat/Sun spacer placement, most-urgent-status-wins, cell values, and per-client
+  note aggregation.
 
 ## What's not built yet
 
-- Since today/future shifts are already skipped, in-progress (yellow) and scheduled/upcoming
-  (blue) statuses shouldn't normally appear in scan results at all — if one ever does (e.g. an
-  overnight shift spanning midnight), it's still included rather than dropped, so it's visible for
-  a human to check.
-- Cancelled (orange/gray) shift variants aren't specially handled yet — they'll come through
-  whatever their raw status maps to.
-- Anything beyond what's visible on one screen (no auto-scroll/paging).
+- Since today/future shifts are skipped, in-progress (yellow) and scheduled/upcoming (blue)
+  statuses shouldn't normally appear at all — if one ever does (e.g. an overnight shift spanning
+  midnight), it's still included rather than dropped, so it's visible for a human to check.
+- Anything beyond what's visible on one screen (no auto-scroll/paging) — so covering a full month
+  means scanning each week and re-running.
 - WellSky login automation (intentionally out of scope).

@@ -147,9 +147,21 @@ test('today and future shifts are skipped -- only past days get scanned', async 
   const result = await runScanScript(html);
 
   assert.equal(result.rowCount, 3, 'all three caregiver rows were on screen');
-  assert.equal(result.records.length, 1, 'only the past-dated shift survives the filter');
-  assert.equal(result.records[0].event_id, 'evt-past');
-  assert.equal(result.skippedTodayOrFuture, 2);
+  assert.equal(result.skippedTodayOrFuture, 2, 'the today and future shifts are dropped');
+
+  // The past-dated shift survives as a real record...
+  const realShifts = result.records.filter((r) => r.status !== 'no_shift');
+  assert.equal(realShifts.length, 1);
+  assert.equal(realShifts[0].event_id, 'evt-past');
+
+  // ...and the other two caregivers, who had nothing on that past date, each
+  // get a "-" row rather than being left out of the log entirely.
+  const noShiftRows = result.records.filter((r) => r.status === 'no_shift');
+  assert.equal(noShiftRows.length, 2);
+  assert.deepEqual(
+    noShiftRows.map((r) => r.caregiver_name).sort(),
+    ['Future Caregiver', 'Today Caregiver']
+  );
 });
 
 test('an unparsed shift with no discoverable date is kept, not silently dropped', async () => {
@@ -508,4 +520,246 @@ test('still flags a scheduled link that exists but cannot be read', async () => 
   assert.equal(result.enrichmentDiagnostics.length, 1);
   assert.match(result.enrichmentDiagnostics[0], /scheduled_time_in/);
   assert.match(result.enrichmentDiagnostics[0], /scheduled_time_out/);
+});
+
+// ---- All caregivers, "-" rows, sorting, notes, durations ----
+
+// A realistic multi-caregiver, multi-day grid: one table, one row per
+// caregiver, one td.day-data per day column -- matching real WellSky markup.
+function buildGrid(caregivers, dates) {
+  const rows = caregivers
+    .map((caregiver) => {
+      const cells = dates
+        .map((date) => {
+          const shifts = (caregiver.shifts || []).filter((s) => s.date === date);
+          const inner = shifts
+            .map(
+              (s) => `
+                <div class="_event ${s.status || 'COMPLETED'} ajSet"
+                     data-event-id="${s.eventId}"
+                     data-start="${date}T${s.start}"
+                     data-end="${date}T${s.end}">
+                  <div class="title">
+                    <a class="name">${s.client}<span class="time">x</span></a>
+                  </div>
+                  ${s.note ? '<div class="_pop_note note_exists" style="display:none">&nbsp;</div>' : ''}
+                </div>`
+            )
+            .join('');
+          return `<td class="day-data">${inner}</td>`;
+        })
+        .join('');
+      return `<tr class="sched_row"><td class="person-name"><a href="#">${caregiver.name}</a></td>${cells}</tr>`;
+    })
+    .join('');
+  return `<table>${rows}</table>`;
+}
+
+test('every caregiver on screen gets a row per date, "-" when they had no shift', async () => {
+  const d1 = isoDateOffsetFromToday(-3);
+  const d2 = isoDateOffsetFromToday(-2);
+  const html = buildGrid(
+    [
+      { name: 'Worked, Both Days', shifts: [
+        { date: d1, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client A', eventId: 'e1' },
+        { date: d2, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client A', eventId: 'e2' },
+      ] },
+      { name: 'Worked, One Day', shifts: [
+        { date: d1, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client B', eventId: 'e3' },
+      ] },
+      { name: 'Worked, Never', shifts: [] },
+    ],
+    [d1, d2]
+  );
+
+  const result = await runScanScript(html);
+
+  // 3 caregivers x 2 dates = 6 rows, no matter who actually worked.
+  assert.equal(result.records.length, 6);
+  assert.deepEqual(result.columnDates, [d1, d2]);
+
+  const byKey = {};
+  for (const r of result.records) byKey[`${r.caregiver_name}|${r.shift_date}`] = r;
+
+  assert.equal(byKey[`Worked, Never|${d1}`].status, 'no_shift');
+  assert.equal(byKey[`Worked, Never|${d1}`].client_name, '-');
+  assert.equal(byKey[`Worked, Never|${d1}`].time_in, '-');
+  assert.equal(byKey[`Worked, Never|${d2}`].status, 'no_shift');
+  assert.equal(byKey[`Worked, One Day|${d1}`].status, 'completed');
+  assert.equal(byKey[`Worked, One Day|${d2}`].status, 'no_shift');
+  assert.equal(byKey[`Worked, Both Days|${d2}`].status, 'completed');
+});
+
+test('a day column where nobody worked still produces "-" rows for everyone', async () => {
+  // This is the case that made deriving column dates by offset worthwhile:
+  // the middle column has no shifts at all, so its date can only be known by
+  // counting from a neighbouring column.
+  const d1 = isoDateOffsetFromToday(-3);
+  const d2 = isoDateOffsetFromToday(-2);
+  const d3 = isoDateOffsetFromToday(-1);
+  const html = buildGrid(
+    [
+      { name: 'Solo, Caregiver', shifts: [
+        { date: d1, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client A', eventId: 'e1' },
+        { date: d3, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client A', eventId: 'e2' },
+      ] },
+    ],
+    [d1, d2, d3]
+  );
+
+  const result = await runScanScript(html);
+
+  assert.deepEqual(result.columnDates, [d1, d2, d3], 'the empty middle column still gets its date');
+  const middle = result.records.find((r) => r.shift_date === d2);
+  assert.ok(middle, 'the empty day produced a row');
+  assert.equal(middle.status, 'no_shift');
+});
+
+test('records come out sorted by date, then caregiver name alphabetically', async () => {
+  const d1 = isoDateOffsetFromToday(-2);
+  const d2 = isoDateOffsetFromToday(-1);
+  const html = buildGrid(
+    [
+      { name: 'Zulu, Zara', shifts: [
+        { date: d1, start: '09:00:00.000000', end: '10:00:00.000000', client: 'C', eventId: 'z1' },
+        { date: d2, start: '09:00:00.000000', end: '10:00:00.000000', client: 'C', eventId: 'z2' },
+      ] },
+      { name: 'Alpha, Aaron', shifts: [
+        { date: d1, start: '09:00:00.000000', end: '10:00:00.000000', client: 'C', eventId: 'a1' },
+        { date: d2, start: '09:00:00.000000', end: '10:00:00.000000', client: 'C', eventId: 'a2' },
+      ] },
+      { name: 'Mike, Mary', shifts: [] },
+    ],
+    [d1, d2]
+  );
+
+  const result = await runScanScript(html);
+
+  assert.deepEqual(
+    result.records.map((r) => `${r.shift_date} ${r.caregiver_name}`),
+    [
+      `${d1} Alpha, Aaron`,
+      `${d1} Mike, Mary`,
+      `${d1} Zulu, Zara`,
+      `${d2} Alpha, Aaron`,
+      `${d2} Mike, Mary`,
+      `${d2} Zulu, Zara`,
+    ]
+  );
+});
+
+test('computes label times and duration, and zeroes out an incomplete shift', async () => {
+  const date = isoDateOffsetFromToday(-1);
+  const html = buildGrid(
+    [
+      { name: 'Timed, Terry', shifts: [
+        { date, start: '13:00:00.000000', end: '17:05:00.000000', client: 'Client A', eventId: 'ok1' },
+      ] },
+      { name: 'Missed, Morgan', shifts: [
+        { date, status: 'MISSED_CLOCK_IN', start: '09:00:00.000000', end: '17:00:00.000000', client: 'Client B', eventId: 'miss1' },
+      ] },
+    ],
+    [date]
+  );
+
+  const result = await runScanScript(html);
+  const byName = Object.fromEntries(result.records.map((r) => [r.caregiver_name, r]));
+
+  // 1:00pm - 5:05pm = 245 minutes, matching the note format asked for.
+  assert.equal(byName['Timed, Terry'].time_in, '1:00pm');
+  assert.equal(byName['Timed, Terry'].time_out, '5:05pm');
+  assert.equal(byName['Timed, Terry'].duration_minutes, 245);
+
+  // A missed clock-in earns zero regardless of WellSky's placeholder times --
+  // those 8 hours were never actually clocked.
+  assert.equal(byName['Missed, Morgan'].status, 'incomplete');
+  assert.equal(byName['Missed, Morgan'].duration_minutes, 0);
+});
+
+test('handles an overnight shift without producing negative hours', async () => {
+  const date = isoDateOffsetFromToday(-2);
+  const nextDay = isoDateOffsetFromToday(-1);
+  const html = `
+    <table>
+      <tr class="sched_row">
+        <td class="person-name"><a href="#">Night, Nadia</a></td>
+        <td class="day-data">
+          <div class="_event COMPLETED ajSet" data-event-id="night1"
+               data-start="${date}T22:00:00.000000" data-end="${nextDay}T06:00:00.000000">
+            <div class="title"><a class="name">Client N<span class="time">x</span></a></div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  const result = await runScanScript(html);
+  const shift = result.records.find((r) => r.event_id === 'night1');
+
+  assert.equal(shift.shift_date, date, 'an overnight shift belongs to the day it started');
+  assert.equal(shift.duration_minutes, 480, '10pm to 6am is 8 hours, not a negative span');
+});
+
+test('reads the activity note from the shift note marker', async () => {
+  const date = isoDateOffsetFromToday(-1);
+  const grid = buildGrid(
+    [
+      { name: 'Noted, Nora', shifts: [
+        { date, start: '17:00:00.000000', end: '20:00:00.000000', client: 'Pallapati, Samson', eventId: 'n1', note: true },
+      ] },
+    ],
+    [date]
+  );
+  const script = `
+    <script>
+      document.querySelector('._pop_note').addEventListener('mouseenter', function () {
+        var tip = document.createElement('div');
+        tip.className = '_ptip side_b';
+        tip.textContent = '07/14/26: On a vacation with their father, July 22-31';
+        document.body.appendChild(tip);
+      });
+    </script>
+  `;
+
+  const result = await runScanScript(grid + script, { runScripts: true });
+  const shift = result.records.find((r) => r.event_id === 'n1');
+
+  assert.match(shift.note, /On a vacation with their father/);
+});
+
+test('flags a note marker whose text cannot be read, rather than dropping it', async () => {
+  const date = isoDateOffsetFromToday(-1);
+  const html = buildGrid(
+    [
+      { name: 'Silent, Sam', shifts: [
+        { date, start: '17:00:00.000000', end: '20:00:00.000000', client: 'Client S', eventId: 's1', note: true },
+      ] },
+    ],
+    [date]
+  );
+
+  const result = await runScanScript(html); // no handler -> marker present, no tooltip
+
+  assert.equal(result.records.find((r) => r.event_id === 's1').note, null);
+  // Scoped to note diagnostics: this fixture has no Edit Care Log dialog
+  // either, so the click-through correctly reports its own separate issue.
+  const noteDiagnostics = result.enrichmentDiagnostics.filter((d) => /activity note marker/.test(d));
+  assert.equal(noteDiagnostics.length, 1);
+});
+
+test('a shift with no note marker is not reported as a problem', async () => {
+  const date = isoDateOffsetFromToday(-1);
+  const html = buildGrid(
+    [
+      { name: 'Plain, Pat', shifts: [
+        { date, start: '17:00:00.000000', end: '20:00:00.000000', client: 'Client P', eventId: 'p1' },
+      ] },
+    ],
+    [date]
+  );
+
+  const result = await runScanScript(html);
+
+  const noteDiagnostics = result.enrichmentDiagnostics.filter((d) => /activity note marker/.test(d));
+  assert.deepEqual(noteDiagnostics, [], 'no note marker means nothing to report');
 });

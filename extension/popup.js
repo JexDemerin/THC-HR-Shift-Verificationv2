@@ -153,22 +153,27 @@ async function scanSchedule() {
       return;
     }
 
-    const parts = [`${summary.total} shifts found`];
+    // summary.total counts every row, including the "-" placeholders for
+    // caregivers who had no shift -- so report the real shift count separately
+    // to avoid implying the schedule held far more shifts than it did.
+    const realShifts = summary.total - summary.no_shift;
+    const parts = [`${realShifts} shifts, ${summary.no_shift} idle caregiver-days`];
     if (summary.unparsed > 0) parts.push(`${summary.unparsed} unparsed`);
     if (result.skippedTodayOrFuture > 0) parts.push(`${result.skippedTodayOrFuture} skipped (today/future)`);
     if (result.stoppedEarlyReason) parts.push('stopped early, see log');
     setStatus(parts.join(' — '));
     addLogEntry(
-      `${new Date(result.scannedAt).toLocaleTimeString()} — scan — ${summary.total} total, ` +
+      `${new Date(result.scannedAt).toLocaleTimeString()} — scan — ${realShifts} shifts across ` +
+        `${(result.columnDates || []).length} day(s), ${result.rowCount} caregiver row(s): ` +
         `${summary.completed} completed, ${summary.incomplete} incomplete, ${summary.upcoming} upcoming, ` +
         `${summary.ongoing} ongoing, ${summary.cancelled} cancelled, ${summary.unparsed} unparsed, ` +
-        `${result.skippedTodayOrFuture} skipped (today/future)`
+        `${summary.no_shift} idle, ${result.skippedTodayOrFuture} skipped (today/future)`
     );
     if (result.stoppedEarlyReason) {
       addLogEntry(`STOPPED EARLY: ${result.stoppedEarlyReason}`);
     }
     if (result.enrichmentDiagnostics && result.enrichmentDiagnostics.length > 0) {
-      addLogEntry(`${result.enrichmentDiagnostics.length} completed shift(s) had a read issue:`);
+      addLogEntry(`${result.enrichmentDiagnostics.length} shift(s) had a read issue:`);
       for (const line of result.enrichmentDiagnostics) addLogEntry(`  ${line}`);
     }
 
@@ -201,7 +206,11 @@ async function scanSchedule() {
         );
       } else {
         setStatus(parts.join(' — ') + ` — sent to sheet (${sheetResult.written} written).`);
-        addLogEntry(`Sent to Google Sheet: ${sheetResult.written} row(s) written/updated.`);
+        const months = (sheetResult.months || []).join(', ');
+        addLogEntry(
+          `Sent to Google Sheet: ${sheetResult.written} row(s) written/updated` +
+            (months ? ` in ${months} (Log + Payroll tabs).` : '.')
+        );
       }
     } else {
       const errorMessage =
