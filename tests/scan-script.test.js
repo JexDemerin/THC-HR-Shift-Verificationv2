@@ -926,3 +926,67 @@ test('says WHY the dialog did not match, not just that it didn\'t', async () => 
   // obvious without another round trip to find out.
   assert.match(diagnostic, /nothing on the page contains:.*Official/);
 });
+
+test('recovers when the first Edit click does not land', async () => {
+  // Regression test for a real failure: the dialog never appeared and none of
+  // its text was anywhere on the page -- a click that didn't register, not a
+  // dialog that failed to load. The fixture ignores the first Edit click and
+  // builds the dialog on the second.
+  const date = isoDateOffsetFromToday(-1);
+  const calendarHtml = buildGrid(
+    [
+      { name: 'Tam, Sean', shifts: [
+        { date, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Lezer, Bryce', eventId: 'retry-edit' },
+      ] },
+    ],
+    [date]
+  );
+  const script = `
+    <script>
+      var editClicks = 0;
+      document.querySelector('.title .name').addEventListener('click', function () {
+        var popup = document.createElement('div');
+        popup.innerHTML =
+          '<h4>Care Log</h4><a>Summary</a><a>Notes</a><a id="edit-link">Edit</a><a>Copy</a>';
+        document.body.appendChild(popup);
+
+        document.getElementById('edit-link').addEventListener('click', function () {
+          editClicks++;
+          if (editClicks < 2) return; // first click is swallowed
+          popup.remove();
+          var dialog = document.createElement('div');
+          dialog.innerHTML =
+            '<label>Status</label><label>Official</label>' +
+            '<label>Client</label><label>Caregiver</label>' +
+            '<a class="actual_start">Actual</a><a class="actual_end">Actual</a>';
+          document.body.appendChild(dialog);
+
+          function tip(selector, text) {
+            dialog.querySelector(selector).addEventListener('mouseenter', function () {
+              var t = document.createElement('div');
+              t.className = '_ptip';
+              t.textContent = text;
+              document.body.appendChild(t);
+            });
+          }
+          tip('.actual_start', '07/28/2026 09:00:00 AM');
+          tip('.actual_end', '07/28/2026 12:00:00 PM');
+
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') dialog.remove();
+          });
+        });
+      });
+    </script>
+  `;
+
+  const result = await runScanScript(calendarHtml + script, { runScripts: true });
+  const shift = result.records.find((r) => r.event_id === 'retry-edit');
+
+  assert.equal(shift.actual_time_in, '07/28/2026 09:00:00 AM', 'the retry got the times');
+  assert.deepEqual(
+    result.enrichmentDiagnostics.filter((d) => /never matched/.test(d)),
+    [],
+    'a recovered click is not reported as a failure'
+  );
+});

@@ -616,9 +616,24 @@
       return { times: null, closedOk, unreadable: TIME_FIELDS, diagnostic: `Summary popup opened but no "Edit" link found in it.` };
     }
 
-    simulateClick(editLink);
+    // Clicked up to twice, for the same reason the shift itself is: a real run
+    // showed the Edit Care Log dialog never appearing at all -- not a wrong
+    // dialog, and no trace of its text anywhere on the page -- which is a click
+    // that didn't land rather than a dialog that failed to load. The Edit link
+    // is re-found on the retry rather than reused, since the popup can re-render
+    // underneath us and leave the first reference pointing at a detached node.
+    let dialog = null;
+    for (let attempt = 0; attempt < 2 && !dialog; attempt++) {
+      if (attempt > 0) await sleep(CLOSE_SETTLE_MS);
+      const link =
+        attempt === 0
+          ? editLink
+          : findLinkByText(findSmallestMatch(SIGNALS.summaryPopup) || popup, 'Edit');
+      if (!link) break;
+      simulateClick(link);
+      dialog = await waitFor(() => findSmallestMatch(SIGNALS.editCareLog), { timeoutMs: CLICK_SETTLE_MS });
+    }
 
-    const dialog = await waitFor(() => findSmallestMatch(SIGNALS.editCareLog), { timeoutMs: CLICK_SETTLE_MS });
     if (!dialog) {
       // Say WHY it didn't match rather than just that it didn't -- which of the
       // expected phrases were absent, and whether a match exists but was judged
