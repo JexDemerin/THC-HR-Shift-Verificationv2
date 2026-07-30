@@ -67,10 +67,8 @@ async function restoreLog() {
   // Newest-first in the array, so appending in order keeps that on screen.
   for (const text of logEntries) renderLogEntry(text, { append: true });
   if (stored[STATUS_STORAGE_KEY]) statusEl.textContent = stored[STATUS_STORAGE_KEY];
-  if (logEntries.length > 0 && !IS_DETACHED) {
-    renderLogEntry('--- log above is from a previous run, kept so it survives the popup closing ---', {
-      append: false,
-    });
+  if (logEntries.length > 0) {
+    renderLogEntry('--- last run, kept so closing this panel does not lose it ---', { append: false });
   }
 }
 
@@ -79,6 +77,16 @@ async function clearLog() {
   logEl.textContent = '';
   await chrome.storage.local.remove([LOG_STORAGE_KEY, STATUS_STORAGE_KEY]);
   setStatus('Log cleared.');
+}
+
+// Each run starts from an empty log. Persisting it is only there so an
+// accidental click can't lose the run you just did -- carrying every previous
+// run forward as well would grow the panel without bound and bury the lines
+// that matter. The Sheet is the durable record; this panel is about the run in
+// front of you.
+function startNewRunLog() {
+  logEntries = [];
+  logEl.textContent = '';
 }
 
 function openInWindow() {
@@ -163,6 +171,7 @@ function downloadHtmlExport(result) {
 
 async function exportCareLogHtml() {
   exportBtn.disabled = true;
+  startNewRunLog();
   setStatus('Reading current tab...');
 
   try {
@@ -210,6 +219,7 @@ async function exportCareLogHtml() {
 
 async function scanSchedule() {
   scanBtn.disabled = true;
+  startNewRunLog();
   setStatus('Scanning visible schedule...');
 
   try {
@@ -376,6 +386,7 @@ function downloadInspectClickReport(result) {
 
 async function inspectShiftClick() {
   inspectClickBtn.disabled = true;
+  startNewRunLog();
   setStatus('Trying a few click targets on one completed shift...');
 
   try {
