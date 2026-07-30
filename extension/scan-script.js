@@ -342,7 +342,14 @@
   const CONTAINER_TAGS = new Set(['DIV', 'SECTION', 'FORM', 'ARTICLE']);
   const SIGNALS = {
     summaryPopup: ['Care Log', 'Summary', 'Notes', 'Edit', 'Copy'],
-    editCareLog: ['Official', 'Bill Hours', 'Pay Hours', 'Status', 'Client', 'Caregiver'],
+    // Deliberately does NOT require "Bill Hours"/"Pay Hours". The real dialog
+    // capture showed that whole bill-pay-automation block sitting inside a
+    // conditional section, so a shift without billing wouldn't have the text at
+    // all -- and requiring it made such a dialog look like it never opened.
+    // Status/Client/Caregiver are what distinguish the dialog from the
+    // Bill/Pay Hours sub-widget nested inside it (which repeats "Official" but
+    // has none of these three), so they're sufficient on their own.
+    editCareLog: ['Official', 'Status', 'Client', 'Caregiver'],
   };
 
   function containsAll(text, phrases) {
@@ -613,8 +620,25 @@
 
     const dialog = await waitFor(() => findSmallestMatch(SIGNALS.editCareLog), { timeoutMs: CLICK_SETTLE_MS });
     if (!dialog) {
+      // Say WHY it didn't match rather than just that it didn't -- which of the
+      // expected phrases were absent, and whether a match exists but was judged
+      // hidden. Those are different problems with different fixes, and guessing
+      // between them costs a whole extra round trip to find out.
+      const pageText = document.body ? document.body.textContent || '' : '';
+      const missing = SIGNALS.editCareLog.filter((phrase) => !pageText.includes(phrase));
+      const hiddenMatch = findSmallestMatch(SIGNALS.editCareLog, { requireVisible: false });
+      const why = missing.length
+        ? `nothing on the page contains: ${missing.join(', ')}`
+        : hiddenMatch
+          ? 'all expected text is present but only in a hidden element'
+          : 'all expected text is present, but never together in one element';
       const closedOk = await closeDialog();
-      return { times: null, closedOk, unreadable: TIME_FIELDS, diagnostic: `Clicked Edit but the Edit Care Log dialog never matched.` };
+      return {
+        times: null,
+        closedOk,
+        unreadable: TIME_FIELDS,
+        diagnostic: `Clicked Edit but the Edit Care Log dialog never matched -- ${why}.`,
+      };
     }
 
     const { times, unreadable } = await readCareLogTimes(dialog);

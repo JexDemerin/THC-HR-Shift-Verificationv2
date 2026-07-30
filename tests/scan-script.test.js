@@ -830,3 +830,99 @@ test('keeps an incomplete shift\'s scheduled span even though it earns no hours'
   assert.equal(shift.duration_minutes, 0, 'no payable hours for a missing clock-in');
   assert.equal(shift.label_duration_minutes, 420, 'the scheduled 7h span is still kept for the note');
 });
+
+test('reads a dialog that has no Bill/Pay Hours block at all', async () => {
+  // Regression test for a real failure ("Clicked Edit but the Edit Care Log
+  // dialog never matched"): the bill-pay-automation block is conditional in
+  // WellSky's markup, so a shift without billing has no "Bill Hours" text --
+  // and requiring it made a perfectly good dialog look like it never opened.
+  const date = isoDateOffsetFromToday(-1);
+  const calendarHtml = buildGrid(
+    [
+      { name: 'Toki, Kaliya', shifts: [
+        { date, start: '10:30:00.000000', end: '14:30:00.000000', client: 'Chiang, Ryan', eventId: 'nobill' },
+      ] },
+    ],
+    [date]
+  );
+  const script = `
+    <script>
+      document.querySelector('.title .name').addEventListener('click', function () {
+        var popup = document.createElement('div');
+        popup.innerHTML =
+          '<h4>Care Log</h4><a>Summary</a><a>Notes</a><a id="edit-link">Edit</a><a>Copy</a>';
+        document.body.appendChild(popup);
+
+        document.getElementById('edit-link').addEventListener('click', function () {
+          popup.remove();
+          var dialog = document.createElement('div');
+          // No Bill Hours / Pay Hours anywhere -- exactly the shape that failed.
+          dialog.innerHTML =
+            '<label>Status</label><label>Official</label>' +
+            '<label>Client</label><label>Caregiver</label>' +
+            '<a class="actual_start">Actual</a><a class="actual_end">Actual</a>';
+          document.body.appendChild(dialog);
+
+          function tip(selector, text) {
+            dialog.querySelector(selector).addEventListener('mouseenter', function () {
+              var t = document.createElement('div');
+              t.className = '_ptip';
+              t.textContent = text;
+              document.body.appendChild(t);
+            });
+          }
+          tip('.actual_start', '07/27/2026 10:30:00 AM');
+          tip('.actual_end', '07/27/2026 02:30:00 PM');
+
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') dialog.remove();
+          });
+        });
+      });
+    </script>
+  `;
+
+  const result = await runScanScript(calendarHtml + script, { runScripts: true });
+  const shift = result.records.find((r) => r.event_id === 'nobill');
+
+  assert.equal(shift.actual_time_in, '07/27/2026 10:30:00 AM');
+  assert.equal(shift.actual_time_out, '07/27/2026 02:30:00 PM');
+  // No Scheduled links at all -> genuinely absent, not a read failure.
+  assert.equal(shift.scheduled_time_in, 'only had actual hours');
+  assert.deepEqual(
+    result.enrichmentDiagnostics.filter((d) => /never matched/.test(d)),
+    [],
+    'a billing-less dialog must not be reported as never opening'
+  );
+});
+
+test('says WHY the dialog did not match, not just that it didn\'t', async () => {
+  const date = isoDateOffsetFromToday(-1);
+  const calendarHtml = buildGrid(
+    [
+      { name: 'Broken, Bea', shifts: [
+        { date, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client B', eventId: 'nodialog' },
+      ] },
+    ],
+    [date]
+  );
+  const script = `
+    <script>
+      document.querySelectorAll('.title .name')[0].addEventListener('click', function () {
+        var popup = document.createElement('div');
+        popup.innerHTML =
+          '<h4>Care Log</h4><a>Summary</a><a>Notes</a><a id="edit-link">Edit</a><a>Copy</a>';
+        document.body.appendChild(popup);
+        // Clicking Edit does nothing at all -- no dialog ever appears.
+      });
+    </script>
+  `;
+
+  const result = await runScanScript(calendarHtml + script, { runScripts: true });
+
+  const diagnostic = result.enrichmentDiagnostics.find((d) => /never matched/.test(d));
+  assert.ok(diagnostic, 'the failure is still reported');
+  // Names the specific expected text that was absent, so the next step is
+  // obvious without another round trip to find out.
+  assert.match(diagnostic, /nothing on the page contains:.*Official/);
+});

@@ -39,7 +39,11 @@
   const SIGNALS = [
     {
       name: 'edit-care-log',
-      mustContain: ['Official', 'Bill Hours', 'Pay Hours', 'Status', 'Client', 'Caregiver'],
+      // "Bill Hours"/"Pay Hours" deliberately excluded: that block is
+      // conditional in the real markup, so requiring it misses the dialog
+      // entirely for a shift without billing. Status/Client/Caregiver alone
+      // already separate the dialog from the sub-widget nested inside it.
+      mustContain: ['Official', 'Status', 'Client', 'Caregiver'],
     },
     { name: 'summary-popup', mustContain: ['Care Log', 'Summary', 'Notes', 'Edit', 'Copy'] },
   ];
