@@ -155,11 +155,11 @@ test('sums a day across two clients and notes each visit separately', () => {
   const records = [
     {
       caregiver_name: 'Barberi, Miku', client_name: 'A. Palapati', shift_date: '2026-07-27',
-      time_in: '3:00pm', time_out: '6:00pm', duration_minutes: 180, status: 'completed',
+      official_time_in: '3:00pm', official_time_out: '6:00pm', duration_minutes: 180, status: 'completed',
     },
     {
       caregiver_name: 'Barberi, Miku', client_name: 'S. Palapati', shift_date: '2026-07-27',
-      time_in: '6:15pm', time_out: '9:00pm', duration_minutes: 165, status: 'completed',
+      official_time_in: '6:15pm', official_time_out: '9:00pm', duration_minutes: 165, status: 'completed',
     },
   ];
 
@@ -179,7 +179,7 @@ test('an incomplete shift contributes no hours to the day total', () => {
   const records = [
     {
       caregiver_name: 'Amato, Savani', client_name: 'Joyner, Yusuf', shift_date: '2026-07-27',
-      time_in: '11:00am', time_out: '6:00pm',
+      official_time_in: '11:00am', official_time_out: '6:00pm',
       duration_minutes: 0, label_duration_minutes: 420, status: 'incomplete',
     },
   ];
@@ -223,7 +223,7 @@ test('an incomplete shift shows its scheduled span and client in the note, cell 
   const records = [
     {
       caregiver_name: 'Amato, Savani', client_name: 'Joyner, Yusuf', shift_date: '2026-07-27',
-      time_in: '11:00am', time_out: '6:00pm',
+      official_time_in: '11:00am', official_time_out: '6:00pm',
       duration_minutes: 0,        // no payable hours until someone verifies them
       label_duration_minutes: 420, // but the schedule said 7h
       status: 'incomplete',
@@ -249,12 +249,12 @@ test('sibling care counts identical times once, not per client', () => {
   const records = [
     {
       caregiver_name: 'Foketi, Ma\'ata', client_name: 'Pallapati, Samson', shift_date: '2026-07-27',
-      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      official_time_in: '1:00pm', official_time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
       status: 'completed',
     },
     {
       caregiver_name: 'Foketi, Ma\'ata', client_name: 'Pallapati, Aaron', shift_date: '2026-07-27',
-      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      official_time_in: '1:00pm', official_time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
       status: 'completed',
     },
   ];
@@ -278,12 +278,12 @@ test('two shifts at different times are NOT treated as sibling care', () => {
   const records = [
     {
       caregiver_name: 'Barberi, Miku', client_name: 'A. Palapati', shift_date: '2026-07-27',
-      time_in: '3:00pm', time_out: '6:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      official_time_in: '3:00pm', official_time_out: '6:00pm', duration_minutes: 180, label_duration_minutes: 180,
       status: 'completed',
     },
     {
       caregiver_name: 'Barberi, Miku', client_name: 'S. Palapati', shift_date: '2026-07-27',
-      time_in: '6:15pm', time_out: '9:00pm', duration_minutes: 165, label_duration_minutes: 165,
+      official_time_in: '6:15pm', official_time_out: '9:00pm', duration_minutes: 165, label_duration_minutes: 165,
       status: 'completed',
     },
   ];
@@ -300,12 +300,12 @@ test('a partial overlap is not sibling care -- only exactly identical times are'
   const records = [
     {
       caregiver_name: 'Overlap, Olive', client_name: 'Client A', shift_date: '2026-07-27',
-      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      official_time_in: '1:00pm', official_time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
       status: 'completed',
     },
     {
       caregiver_name: 'Overlap, Olive', client_name: 'Client B', shift_date: '2026-07-27',
-      time_in: '1:00pm', time_out: '3:00pm', duration_minutes: 120, label_duration_minutes: 120,
+      official_time_in: '1:00pm', official_time_out: '3:00pm', duration_minutes: 120, label_duration_minutes: 120,
       status: 'completed',
     },
   ];
@@ -321,12 +321,12 @@ test('sibling care on different days is counted separately per day', () => {
   const makePair = (date) => [
     {
       caregiver_name: 'Daily, Dana', client_name: 'Sib One', shift_date: date,
-      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      official_time_in: '1:00pm', official_time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
       status: 'completed',
     },
     {
       caregiver_name: 'Daily, Dana', client_name: 'Sib Two', shift_date: date,
-      time_in: '1:00pm', time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
+      official_time_in: '1:00pm', official_time_out: '4:00pm', duration_minutes: 180, label_duration_minutes: 180,
       status: 'completed',
     },
   ];
@@ -346,12 +346,12 @@ test('a completed shift keeps its hours when an incomplete sibling shares its ti
   const records = [
     {
       caregiver_name: 'Mixed, Morgan', client_name: 'Sib One', shift_date: '2026-07-27',
-      time_in: '1:00pm', time_out: '4:00pm',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
       duration_minutes: 0, label_duration_minutes: 180, status: 'incomplete',
     },
     {
       caregiver_name: 'Mixed, Morgan', client_name: 'Sib Two', shift_date: '2026-07-27',
-      time_in: '1:00pm', time_out: '4:00pm',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
       duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
     },
   ];
@@ -466,6 +466,56 @@ test('migrates rows by column name when an older tab is missing a column', () =>
   // ...and the newly added column is simply blank rather than stealing the
   // value of whatever used to occupy its position.
   assert.equal(migrated.label_duration_minutes, '');
+});
+
+test('follows a renamed column so its values move instead of being dropped', () => {
+  // time_in/time_out became official_time_in/official_time_out. Without a rename
+  // map that is indistinguishable from "a column that no longer exists", and
+  // every label time already scanned -- along with every payroll hour derived
+  // from one -- would be blanked on the next write.
+  const oldHeaders = local(code.LOG_HEADERS).map(function (h) {
+    if (h === 'official_time_in') return 'time_in';
+    if (h === 'official_time_out') return 'time_out';
+    return h;
+  });
+  const oldRow = oldHeaders.map((header) => 'value:' + header);
+  const sheet = makeFakeSheet([oldHeaders, oldRow]);
+
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+
+  const migrated = {};
+  code.LOG_HEADERS.forEach((header, index) => { migrated[header] = sheet._cells[1][index]; });
+
+  assert.equal(migrated.official_time_in, 'value:time_in');
+  assert.equal(migrated.official_time_out, 'value:time_out');
+  assert.equal(migrated.actual_time_in, 'value:actual_time_in', 'neighbours are untouched');
+});
+
+test('a sheet holding both the old and new column name keeps the new one', () => {
+  // A tab can be caught mid-migration -- e.g. a header row edited by hand. The
+  // value under the CURRENT name is the one to trust, whichever of the two
+  // columns happens to come first.
+  const sheet = makeFakeSheet([
+    ['caregiver_name', 'official_time_in', 'time_in'],
+    ['Barberi, Miku', '9:00am', 'stale'],
+  ]);
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+  const migrated = {};
+  code.LOG_HEADERS.forEach((header, index) => { migrated[header] = sheet._cells[1][index]; });
+  assert.equal(migrated.official_time_in, '9:00am');
+
+  // The other column order, where a single-pass remap would let the old
+  // column's value overwrite the new column's.
+  const reversed = makeFakeSheet([
+    ['caregiver_name', 'time_in', 'official_time_in'],
+    ['Barberi, Miku', 'stale', '9:00am'],
+  ]);
+  code.ensureHeaderRow_(reversed, code.LOG_HEADERS);
+  const migratedReversed = {};
+  code.LOG_HEADERS.forEach((header, index) => {
+    migratedReversed[header] = reversed._cells[1][index];
+  });
+  assert.equal(migratedReversed.official_time_in, '9:00am');
 });
 
 test('drops a column that no longer exists rather than shifting everything', () => {
@@ -712,6 +762,57 @@ test('a time Sheets handed back as an 1899 Date is restored to 12-hour form', ()
   assert.equal(code.normalizeTimeValue_(null), '');
 });
 
+test("a clock punch's redundant date is dropped, a differing one kept", () => {
+  // shift_date already says which day it was, so repeating it in every clock
+  // punch is noise. A DIFFERENT date is not noise -- it is how an overnight
+  // shift's clock-out stays visibly on the next day.
+  assert.equal(code.stripRedundantDatePrefix_('07/27/2026 07:11:25 PM', '2026-07-27'), '07:11:25 PM');
+  assert.equal(
+    code.stripRedundantDatePrefix_('07/28/2026 06:00:00 AM', '2026-07-27'),
+    '07/28/2026 06:00:00 AM',
+    'a next-day clock-out keeps its date'
+  );
+  // Single-digit month/day, as a hand-edited cell might carry.
+  assert.equal(code.stripRedundantDatePrefix_('7/5/2026 9:00:00 AM', '2026-07-05'), '9:00:00 AM');
+  // Nothing to strip, or nothing to compare against -- passed through untouched
+  // rather than guessed at.
+  assert.equal(code.stripRedundantDatePrefix_('only had actual hours', '2026-07-27'), 'only had actual hours');
+  assert.equal(code.stripRedundantDatePrefix_('-', '2026-07-27'), '-');
+  assert.equal(code.stripRedundantDatePrefix_('07/27/2026 07:11:25 PM', ''), '07/27/2026 07:11:25 PM');
+});
+
+test("Sheets' 1899 epoch never reaches a clock-punch cell", () => {
+  // A clock punch written before those columns were forced to plain text may
+  // come back as a Date. If it has no real date it sits on Sheets' own time
+  // epoch, 1899-12-30 -- bookkeeping, not an observation, so it must not appear.
+  code.Utilities.formatDate = (date, _tz, format) => {
+    if (format !== 'MM/dd/yyyy hh:mm:ss a') return date.toISOString().slice(0, 10);
+    const h24 = date.getUTCHours();
+    const h12 = String(((h24 + 11) % 12) + 1).padStart(2, '0');
+    const mm = String(date.getUTCMinutes()).padStart(2, '0');
+    const ss = String(date.getUTCSeconds()).padStart(2, '0');
+    const d = `${String(date.getUTCMonth() + 1).padStart(2, '0')}/${String(date.getUTCDate()).padStart(2, '0')}/${date.getUTCFullYear()}`;
+    return `${d} ${h12}:${mm}:${ss} ${h24 < 12 ? 'AM' : 'PM'}`;
+  };
+
+  assert.equal(
+    code.normalizeClockPunchValue_(new Date(Date.UTC(1899, 11, 30, 19, 11, 25)), '2026-07-27'),
+    '07:11:25 PM'
+  );
+  // A Date carrying the shift's own date loses it as redundant...
+  assert.equal(
+    code.normalizeClockPunchValue_(new Date(Date.UTC(2026, 6, 27, 19, 11, 25)), '2026-07-27'),
+    '07:11:25 PM'
+  );
+  // ...but an overnight clock-out on the next day keeps it.
+  assert.equal(
+    code.normalizeClockPunchValue_(new Date(Date.UTC(2026, 6, 28, 6, 0, 0)), '2026-07-27'),
+    '07/28/2026 06:00:00 AM'
+  );
+  assert.equal(code.normalizeClockPunchValue_(null, '2026-07-27'), '');
+  assert.equal(code.normalizeClockPunchValue_('-', '2026-07-27'), '-');
+});
+
 test('formats a note date as mm/dd/yyyy', () => {
   assert.equal(code.formatMmDdYyyy_('2026-07-29'), '07/29/2026');
   assert.equal(code.formatMmDdYyyy_('2026-01-05'), '01/05/2026');
@@ -723,7 +824,7 @@ test('every column Sheets would reinterpret is written as plain text', () => {
   // If a time or date column is left in Sheets' default format, the value gets
   // coerced on write and comes back as a Date -- so each of these has to be in
   // TEXT_COLUMNS, and each has to be a real column name.
-  ['shift_date', 'time_in', 'time_out', 'actual_time_in', 'scheduled_time_in',
+  ['shift_date', 'official_time_in', 'official_time_out', 'actual_time_in', 'scheduled_time_in',
     'actual_time_out', 'scheduled_time_out'].forEach((name) => {
     assert.ok(local(code.TEXT_COLUMNS).indexOf(name) !== -1, `${name} should be plain text`);
   });
@@ -736,7 +837,7 @@ test('builds the note in the requested two-line shape', () => {
   const records = [
     {
       caregiver_name: 'Antonio, Imee', client_name: 'Leiker, Myles', shift_date: '2026-07-29',
-      time_in: '12:00pm', time_out: '5:45pm',
+      official_time_in: '12:00pm', official_time_out: '5:45pm',
       duration_minutes: 345, label_duration_minutes: 345, status: 'completed',
     },
   ];
@@ -845,7 +946,7 @@ test('puts the hours first and the activity note last, with a separator', () => 
   const records = [
     {
       caregiver_name: 'Williams, Natalia', client_name: 'Kozuka-Ssenyan, Mia',
-      shift_date: '2026-07-27', time_in: '9:00am', time_out: '4:00pm',
+      shift_date: '2026-07-27', official_time_in: '9:00am', official_time_out: '4:00pm',
       duration_minutes: 420, label_duration_minutes: 420, status: 'completed',
       note: '07/14/26: On a vacation with their father, July 22-31 (Added to shift that ' +
         'Occurs once on 07/27/2026 for Samson Pallapati; assigned to caregiver Natalia Williams)',
@@ -867,7 +968,7 @@ test('a shift with no note gets no separator line', () => {
   const records = [
     {
       caregiver_name: 'Plain, Pat', client_name: 'Client P', shift_date: '2026-07-27',
-      time_in: '9:00am', time_out: '4:00pm',
+      official_time_in: '9:00am', official_time_out: '4:00pm',
       duration_minutes: 420, label_duration_minutes: 420, status: 'completed', note: '',
     },
   ];
@@ -961,7 +1062,7 @@ test('re-scanning the same day overwrites its rows instead of adding more', () =
   const firstScan = [
     logRecord({
       caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
-      time_in: '9:00am', time_out: '4:00pm', duration_minutes: 420,
+      official_time_in: '9:00am', official_time_out: '4:00pm', duration_minutes: 420,
       event_id: '846292420', row_key: '846292420', scanned_at: 'run1',
     }),
     logRecord({
@@ -976,7 +1077,7 @@ test('re-scanning the same day overwrites its rows instead of adding more', () =
   const reScan = [
     logRecord({
       caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
-      time_in: '9:00am', time_out: '5:00pm', duration_minutes: 480,
+      official_time_in: '9:00am', official_time_out: '5:00pm', duration_minutes: 480,
       event_id: '846292420', row_key: '846292420', scanned_at: 'run2',
     }),
     logRecord({

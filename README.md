@@ -93,17 +93,29 @@ deleted or edited by hand, it's restored. If a tab predates a column being added
 are **remapped by column name** rather than the header row simply being overwritten — otherwise
 every value after an inserted column would silently shift one place and end up labelled as the wrong
 field, which for payroll timestamps is worse than an outright failure. Values whose column no longer
-exists are dropped rather than shifted; genuinely new columns start blank. The Payroll tab is fully
+exists are dropped rather than shifted; genuinely new columns start blank — except for a column that
+was *renamed*, which `COLUMN_RENAMES` follows to its new name so its values move with it instead of
+being thrown away. The Payroll tab is fully
 rebuilt each scan (notes included, since a stale note would strand an old breakdown on a changed
 cell), so its date/weekday header rows can't drift.
 
 - **`2026 - 07 Log (July)`** — one row per shift (or per idle caregiver/day, reading `-`), with
-  `caregiver_name`, `client_name`, `shift_date`, `time_in`, `time_out`, `duration_minutes`,
-  `label_duration_minutes`, the four actual/scheduled times, `status`, `status_raw`, `note`,
-  `event_id`, `row_key`, `scanned_at`. (`duration_minutes` is the payable span — zero for a missed
-  clock-in/out — while `label_duration_minutes` keeps the scheduled span regardless of status, so
-  the payroll note can show it without it reaching the total.)
+  `caregiver_name`, `client_name`, `shift_date`, `official_time_in`, `official_time_out`,
+  `duration_minutes`, `label_duration_minutes`, the four actual/scheduled times, `status`,
+  `status_raw`, `note`, `event_id`, `row_key`, `scanned_at`. (`duration_minutes` is the payable span
+  — zero for a missed clock-in/out — while `label_duration_minutes` keeps the scheduled span
+  regardless of status, so the payroll note can show it without it reaching the total.)
   See "Re-scanning" below for how repeat scans merge into it.
+
+  **Three pairs of times, three different facts.** `official_*` is the time on the calendar label —
+  what the Edit Care Log dialog itself labels "Official", i.e. the agreed hours the shift is paid on.
+  It reads straight off the schedule with no clicking, exists for every shift, and is what
+  `duration_minutes` and the payroll hours come from. `actual_*` is the raw clock punch, which can
+  differ sharply (one real capture showed Official `9:00 AM` against an actual punch of `1:35:33 PM`).
+  `scheduled_*` is the original plan. The last two only exist for completed shifts, since only the
+  click-through can read them. The `actual_*`/`scheduled_*` values drop their leading date, which
+  `shift_date` already carries — **unless** it differs, so an overnight shift's next-day clock-out
+  stays visible rather than reading as a time that runs backwards within one day.
 - **`2026 - 07 Payroll (July)`** — caregivers down the left, **every** date in the month across the top as
   `7/1`, `7/2`, … with its weekday (`Mon`, `Tue`, …) beneath, and a shaded spacer column between
   each Saturday and Sunday so weeks read separately. The whole month's grid exists upfront; each

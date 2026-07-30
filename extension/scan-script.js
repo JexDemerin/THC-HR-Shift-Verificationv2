@@ -181,8 +181,12 @@
       caregiver_name: caregiverName || null,
       client_name: clientName,
       shift_date: shiftDate,
-      time_in: formatTime12h(start),
-      time_out: formatTime12h(end),
+      // WellSky's dialog calls this pair "Official" -- the agreed/rounded
+      // time, as distinct from the raw clock punch (actual_*) and the original
+      // plan (scheduled_*). Named to match, since "time_in" next to
+      // "actual_time_in" reads as though one of them were redundant.
+      official_time_in: formatTime12h(start),
+      official_time_out: formatTime12h(end),
       duration_minutes: durationMinutes,
       label_duration_minutes: labelDurationMinutes,
       actual_time_in: null,
@@ -211,8 +215,8 @@
       caregiver_name: caregiverName,
       client_name: '-',
       shift_date: date,
-      time_in: '-',
-      time_out: '-',
+      official_time_in: '-',
+      official_time_out: '-',
       duration_minutes: null,
       label_duration_minutes: null,
       unread_fields: [],
@@ -484,6 +488,21 @@
     return { present: true, value: text || null };
   }
 
+  // The dialog's tooltips print a full "07/27/2026 07:11:25 PM". The row
+  // already carries that date in its own shift_date column, so the leading date
+  // is dropped as redundant -- but ONLY when it actually matches shift_date. An
+  // overnight shift clocks out on the FOLLOWING day, and stripping that date
+  // would leave a 10pm-6am shift reading as two times that run backwards inside
+  // a single day, hiding the midnight crossing entirely.
+  function stripRedundantDate(value, isoDate) {
+    if (!value || !isoDate) return value;
+    const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(.+)$/.exec(String(value).trim());
+    if (!match) return value;
+    const [, month, day, year, timeOfDay] = match;
+    const pad = (n) => (n.length === 1 ? `0${n}` : n);
+    return `${year}-${pad(month)}-${pad(day)}` === isoDate ? timeOfDay : value;
+  }
+
   // Returns the four time values plus the list of fields that failed to read
   // for a reason worth flagging -- a genuinely-absent scheduled time isn't
   // one of those, it's recorded as NO_SCHEDULED_VALUE instead.
@@ -704,7 +723,12 @@
     if (!eventEl) continue;
 
     const { times, closedOk, diagnostic, unreadable } = await enrichCompletedShift(eventEl);
-    if (times) Object.assign(record, times);
+    if (times) {
+      for (const field of TIME_FIELDS) {
+        times[field] = stripRedundantDate(times[field], record.shift_date);
+      }
+      Object.assign(record, times);
+    }
     // Whatever the click-through couldn't determine is marked unread, so the
     // Sheet keeps its existing value for those fields instead of being told
     // WellSky has nothing there. Everything it DID read -- including a

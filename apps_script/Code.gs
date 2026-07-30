@@ -27,21 +27,47 @@
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 9;
+var SCRIPT_VERSION = 10;
 
+// official_* is the time on the calendar label -- what WellSky's own Edit Care
+// Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
+// It's read straight off the schedule with no click, and it's what
+// duration_minutes and the payroll hours are computed from. actual_* is the raw
+// clock punch and scheduled_* the original plan, both only obtainable by
+// clicking into the dialog. Three different facts, so three pairs of columns --
+// the pair used to be called plain time_in/time_out, which read as though it
+// were a redundant copy of actual_time_in.
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
-  'time_in', 'time_out', 'duration_minutes', 'label_duration_minutes',
+  'official_time_in', 'official_time_out', 'duration_minutes', 'label_duration_minutes',
   'actual_time_in', 'scheduled_time_in',
   'actual_time_out', 'scheduled_time_out',
   'status', 'status_raw', 'note', 'event_id', 'row_key', 'scanned_at'
+];
+
+// Old column name -> its current name. Consulted when the header row is
+// rewritten, so values already in a sheet follow their column to its new name.
+// Without this the remap would find no column called "official_time_in" in an
+// existing sheet and start it blank, throwing away every label time already
+// scanned -- and with it the payroll hours derived from them.
+var COLUMN_RENAMES = {
+  time_in: 'official_time_in',
+  time_out: 'official_time_out'
+};
+
+// The four columns holding a clock punch read out of the Edit Care Log dialog.
+// Grouped because they share a format ("07:11:25 PM") distinct from the label
+// times' shorter "7:11pm".
+var CLOCK_PUNCH_COLUMNS = [
+  'actual_time_in', 'scheduled_time_in',
+  'actual_time_out', 'scheduled_time_out'
 ];
 
 // Columns Sheets would otherwise reinterpret: a time like "2:13pm" becomes a
 // time value stored as a fraction of a day, and a date string becomes a Date.
 // Written as plain text so a value survives the round trip unchanged.
 var TEXT_COLUMNS = [
-  'shift_date', 'time_in', 'time_out',
+  'shift_date', 'official_time_in', 'official_time_out',
   'actual_time_in', 'scheduled_time_in',
   'actual_time_out', 'scheduled_time_out',
   'scanned_at'
@@ -220,6 +246,13 @@ function ensureHeaderRow_(sheet, headers) {
     var byOldName = {};
     current.forEach(function (name, index) {
       if (name) byOldName[String(name)] = row[index];
+    });
+    // Renames applied in a second pass so the result doesn't depend on column
+    // order: a sheet caught mid-migration can hold both the old and the new
+    // name, and whichever of the two actually has a value should win.
+    current.forEach(function (name, index) {
+      var renamedTo = name ? COLUMN_RENAMES[String(name)] : null;
+      if (renamedTo && isBlank_(byOldName[renamedTo])) byOldName[renamedTo] = row[index];
     });
     return headers.map(function (name) {
       var value = byOldName[name];
@@ -423,8 +456,11 @@ function readLogRecords_(monthKey) {
     // re-scan would fail to recognise its own previously-written rows, and the
     // payroll notes would print raw Date objects.
     record.shift_date = normalizeDateValue_(record.shift_date);
-    record.time_in = normalizeTimeValue_(record.time_in);
-    record.time_out = normalizeTimeValue_(record.time_out);
+    record.official_time_in = normalizeTimeValue_(record.official_time_in);
+    record.official_time_out = normalizeTimeValue_(record.official_time_out);
+    CLOCK_PUNCH_COLUMNS.forEach(function (name) {
+      record[name] = normalizeClockPunchValue_(record[name], record.shift_date);
+    });
     return record;
   });
 }
@@ -455,6 +491,38 @@ function normalizeTimeValue_(value) {
     return Utilities.formatDate(value, Session.getScriptTimeZone(), 'h:mma').toLowerCase();
   }
   return value === null || value === undefined ? '' : String(value);
+}
+
+// The scanner drops a clock punch's leading date when it matches the shift's own
+// date, since shift_date already says it -- but keeps it when it differs, which
+// is how an overnight shift's clock-out stays visibly on the next day. Rows
+// already in the sheet may predate that, and Sheets may hand one back as a Date,
+// so the same rule is applied on the way in. Sharing one rule means a re-scan's
+// merge can't quietly reformat a field it never actually read.
+function stripRedundantDatePrefix_(value, isoDate) {
+  var match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(.+)$/.exec(String(value).trim());
+  if (!match || !isoDate) return String(value);
+  var pad = function (part) { return part.length === 1 ? '0' + part : part; };
+  var asIso = match[3] + '-' + pad(match[1]) + '-' + pad(match[2]);
+  return asIso === String(isoDate) ? match[4] : String(value);
+}
+
+// A time with no date is stored on Sheets' own time epoch, 1899-12-30. That
+// date is Sheets bookkeeping rather than anything observed in WellSky, so it
+// must never reach a cell -- left in, it produces the "Sat Dec 30 1899" strings
+// that used to show up in payroll notes.
+var SHEETS_TIME_EPOCH_PREFIX = '12/30/1899 ';
+
+function normalizeClockPunchValue_(value, isoDate) {
+  if (isDateLike_(value)) {
+    var formatted = Utilities.formatDate(
+      value, Session.getScriptTimeZone(), 'MM/dd/yyyy hh:mm:ss a');
+    value = formatted.indexOf(SHEETS_TIME_EPOCH_PREFIX) === 0
+      ? formatted.slice(SHEETS_TIME_EPOCH_PREFIX.length)
+      : formatted;
+  }
+  if (value === null || value === undefined) return '';
+  return stripRedundantDatePrefix_(String(value), isoDate);
 }
 
 // "2026-07-29" -> "07/29/2026"
@@ -544,7 +612,7 @@ function aggregateByCaregiverAndDate_(records) {
     var labelMinutes = toMinutes_(record.label_duration_minutes);
     var noteMinutes = labelMinutes !== null ? labelMinutes : minutes;
 
-    var timeRangeKey = String(record.time_in) + '|' + String(record.time_out);
+    var timeRangeKey = String(record.official_time_in) + '|' + String(record.official_time_out);
     cell.timeRangeCounts[timeRangeKey] = (cell.timeRangeCounts[timeRangeKey] || 0) + 1;
     if (cell.timeRangeCounts[timeRangeKey] > 1) cell.siblingCare = true;
 
@@ -568,8 +636,8 @@ function aggregateByCaregiverAndDate_(records) {
       // which shifts need follow-up, so the note doesn't repeat it.
       var block =
         formatMmDdYyyy_(date) + ' (' + (record.client_name || 'unknown client') + ')\n' +
-        normalizeTimeValue_(record.time_in || '?') + ' - ' +
-        normalizeTimeValue_(record.time_out || '?') +
+        normalizeTimeValue_(record.official_time_in || '?') + ' - ' +
+        normalizeTimeValue_(record.official_time_out || '?') +
         ' = ' + formatHoursMinutes_(noteMinutes);
 
       var activityNote = cleanActivityNote_(record.note);

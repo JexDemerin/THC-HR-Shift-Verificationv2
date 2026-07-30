@@ -123,6 +123,15 @@ test('no shifts on the page returns an empty, not throwing, result', async () =>
   assert.equal(result.summary.total, 0);
 });
 
+// "2026-07-29" -> "07/29/2026", the form WellSky's own quick-time tooltips use.
+// Fixtures that build their shift date relative to today need their tooltip
+// dates built the same way, or the shift date and the tooltip date disagree and
+// the fixture stops representing a real shift.
+function mmDdYyyy(isoDate) {
+  const [year, month, day] = isoDate.split('-');
+  return `${month}/${day}/${year}`;
+}
+
 function isoDateOffsetFromToday(dayOffset) {
   const d = new Date();
   d.setDate(d.getDate() + dayOffset);
@@ -194,7 +203,11 @@ test('an unparsed shift with no discoverable date is kept, not silently dropped'
 
 // ---- Full click-through: green shift -> summary popup -> Edit -> read times -> close ----
 
-function buildClickThroughScript({ closable, scheduledLinks = 'present' }) {
+// `tooltipDate` must be the same day the fixture's shift sits on, or the fixture
+// stops describing a real shift: the scanner drops a clock punch's date only when
+// it matches shift_date, so a mismatched default would silently exercise the
+// overnight path instead of the ordinary one.
+function buildClickThroughScript({ closable, scheduledLinks = 'present', tooltipDate = '07/27/2026' }) {
   // closable === true: document-level Escape handling (registering this
   // listener doesn't need #edit-dialog to exist yet -- it's only looked up
   // once Escape is actually pressed, later).
@@ -287,13 +300,13 @@ function buildClickThroughScript({ closable, scheduledLinks = 'present' }) {
               document.body.appendChild(tip);
             });
           }
-          attachTooltip('.actual_start', '07/27/2026 07:11:25 PM');
-          attachTooltip('.actual_end', '07/27/2026 09:11:43 PM');
+          attachTooltip('.actual_start', '${tooltipDate} 07:11:25 PM');
+          attachTooltip('.actual_end', '${tooltipDate} 09:11:43 PM');
           ${
             scheduledLinks === 'present-but-silent'
               ? '// links exist but never produce a tooltip -- a real read failure'
-              : `attachTooltip('.scheduled_start', '07/27/2026 07:00:00 PM');
-                 attachTooltip('.scheduled_end', '07/27/2026 09:00:00 PM');`
+              : `attachTooltip('.scheduled_start', '${tooltipDate} 07:00:00 PM');
+                 attachTooltip('.scheduled_end', '${tooltipDate} 09:00:00 PM');`
           }
         });
       });
@@ -318,10 +331,10 @@ test('a completed shift is clicked through to read all four real clock times', a
 
   assert.equal(result.stoppedEarlyReason, null);
   const record = result.records[0];
-  assert.equal(record.actual_time_in, '07/27/2026 07:11:25 PM');
-  assert.equal(record.scheduled_time_in, '07/27/2026 07:00:00 PM');
-  assert.equal(record.actual_time_out, '07/27/2026 09:11:43 PM');
-  assert.equal(record.scheduled_time_out, '07/27/2026 09:00:00 PM');
+  assert.equal(record.actual_time_in, '07:11:25 PM');
+  assert.equal(record.scheduled_time_in, '07:00:00 PM');
+  assert.equal(record.actual_time_out, '09:11:43 PM');
+  assert.equal(record.scheduled_time_out, '09:00:00 PM');
 });
 
 test('stops and reports a reason if the Edit Care Log dialog never closes', async () => {
@@ -362,7 +375,7 @@ test('closes via Escape dispatched directly on the dialog, not just document', a
   const result = await runScanScript(html, { runScripts: true });
 
   assert.equal(result.stoppedEarlyReason, null);
-  assert.equal(result.records[0].actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(result.records[0].actual_time_in, '07:11:25 PM');
 });
 
 test('falls back to the jQuery UI titlebar close button when Escape does nothing', async () => {
@@ -380,7 +393,7 @@ test('falls back to the jQuery UI titlebar close button when Escape does nothing
   const result = await runScanScript(html, { runScripts: true });
 
   assert.equal(result.stoppedEarlyReason, null);
-  assert.equal(result.records[0].actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(result.records[0].actual_time_in, '07:11:25 PM');
 });
 
 test('treats a hidden-but-still-present dialog as closed, and keeps going', async () => {
@@ -399,12 +412,12 @@ test('treats a hidden-but-still-present dialog as closed, and keeps going', asyn
     eventId: 'evt-hidden-close',
     id: 'shift-el',
   });
-  const html = calendarHtml + buildClickThroughScript({ closable: 'hides-not-removes' });
+  const html = calendarHtml + buildClickThroughScript({ closable: 'hides-not-removes', tooltipDate: mmDdYyyy(yesterday) });
 
   const result = await runScanScript(html, { runScripts: true });
 
   assert.equal(result.stoppedEarlyReason, null, 'a hidden dialog must count as closed');
-  assert.equal(result.records[0].actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(result.records[0].actual_time_in, '07:11:25 PM');
 });
 
 test('clicks the .title label, not just the outer shift wrapper', async () => {
@@ -493,11 +506,73 @@ test('records "only had actual hours" when a shift genuinely has no scheduled ti
   const result = await runScanScript(html, { runScripts: true });
 
   const record = result.records[0];
-  assert.equal(record.actual_time_in, '07/27/2026 07:11:25 PM');
-  assert.equal(record.actual_time_out, '07/27/2026 09:11:43 PM');
+  assert.equal(record.actual_time_in, '07:11:25 PM');
+  assert.equal(record.actual_time_out, '09:11:43 PM');
   assert.equal(record.scheduled_time_in, 'only had actual hours');
   assert.equal(record.scheduled_time_out, 'only had actual hours');
   assert.deepEqual(result.enrichmentDiagnostics, [], 'an absent scheduled time is not a failure');
+});
+
+test("an overnight shift keeps the clock-out's next-day date", async () => {
+  // The date is stripped from a clock punch because shift_date already carries
+  // it -- but an overnight shift clocks out on the FOLLOWING day. Strip that and
+  // "10:00:00 PM" to "06:00:00 AM" reads as a shift running backwards inside one
+  // day, and the midnight crossing disappears from the sheet entirely.
+  const date = isoDateOffsetFromToday(-2);
+  const nextDay = isoDateOffsetFromToday(-1);
+  const calendarHtml = buildGrid(
+    [
+      { name: 'Nocturne, Nia', shifts: [
+        { date, start: '22:00:00.000000', end: '23:59:00.000000', client: 'Sleeper, Sam', eventId: 'overnight' },
+      ] },
+    ],
+    [date]
+  );
+  const script = `
+    <script>
+      document.querySelector('.title .name').addEventListener('click', function () {
+        var popup = document.createElement('div');
+        popup.innerHTML =
+          '<h4>Care Log</h4><a>Summary</a><a>Notes</a><a id="edit-link">Edit</a><a>Copy</a>';
+        document.body.appendChild(popup);
+
+        document.getElementById('edit-link').addEventListener('click', function () {
+          popup.remove();
+          var dialog = document.createElement('div');
+          dialog.innerHTML =
+            '<label>Status</label><label>Official</label>' +
+            '<label>Client</label><label>Caregiver</label>' +
+            '<a class="actual_start">Actual</a><a class="actual_end">Actual</a>';
+          document.body.appendChild(dialog);
+
+          function tip(selector, text) {
+            dialog.querySelector(selector).addEventListener('mouseenter', function () {
+              var t = document.createElement('div');
+              t.className = '_ptip';
+              t.textContent = text;
+              document.body.appendChild(t);
+            });
+          }
+          tip('.actual_start', '${mmDdYyyy(date)} 10:00:00 PM');
+          tip('.actual_end', '${mmDdYyyy(nextDay)} 06:00:00 AM');
+
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') dialog.remove();
+          });
+        });
+      });
+    </script>
+  `;
+
+  const result = await runScanScript(calendarHtml + script, { runScripts: true });
+  const shift = result.records.find((r) => r.event_id === 'overnight');
+
+  assert.equal(shift.actual_time_in, '10:00:00 PM', "the shift's own date is redundant");
+  assert.equal(
+    shift.actual_time_out,
+    `${mmDdYyyy(nextDay)} 06:00:00 AM`,
+    'a different date is real information and stays'
+  );
 });
 
 test('still flags a scheduled link that exists but cannot be read', async () => {
@@ -520,7 +595,7 @@ test('still flags a scheduled link that exists but cannot be read', async () => 
   const result = await runScanScript(html, { runScripts: true });
 
   const record = result.records[0];
-  assert.equal(record.actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(record.actual_time_in, '07:11:25 PM');
   assert.equal(record.scheduled_time_in, null);
   assert.equal(result.enrichmentDiagnostics.length, 1);
   assert.match(result.enrichmentDiagnostics[0], /scheduled_time_in/);
@@ -593,7 +668,7 @@ test('every caregiver on screen gets a row per date, "-" when they had no shift'
 
   assert.equal(byKey[`Worked, Never|${d1}`].status, 'no_shift');
   assert.equal(byKey[`Worked, Never|${d1}`].client_name, '-');
-  assert.equal(byKey[`Worked, Never|${d1}`].time_in, '-');
+  assert.equal(byKey[`Worked, Never|${d1}`].official_time_in, '-');
   assert.equal(byKey[`Worked, Never|${d2}`].status, 'no_shift');
   assert.equal(byKey[`Worked, One Day|${d1}`].status, 'completed');
   assert.equal(byKey[`Worked, One Day|${d2}`].status, 'no_shift');
@@ -676,8 +751,8 @@ test('computes label times and duration, and zeroes out an incomplete shift', as
   const byName = Object.fromEntries(result.records.map((r) => [r.caregiver_name, r]));
 
   // 1:00pm - 5:05pm = 245 minutes, matching the note format asked for.
-  assert.equal(byName['Timed, Terry'].time_in, '1:00pm');
-  assert.equal(byName['Timed, Terry'].time_out, '5:05pm');
+  assert.equal(byName['Timed, Terry'].official_time_in, '1:00pm');
+  assert.equal(byName['Timed, Terry'].official_time_out, '5:05pm');
   assert.equal(byName['Timed, Terry'].duration_minutes, 245);
 
   // A missed clock-in earns zero regardless of WellSky's placeholder times --
@@ -871,8 +946,8 @@ test('reads a dialog that has no Bill/Pay Hours block at all', async () => {
               document.body.appendChild(t);
             });
           }
-          tip('.actual_start', '07/27/2026 10:30:00 AM');
-          tip('.actual_end', '07/27/2026 02:30:00 PM');
+          tip('.actual_start', '${mmDdYyyy(date)} 10:30:00 AM');
+          tip('.actual_end', '${mmDdYyyy(date)} 02:30:00 PM');
 
           document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') dialog.remove();
@@ -885,8 +960,8 @@ test('reads a dialog that has no Bill/Pay Hours block at all', async () => {
   const result = await runScanScript(calendarHtml + script, { runScripts: true });
   const shift = result.records.find((r) => r.event_id === 'nobill');
 
-  assert.equal(shift.actual_time_in, '07/27/2026 10:30:00 AM');
-  assert.equal(shift.actual_time_out, '07/27/2026 02:30:00 PM');
+  assert.equal(shift.actual_time_in, '10:30:00 AM');
+  assert.equal(shift.actual_time_out, '02:30:00 PM');
   // No Scheduled links at all -> genuinely absent, not a read failure.
   assert.equal(shift.scheduled_time_in, 'only had actual hours');
   assert.deepEqual(
@@ -969,8 +1044,8 @@ test('recovers when the first Edit click does not land', async () => {
               document.body.appendChild(t);
             });
           }
-          tip('.actual_start', '07/28/2026 09:00:00 AM');
-          tip('.actual_end', '07/28/2026 12:00:00 PM');
+          tip('.actual_start', '${mmDdYyyy(date)} 09:00:00 AM');
+          tip('.actual_end', '${mmDdYyyy(date)} 12:00:00 PM');
 
           document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') dialog.remove();
@@ -983,7 +1058,7 @@ test('recovers when the first Edit click does not land', async () => {
   const result = await runScanScript(calendarHtml + script, { runScripts: true });
   const shift = result.records.find((r) => r.event_id === 'retry-edit');
 
-  assert.equal(shift.actual_time_in, '07/28/2026 09:00:00 AM', 'the retry got the times');
+  assert.equal(shift.actual_time_in, '09:00:00 AM', 'the retry got the times');
   assert.deepEqual(
     result.enrichmentDiagnostics.filter((d) => /never matched/.test(d)),
     [],
