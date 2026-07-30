@@ -148,13 +148,14 @@ That's expected and safe:
 - **Other weeks go to the right place.** Every row is filed by its own `shift_date`, so a week
   spanning a month boundary splits correctly across both months' tabs, and rows always land in date
   order with caregivers alphabetical within each date.
-- **Already-correct data stays as it is.** A re-scan merges **field by field**: a value the scan
-  couldn't read this time leaves whatever is already in the sheet alone. This matters because the
-  Edit Care Log click-through occasionally misses a shift — without the merge, one failed read would
-  blank out timestamps an earlier scan captured correctly. A real new value does overwrite the old
-  one, so a shift corrected in WellSky between scans is picked up. (`0` counts as a real value, not
-  a blank.) The trade-off: a field genuinely *cleared* in WellSky won't be blanked here — the safer
-  direction to be wrong in for payroll.
+- **The sheet mirrors WellSky.** A re-scan's result wins, blanks included — if a value was cleared
+  in WellSky, the cell gets cleared too, because anything else stops it being a faithful copy.
+- **…except for a field the scan couldn't actually read.** The Edit Care Log click-through
+  occasionally fails to open, and that blank isn't an observation about WellSky — it's "we didn't
+  manage to look". Blanking a cell on that basis would put a claim in the sheet that was never seen,
+  so the scanner reports exactly which fields it couldn't determine and those keep their previous
+  value. Every such shift is named in the popup's log, so a preserved value is never silent. Fields
+  it *did* read always overwrite, including a genuinely-absent scheduled time.
 - **Deleted shifts don't linger.** Each scan emits a row for every caregiver on screen × every past
   visible date, so the caregiver/date pairs it sends are exactly what it had authoritative knowledge
   of. Within those pairs its result is treated as the truth, so a shift that was deleted or

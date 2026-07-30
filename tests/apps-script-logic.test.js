@@ -526,21 +526,44 @@ test('doGet reports the version so the live deployment can be checked in a brows
 
 // ---- Re-scanning: merge, don't clobber ----
 
-test('a blank from a failed re-read never erases an existing value', () => {
-  // The whole point: the Edit Care Log click-through occasionally misses, and
-  // a re-scan that couldn't read the times must not wipe the ones a previous
-  // scan got right.
+test('an observed blank clears the cell -- the sheet mirrors WellSky', () => {
+  // If a value was cleared in WellSky, the sheet has to clear it too, or it
+  // stops being a faithful copy. Nothing is in unread_fields here, so every
+  // blank was genuinely observed.
   const existing = {
     caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
-    actual_time_in: '07/27/2026 07:11:25 PM', scheduled_time_in: '07/27/2026 07:00:00 PM',
-    actual_time_out: '07/27/2026 09:11:43 PM', scheduled_time_out: '07/27/2026 09:00:00 PM',
-    duration_minutes: 120, status: 'completed', note: 'a real note', row_key: 'evt-1',
+    actual_time_in: '07/27/2026 07:11:25 PM', note: 'an old note', row_key: 'evt-1',
   };
   const incoming = {
     caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
-    actual_time_in: '', scheduled_time_in: null,
-    actual_time_out: undefined, scheduled_time_out: '',
-    duration_minutes: 120, status: 'completed', note: '', row_key: 'evt-1',
+    actual_time_in: '', note: '', row_key: 'evt-1', unread_fields: [],
+  };
+
+  const merged = code.mergeRecord_(existing, incoming);
+
+  assert.equal(merged.actual_time_in, '');
+  assert.equal(merged.note, '');
+});
+
+test('a field the scan could not read keeps its previous value', () => {
+  // The Edit Care Log click-through occasionally fails to open. That blank is
+  // not an observation about WellSky, so it must not erase a timestamp an
+  // earlier scan captured correctly -- the scanner flags exactly which fields
+  // it couldn't determine.
+  const existing = {
+    caregiver_name: 'Barberi, Miku', shift_date: '2026-07-27',
+    actual_time_in: '07/27/2026 07:11:25 PM', scheduled_time_in: '07/27/2026 07:00:00 PM',
+    actual_time_out: '07/27/2026 09:11:43 PM', scheduled_time_out: '07/27/2026 09:00:00 PM',
+    note: 'a real note', row_key: 'evt-1',
+  };
+  const incoming = {
+    caregiver_name: 'Barberi, Miku', shift_date: '2026-07-27',
+    actual_time_in: null, scheduled_time_in: null,
+    actual_time_out: null, scheduled_time_out: null,
+    note: null, row_key: 'evt-1',
+    unread_fields: [
+      'actual_time_in', 'scheduled_time_in', 'actual_time_out', 'scheduled_time_out', 'note',
+    ],
   };
 
   const merged = code.mergeRecord_(existing, incoming);
@@ -550,6 +573,23 @@ test('a blank from a failed re-read never erases an existing value', () => {
   assert.equal(merged.actual_time_out, '07/27/2026 09:11:43 PM');
   assert.equal(merged.scheduled_time_out, '07/27/2026 09:00:00 PM');
   assert.equal(merged.note, 'a real note');
+});
+
+test('a field that WAS read overwrites even when it is also listed as unread', () => {
+  // Only some of the four can fail in one pass, so a value that did come
+  // through must win regardless of what else failed alongside it.
+  const merged = code.mergeRecord_(
+    { actual_time_in: 'old value', scheduled_time_in: 'old scheduled', row_key: 'k' },
+    {
+      actual_time_in: '07/27/2026 07:11:25 PM',
+      scheduled_time_in: null,
+      row_key: 'k',
+      unread_fields: ['actual_time_in', 'scheduled_time_in'],
+    }
+  );
+
+  assert.equal(merged.actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(merged.scheduled_time_in, 'old scheduled');
 });
 
 test('a real new value does overwrite the old one', () => {

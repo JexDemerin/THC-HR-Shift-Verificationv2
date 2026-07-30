@@ -195,6 +195,12 @@
       event_id: eventEl.getAttribute('data-event-id') || null,
       row_key: eventEl.getAttribute('data-event-id') || null,
       scanned_at: new Date().toISOString(),
+      // Fields this scan could not determine -- as opposed to ones it read and
+      // found genuinely empty. The Sheet mirrors WellSky, so an observed blank
+      // SHOULD blank the cell; but a field we simply failed to look at tells us
+      // nothing about WellSky, and blanking on that basis would assert
+      // something untrue. Those get left as they were instead.
+      unread_fields: [],
     };
   }
 
@@ -209,6 +215,7 @@
       time_out: '-',
       duration_minutes: null,
       label_duration_minutes: null,
+      unread_fields: [],
       actual_time_in: '-',
       scheduled_time_in: '-',
       actual_time_out: '-',
@@ -436,6 +443,15 @@
   // indistinguishable from something having gone wrong).
   const NO_SCHEDULED_VALUE = 'only had actual hours';
 
+  // The four fields that only the Edit Care Log click-through can supply.
+  // If that click-through never got far enough to look, all four are unread.
+  const TIME_FIELDS = [
+    'actual_time_in',
+    'scheduled_time_in',
+    'actual_time_out',
+    'scheduled_time_out',
+  ];
+
   // Hovers one quick-time link and reads the resulting `._ptip` tooltip node
   // that appears elsewhere on the page -- confirmed via a real Phase 0
   // capture. Removes the tooltip node afterward so repeated runs don't leave
@@ -578,7 +594,7 @@
       const newEls = findNewTopLevelElements(before, snapshotAllElements());
       const closedOk = await closeDialog();
       const seen = newEls.length ? textSnippet(newEls[0]) : '(nothing new appeared)';
-      return { times: null, closedOk, diagnostic: `Expected summary popup didn't open. Instead: ${seen}` };
+      return { times: null, closedOk, unreadable: TIME_FIELDS, diagnostic: `Expected summary popup didn't open. Instead: ${seen}` };
     }
 
     // Re-query rather than trust the first `popup` reference -- some of its
@@ -590,7 +606,7 @@
     }, { timeoutMs: CLICK_SETTLE_MS });
     if (!editLink) {
       const closedOk = await closeDialog();
-      return { times: null, closedOk, diagnostic: `Summary popup opened but no "Edit" link found in it.` };
+      return { times: null, closedOk, unreadable: TIME_FIELDS, diagnostic: `Summary popup opened but no "Edit" link found in it.` };
     }
 
     simulateClick(editLink);
@@ -598,7 +614,7 @@
     const dialog = await waitFor(() => findSmallestMatch(SIGNALS.editCareLog), { timeoutMs: CLICK_SETTLE_MS });
     if (!dialog) {
       const closedOk = await closeDialog();
-      return { times: null, closedOk, diagnostic: `Clicked Edit but the Edit Care Log dialog never matched.` };
+      return { times: null, closedOk, unreadable: TIME_FIELDS, diagnostic: `Clicked Edit but the Edit Care Log dialog never matched.` };
     }
 
     const { times, unreadable } = await readCareLogTimes(dialog);
@@ -606,7 +622,7 @@
     const diagnostic = unreadable.length
       ? `Dialog opened but couldn't read: ${unreadable.join(', ')}`
       : null;
-    return { times, closedOk, diagnostic };
+    return { times, closedOk, unreadable, diagnostic };
   }
 
   // ---- Run it ----
@@ -632,8 +648,11 @@
     if (note.value) {
       record.note = note.value;
     } else if (note.error) {
-      // Only a genuine failure is worth reporting. A marker with nothing
-      // behind it just means that shift has no note.
+      // Only a genuine failure is worth reporting -- and the note field is
+      // marked unread so the Sheet keeps whatever it already had rather than
+      // blanking it on the strength of a failed request. A marker with nothing
+      // behind it is a real empty note and is left to blank the cell.
+      record.unread_fields.push('note');
       enrichmentDiagnostics.push(
         `${record.caregiver_name}/${record.client_name} (${record.shift_date}): couldn't read its activity note (${note.error}).`
       );
@@ -645,8 +664,15 @@
     const eventEl = eventElsByEventId.get(record.event_id);
     if (!eventEl) continue;
 
-    const { times, closedOk, diagnostic } = await enrichCompletedShift(eventEl);
+    const { times, closedOk, diagnostic, unreadable } = await enrichCompletedShift(eventEl);
     if (times) Object.assign(record, times);
+    // Whatever the click-through couldn't determine is marked unread, so the
+    // Sheet keeps its existing value for those fields instead of being told
+    // WellSky has nothing there. Everything it DID read -- including a
+    // genuinely absent scheduled time -- overwrites as normal.
+    for (const field of unreadable || TIME_FIELDS) {
+      if (record.unread_fields.indexOf(field) === -1) record.unread_fields.push(field);
+    }
     if (diagnostic) {
       enrichmentDiagnostics.push(`${record.caregiver_name}/${record.client_name} (${record.shift_date}): ${diagnostic}`);
     }

@@ -27,7 +27,7 @@
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 5;
+var SCRIPT_VERSION = 6;
 
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
@@ -212,18 +212,25 @@ function caregiverDateKey_(record) {
   return String(record.caregiver_name) + '|' + String(record.shift_date);
 }
 
-// A field-by-field merge, NOT a wholesale row replacement.
+// The Sheet mirrors WellSky, so a re-scan's result wins -- including a blank.
+// If a field was cleared in WellSky, the cell gets cleared too.
 //
-// A re-scan can legitimately come back with a field it couldn't read this time
-// -- the Edit Care Log click-through occasionally misses, and a blank from a
-// failed read must never erase a timestamp that a previous scan got right.
-// So an incoming blank leaves whatever is already there; only a real value
-// overwrites. The trade-off is that a value genuinely cleared in WellSky won't
-// be blanked here, which is the safer direction to be wrong in for payroll.
+// The single exception is a field the scan could not DETERMINE, which the
+// scanner reports in `unread_fields` (the Edit Care Log click-through does
+// occasionally fail to open). A failed read is not an observation about
+// WellSky, so blanking a cell on the strength of one would put a claim in the
+// sheet that was never actually seen. Those fields keep their previous value;
+// the popup's log names every shift this happened to.
 function mergeRecord_(existing, incoming) {
+  var unread = {};
+  (incoming.unread_fields || []).forEach(function (field) {
+    unread[field] = true;
+  });
+
   var merged = {};
   LOG_HEADERS.forEach(function (key) {
-    merged[key] = isBlank_(incoming[key]) ? existing[key] : incoming[key];
+    var keepPrevious = unread[key] && isBlank_(incoming[key]) && !isBlank_(existing[key]);
+    merged[key] = keepPrevious ? existing[key] : incoming[key];
   });
   return merged;
 }
