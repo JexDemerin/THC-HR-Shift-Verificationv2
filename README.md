@@ -212,6 +212,13 @@ successful scan.
 
 ## Using it
 
+**Open the panel in its own window first** (the "Open in a window" button). Chrome closes an
+extension popup the instant it loses focus, and that can't be prevented from inside it — which
+matters more than it sounds, because the scan is driven from that page: a popup that closes mid-scan
+takes the pending results with it and **nothing reaches the Sheet**. A window doesn't close on a
+stray click. The log is also persisted either way, so reopening shows the last run rather than an
+empty panel, and there's a "Clear log" button when you want a fresh one.
+
 1. Log into WellSky and go to the weekly schedule view.
 2. Click the extension icon → **Scan Schedule**. Records get written to that month's Log and
    Payroll tabs. Completed shifts take a few seconds each while it clicks through and reads their
