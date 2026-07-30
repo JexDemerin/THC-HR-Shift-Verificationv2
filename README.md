@@ -96,8 +96,7 @@ cell), so its date/weekday header rows can't drift.
   `event_id`, `row_key`, `scanned_at`. (`duration_minutes` is the payable span — zero for a missed
   clock-in/out — while `label_duration_minutes` keeps the scheduled span regardless of status, so
   the payroll note can show it without it reaching the total.)
-  Re-scanning updates an existing row rather than duplicating it, and a caregiver/day that gains a
-  real shift has its stale `-` row removed.
+  See "Re-scanning" below for how repeat scans merge into it.
 - **`2026-07 Payroll`** — caregivers down the left, **every** date in the month across the top as
   `7/1`, `7/2`, … with its weekday (`Mon`, `Tue`, …) beneath, and a shaded spacer column between
   each Saturday and Sunday so weeks read separately. The whole month's grid exists upfront; each
@@ -139,6 +138,29 @@ A date with no record at all (not yet scanned, or still in the future) is left *
 Scanning a shift with a click-through takes a few seconds each (open, read, close), so a schedule
 with many completed shifts visible at once will take a while to finish — that's expected. Since each
 scan only sees one visible week, a full month's Payroll tab fills in over several scans.
+
+### Re-scanning: what changes and what doesn't
+
+WellSky shows one week at a time, so building up a month means scanning several weeks, and
+re-scanning a week you've already done (e.g. today, to pick up yesterday's now-finished shifts).
+That's expected and safe:
+
+- **Other weeks go to the right place.** Every row is filed by its own `shift_date`, so a week
+  spanning a month boundary splits correctly across both months' tabs, and rows always land in date
+  order with caregivers alphabetical within each date.
+- **Already-correct data stays as it is.** A re-scan merges **field by field**: a value the scan
+  couldn't read this time leaves whatever is already in the sheet alone. This matters because the
+  Edit Care Log click-through occasionally misses a shift — without the merge, one failed read would
+  blank out timestamps an earlier scan captured correctly. A real new value does overwrite the old
+  one, so a shift corrected in WellSky between scans is picked up. (`0` counts as a real value, not
+  a blank.) The trade-off: a field genuinely *cleared* in WellSky won't be blanked here — the safer
+  direction to be wrong in for payroll.
+- **Deleted shifts don't linger.** Each scan emits a row for every caregiver on screen × every past
+  visible date, so the caregiver/date pairs it sends are exactly what it had authoritative knowledge
+  of. Within those pairs its result is treated as the truth, so a shift that was deleted or
+  recreated in WellSky (new `event_id`) doesn't leave a ghost row behind. Rows for any *other*
+  caregiver/date — a different week, or a caregiver scrolled out of view — are left completely
+  untouched.
 
 ## Setup
 

@@ -27,7 +27,7 @@
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 4;
+var SCRIPT_VERSION = 5;
 
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
@@ -36,8 +36,6 @@ var LOG_HEADERS = [
   'actual_time_out', 'scheduled_time_out',
   'status', 'status_raw', 'note', 'event_id', 'row_key', 'scanned_at'
 ];
-
-var ROW_KEY_COL = LOG_HEADERS.indexOf('row_key') + 1; // 1-based sheet column
 
 // Matches the WellSky legend colors the original scanner used, so a cell's
 // color means the same thing here as it does on the schedule itself.
@@ -206,70 +204,94 @@ function rowValuesFor_(record) {
   });
 }
 
-function readRowKeyIndex_(sheet) {
-  var lastRow = sheet.getLastRow();
-  var index = {};
-  if (lastRow < 2) return index;
-  var keys = sheet.getRange(2, ROW_KEY_COL, lastRow - 1, 1).getValues();
-  for (var i = 0; i < keys.length; i++) {
-    if (keys[i][0]) index[keys[i][0]] = i + 2; // +2: 1-based, plus header row
-  }
-  return index;
+function isBlank_(value) {
+  return value === '' || value === null || value === undefined;
 }
 
+function caregiverDateKey_(record) {
+  return String(record.caregiver_name) + '|' + String(record.shift_date);
+}
+
+// A field-by-field merge, NOT a wholesale row replacement.
+//
+// A re-scan can legitimately come back with a field it couldn't read this time
+// -- the Edit Care Log click-through occasionally misses, and a blank from a
+// failed read must never erase a timestamp that a previous scan got right.
+// So an incoming blank leaves whatever is already there; only a real value
+// overwrites. The trade-off is that a value genuinely cleared in WellSky won't
+// be blanked here, which is the safer direction to be wrong in for payroll.
+function mergeRecord_(existing, incoming) {
+  var merged = {};
+  LOG_HEADERS.forEach(function (key) {
+    merged[key] = isBlank_(incoming[key]) ? existing[key] : incoming[key];
+  });
+  return merged;
+}
+
+function sortRecordsForLog_(records) {
+  return records.slice().sort(function (a, b) {
+    var dateA = String(a.shift_date || '');
+    var dateB = String(b.shift_date || '');
+    if (dateA !== dateB) return dateA < dateB ? -1 : 1;
+    var nameA = String(a.caregiver_name || '').toLowerCase();
+    var nameB = String(b.caregiver_name || '').toLowerCase();
+    if (nameA !== nameB) return nameA < nameB ? -1 : 1;
+    var clientA = String(a.client_name || '').toLowerCase();
+    var clientB = String(b.client_name || '').toLowerCase();
+    return clientA < clientB ? -1 : clientA > clientB ? 1 : 0;
+  });
+}
+
+// Read the whole month, merge this scan into it, write it back sorted -- one
+// read and one write rather than a per-row shuffle, and every decision made
+// against a complete picture.
+//
+// The scan emits a row for EVERY caregiver on screen x EVERY past visible
+// date, so the (caregiver, date) pairs in `records` are exactly what this scan
+// had authoritative knowledge of. For those pairs, whatever the scan found IS
+// the truth -- so a previously-logged shift that no longer appears there has
+// been deleted or recreated in WellSky and its old row is dropped. Rows for
+// any other pair (a different week, or a caregiver who was scrolled out of
+// view) are left completely untouched.
 function upsertLogRows_(monthKey, records) {
   var sheet = getOrCreateSheet_(logSheetName_(monthKey), LOG_HEADERS);
-  var existingKeys = readRowKeyIndex_(sheet);
+  var existing = readLogRecords_(monthKey);
 
-  // A caregiver/day that now has a real shift must not keep a stale "-" row
-  // from an earlier scan sitting alongside it.
-  var supersededRows = [];
-  records.forEach(function (record) {
-    if (record.status !== 'no_shift' && record.caregiver_name && record.shift_date) {
-      var staleKey = 'no-shift:' + record.caregiver_name + ':' + record.shift_date;
-      if (existingKeys[staleKey]) supersededRows.push(existingKeys[staleKey]);
-    }
+  var existingByKey = {};
+  existing.forEach(function (record) {
+    if (record.row_key) existingByKey[String(record.row_key)] = record;
   });
 
-  if (supersededRows.length) {
-    // Delete from the bottom up so earlier deletions don't shift the indices
-    // of rows still to be deleted, then re-read the index since every row
-    // below a deletion has moved.
-    supersededRows.sort(function (a, b) { return b - a; }).forEach(function (rowIndex) {
-      sheet.deleteRow(rowIndex);
-    });
-    existingKeys = readRowKeyIndex_(sheet);
-  }
-
-  var appended = [];
+  var covered = {};
+  var incomingKeys = {};
   records.forEach(function (record) {
-    var values = rowValuesFor_(record);
-    var existingRow = existingKeys[record.row_key];
-    if (existingRow) {
-      sheet.getRange(existingRow, 1, 1, LOG_HEADERS.length).setValues([values]);
-    } else {
-      appended.push(values);
-    }
+    if (record.caregiver_name && record.shift_date) covered[caregiverDateKey_(record)] = true;
+    if (record.row_key) incomingKeys[String(record.row_key)] = true;
   });
 
-  if (appended.length) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, appended.length, LOG_HEADERS.length).setValues(appended);
-  }
+  var kept = existing.filter(function (record) {
+    // Anything this scan is about to write is handled by the merge below.
+    if (record.row_key && incomingKeys[String(record.row_key)]) return false;
+    // Outside this scan's coverage -- not ours to judge, leave it alone.
+    return !covered[caregiverDateKey_(record)];
+  });
 
-  sortLogSheet_(sheet);
+  var mergedIncoming = records.map(function (record) {
+    var previous = record.row_key ? existingByKey[String(record.row_key)] : null;
+    return previous ? mergeRecord_(previous, record) : record;
+  });
+
+  var finalRows = sortRecordsForLog_(kept.concat(mergedIncoming));
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]).setFontWeight('bold');
+  if (finalRows.length) {
+    sheet.getRange(2, 1, finalRows.length, LOG_HEADERS.length)
+      .setValues(finalRows.map(rowValuesFor_));
+  }
+  sheet.setFrozenRows(1);
+
   return records.length;
-}
-
-// Date chronological, then caregiver alphabetical within each date.
-function sortLogSheet_(sheet) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 3) return;
-  var dateCol = LOG_HEADERS.indexOf('shift_date') + 1;
-  var caregiverCol = LOG_HEADERS.indexOf('caregiver_name') + 1;
-  sheet.getRange(2, 1, lastRow - 1, LOG_HEADERS.length).sort([
-    { column: dateCol, ascending: true },
-    { column: caregiverCol, ascending: true }
-  ]);
 }
 
 function readLogRecords_(monthKey) {
@@ -290,8 +312,24 @@ function readLogRecords_(monthKey) {
     headerRow.forEach(function (key, index) {
       if (key) record[String(key)] = row[index];
     });
+    // Sheets may hand a date column back as a Date object rather than the
+    // string that was written. Normalising here means every date comparison,
+    // sort and lookup downstream works on one consistent form -- otherwise a
+    // re-scan would fail to recognise its own previously-written rows.
+    record.shift_date = normalizeDateValue_(record.shift_date);
     return record;
   });
+}
+
+function normalizeDateValue_(value) {
+  // Duck-typed rather than `instanceof Date`: instanceof compares against one
+  // specific realm's Date constructor and quietly returns false for a Date
+  // that came from anywhere else, which would send the value down the
+  // String() path and produce "Mon Jul 27 2026 00:00:00 GMT..." as a date key.
+  if (value && typeof value.getTime === 'function') {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return value === null || value === undefined ? '' : String(value);
 }
 
 // ---- Payroll tab ----
@@ -324,13 +362,8 @@ function aggregateByCaregiverAndDate_(records) {
   var byCaregiver = {};
   records.forEach(function (record) {
     var caregiver = record.caregiver_name;
-    var date = record.shift_date;
+    var date = normalizeDateValue_(record.shift_date);
     if (!caregiver || !date) return;
-    // Dates arrive as strings from the extension but Sheets may hand back a
-    // Date object once they've been through a cell.
-    if (date instanceof Date) {
-      date = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    }
 
     if (!byCaregiver[caregiver]) byCaregiver[caregiver] = {};
     if (!byCaregiver[caregiver][date]) {

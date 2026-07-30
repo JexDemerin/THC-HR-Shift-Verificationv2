@@ -523,3 +523,120 @@ test('doGet reports the version so the live deployment can be checked in a brows
   assert.equal(payload.script_version, code.SCRIPT_VERSION);
   assert.deepEqual(payload.log_headers, local(code.LOG_HEADERS));
 });
+
+// ---- Re-scanning: merge, don't clobber ----
+
+test('a blank from a failed re-read never erases an existing value', () => {
+  // The whole point: the Edit Care Log click-through occasionally misses, and
+  // a re-scan that couldn't read the times must not wipe the ones a previous
+  // scan got right.
+  const existing = {
+    caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
+    actual_time_in: '07/27/2026 07:11:25 PM', scheduled_time_in: '07/27/2026 07:00:00 PM',
+    actual_time_out: '07/27/2026 09:11:43 PM', scheduled_time_out: '07/27/2026 09:00:00 PM',
+    duration_minutes: 120, status: 'completed', note: 'a real note', row_key: 'evt-1',
+  };
+  const incoming = {
+    caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
+    actual_time_in: '', scheduled_time_in: null,
+    actual_time_out: undefined, scheduled_time_out: '',
+    duration_minutes: 120, status: 'completed', note: '', row_key: 'evt-1',
+  };
+
+  const merged = code.mergeRecord_(existing, incoming);
+
+  assert.equal(merged.actual_time_in, '07/27/2026 07:11:25 PM');
+  assert.equal(merged.scheduled_time_in, '07/27/2026 07:00:00 PM');
+  assert.equal(merged.actual_time_out, '07/27/2026 09:11:43 PM');
+  assert.equal(merged.scheduled_time_out, '07/27/2026 09:00:00 PM');
+  assert.equal(merged.note, 'a real note');
+});
+
+test('a real new value does overwrite the old one', () => {
+  const existing = {
+    caregiver_name: 'Barberi, Miku', shift_date: '2026-07-27',
+    status: 'incomplete', duration_minutes: 0, row_key: 'evt-1',
+  };
+  const incoming = {
+    caregiver_name: 'Barberi, Miku', shift_date: '2026-07-27',
+    status: 'completed', duration_minutes: 180, row_key: 'evt-1',
+  };
+
+  const merged = code.mergeRecord_(existing, incoming);
+
+  // A shift fixed up in WellSky between scans must be reflected.
+  assert.equal(merged.status, 'completed');
+  assert.equal(merged.duration_minutes, 180);
+});
+
+test('a zero is a real value and is not treated as blank', () => {
+  const merged = code.mergeRecord_(
+    { duration_minutes: 180, row_key: 'k' },
+    { duration_minutes: 0, row_key: 'k' }
+  );
+
+  // 0 hours is a meaningful payroll value (an incomplete shift), so it has to
+  // survive the merge rather than being mistaken for "nothing read".
+  assert.equal(merged.duration_minutes, 0);
+});
+
+test('sorts by date, then caregiver, then client', () => {
+  const sorted = code.sortRecordsForLog_([
+    { shift_date: '2026-07-28', caregiver_name: 'Alpha, A', client_name: 'X' },
+    { shift_date: '2026-07-27', caregiver_name: 'Zulu, Z', client_name: 'X' },
+    { shift_date: '2026-07-27', caregiver_name: 'Alpha, A', client_name: 'B' },
+    { shift_date: '2026-07-27', caregiver_name: 'Alpha, A', client_name: 'A' },
+  ]);
+
+  assert.deepEqual(
+    local(sorted).map((r) => `${r.shift_date} ${r.caregiver_name} ${r.client_name}`),
+    [
+      '2026-07-27 Alpha, A A',
+      '2026-07-27 Alpha, A B',
+      '2026-07-27 Zulu, Z X',
+      '2026-07-28 Alpha, A X',
+    ]
+  );
+});
+
+test('normalizes a Date object back to the ISO string form', () => {
+  // Sheets can hand a date column back as a Date. Without normalising, a
+  // re-scan wouldn't recognise its own previously-written rows.
+  code.Utilities.formatDate = (date, _tz, _fmt) => date.toISOString().slice(0, 10);
+
+  assert.equal(code.normalizeDateValue_(new Date('2026-07-27T00:00:00Z')), '2026-07-27');
+  assert.equal(code.normalizeDateValue_('2026-07-27'), '2026-07-27');
+  assert.equal(code.normalizeDateValue_(null), '');
+});
+
+test('a caregiver/date pair the scan covered is resynced, other dates are untouched', () => {
+  // Mirrors the real workflow: 7/27 and 7/28 were already scanned, and now the
+  // same week is rescanned once 7/29 has passed.
+  const covered = {};
+  const incoming = [
+    { caregiver_name: 'A', shift_date: '2026-07-27', row_key: 'evt-a27' },
+    { caregiver_name: 'A', shift_date: '2026-07-29', row_key: 'evt-a29' },
+  ];
+  incoming.forEach((r) => { covered[code.caregiverDateKey_(r)] = true; });
+
+  const existing = [
+    { caregiver_name: 'A', shift_date: '2026-07-27', row_key: 'evt-a27' },   // rescanned
+    { caregiver_name: 'A', shift_date: '2026-07-27', row_key: 'evt-deleted' }, // gone from WellSky
+    { caregiver_name: 'A', shift_date: '2026-07-20', row_key: 'evt-lastweek' }, // different week
+    { caregiver_name: 'B', shift_date: '2026-07-27', row_key: 'evt-b27' },    // scrolled out of view
+  ];
+
+  const incomingKeys = {};
+  incoming.forEach((r) => { incomingKeys[r.row_key] = true; });
+  const kept = existing.filter(
+    (r) => !incomingKeys[r.row_key] && !covered[code.caregiverDateKey_(r)]
+  );
+
+  assert.deepEqual(
+    local(kept).map((r) => r.row_key),
+    ['evt-lastweek', 'evt-b27'],
+    'only rows outside this scan\'s coverage are preserved'
+  );
+  // evt-deleted was inside coverage but absent from the scan -> dropped, so a
+  // shift removed in WellSky does not linger as a ghost row.
+});
