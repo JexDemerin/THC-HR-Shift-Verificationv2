@@ -38,17 +38,36 @@ function startNewRunLog() {
   logEl.textContent = '';
 }
 
-async function getActiveTab() {
-  // "Current window" is this panel's own window, so the WellSky tab has to be
-  // found among the browser's other windows.
-  const activeTabs = await chrome.tabs.query({ active: true });
-  const candidates = activeTabs.filter(
-    (t) => !String(t.url || '').startsWith('chrome-extension://')
+const WELLSKY_URL_MATCH = 'https://*.clearcareonline.com/*';
+
+// Finds the WellSky tab wherever it is -- deliberately NOT "the active tab".
+//
+// chrome.tabs.query({active: true}) only ever returns the FRONT tab of each
+// window, so the moment anything else takes focus in the same window the
+// WellSky tab stops being a candidate. Downloading the Care Log export does
+// exactly that: the export opens in front, and the old code then fell through
+// to `candidates[0]` -- the export viewer itself -- injected the scanner into
+// it, found no schedule there, and reported "Could not read the schedule from
+// this page." The WellSky tab had been open the whole time, one tab over.
+//
+// Matching on the URL finds it whether it's focused, backgrounded, or in
+// another window. Returning null when there genuinely isn't one is the other
+// half of the fix: injecting into some unrelated page can only produce a
+// confusing failure, so it's better to name the tab that's missing.
+async function findWellSkyTab() {
+  const tabs = await chrome.tabs.query({ url: WELLSKY_URL_MATCH });
+  if (!tabs.length) return null;
+  // With several WellSky tabs open, prefer the one being worked in: front-most
+  // in its window, else the most recently looked at.
+  return (
+    tabs.find((t) => t.active) ||
+    tabs.slice().sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0]
   );
-  // Prefer a WellSky tab when several windows are open, so it doesn't matter
-  // which one happened to be focused last.
-  return candidates.find((t) => String(t.url || '').includes('clearcareonline.com')) || candidates[0];
 }
+
+const NO_WELLSKY_TAB =
+  'No WellSky tab found. Open the WellSky schedule in a tab and try again — it ' +
+  'can stay in the background, it does not have to be the tab in front.';
 
 // ---- Export Care Log HTML (Phase 0 discovery tool) ----
 
@@ -108,12 +127,12 @@ function downloadHtmlExport(result) {
 async function exportCareLogHtml() {
   exportBtn.disabled = true;
   startNewRunLog();
-  setStatus('Reading current tab...');
+  setStatus('Reading the WellSky tab...');
 
   try {
-    const tab = await getActiveTab();
+    const tab = await findWellSkyTab();
     if (!tab || !tab.id) {
-      setStatus('No active tab found.');
+      setStatus(NO_WELLSKY_TAB);
       return;
     }
 
@@ -159,9 +178,9 @@ async function scanSchedule() {
   setStatus('Scanning visible schedule...');
 
   try {
-    const tab = await getActiveTab();
+    const tab = await findWellSkyTab();
     if (!tab || !tab.id) {
-      setStatus('No active tab found.');
+      setStatus(NO_WELLSKY_TAB);
       return;
     }
 
@@ -172,7 +191,13 @@ async function scanSchedule() {
 
     const result = injectionResults && injectionResults[0] && injectionResults[0].result;
     if (!result) {
-      setStatus('Could not read the schedule from this page.');
+      // The WellSky tab was found, so this is about the PAGE, not the tab --
+      // say which, rather than the old message that covered both and pointed at
+      // neither.
+      setStatus(
+        'Found the WellSky tab, but the scanner returned nothing from it. ' +
+          'Make sure the weekly schedule is showing (not a settings or detail page), then re-scan.'
+      );
       return;
     }
 
@@ -326,9 +351,9 @@ async function inspectShiftClick() {
   setStatus('Trying a few click targets on one completed shift...');
 
   try {
-    const tab = await getActiveTab();
+    const tab = await findWellSkyTab();
     if (!tab || !tab.id) {
-      setStatus('No active tab found.');
+      setStatus(NO_WELLSKY_TAB);
       return;
     }
 

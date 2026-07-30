@@ -70,15 +70,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'export-care-log-no-hover') return;
 
-  // Not `currentWindow`: from a service worker that resolves to whichever
-  // window was focused last, which can be the panel's own window now that the
-  // panel is a window rather than an action popup.
-  const activeTabs = await chrome.tabs.query({ active: true });
-  const candidates = activeTabs.filter(
-    (t) => !String(t.url || '').startsWith('chrome-extension://')
-  );
+  // Matched by URL, not by {active: true}: that only returns the front tab of
+  // each window, so the WellSky tab drops out of the running the moment
+  // anything else takes focus beside it -- and the old fallback then reached
+  // for an unrelated tab instead. Same fix as findWellSkyTab() in popup.js.
+  const tabs = await chrome.tabs.query({ url: 'https://*.clearcareonline.com/*' });
   const tab =
-    candidates.find((t) => String(t.url || '').includes('clearcareonline.com')) || candidates[0];
+    tabs.find((t) => t.active) ||
+    tabs.slice().sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
   if (!tab || !tab.id) return;
 
   const injectionResults = await chrome.scripting.executeScript({
