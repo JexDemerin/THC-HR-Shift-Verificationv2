@@ -69,6 +69,39 @@ const NO_WELLSKY_TAB =
   'No WellSky tab found. Open the WellSky schedule in a tab and try again — it ' +
   'can stay in the background, it does not have to be the tab in front.';
 
+// Chrome unloads background tabs to reclaim memory (Memory Saver). A discarded
+// tab keeps its title and URL in the tab strip -- and in chrome.tabs.query --
+// but its document is gone, so injecting into one finds an empty page and reads
+// no schedule. Only reachable since the lookup started matching backgrounded
+// tabs by URL, so it has to be checked for by name rather than left to surface
+// as a mystery empty result.
+function tabNotReadyReason(tab) {
+  if (tab.discarded) {
+    return (
+      'The WellSky tab is asleep — Chrome unloaded it to save memory, so there is ' +
+      'no page there to read. Click that tab once to wake it, wait for the ' +
+      'schedule to appear, then scan again.'
+    );
+  }
+  if (tab.status === 'loading') {
+    return 'The WellSky tab is still loading. Wait for the schedule to finish appearing, then scan again.';
+  }
+  return null;
+}
+
+// Which page a scan actually ran against. Worth showing on every failure: the
+// panel picks the tab on its own, so without this a failure gives no way to
+// tell "wrong page" from "right page, real bug".
+function describeTab(tab) {
+  let path = tab.url || '(unknown URL)';
+  try {
+    path = new URL(tab.url).pathname;
+  } catch (err) {
+    // Keep the raw URL -- a malformed one is itself worth seeing.
+  }
+  return path;
+}
+
 // ---- Export Care Log HTML (Phase 0 discovery tool) ----
 
 function buildExportDocument(result) {
@@ -184,6 +217,13 @@ async function scanSchedule() {
       return;
     }
 
+    const notReady = tabNotReadyReason(tab);
+    if (notReady) {
+      setStatus(notReady);
+      addLogEntry(`WellSky tab: ${describeTab(tab)} — discarded=${!!tab.discarded} status=${tab.status}`);
+      return;
+    }
+
     const injectionResults = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: ['scan-script.js'],
@@ -191,20 +231,35 @@ async function scanSchedule() {
 
     const result = injectionResults && injectionResults[0] && injectionResults[0].result;
     if (!result) {
-      // The WellSky tab was found, so this is about the PAGE, not the tab --
-      // say which, rather than the old message that covered both and pointed at
-      // neither.
       setStatus(
-        'Found the WellSky tab, but the scanner returned nothing from it. ' +
-          'Make sure the weekly schedule is showing (not a settings or detail page), then re-scan.'
+        `Scanned ${describeTab(tab)} but got no result back at all. ` +
+          'If that is not the weekly schedule page, switch that tab to it and re-scan.'
       );
+      return;
+    }
+
+    // The scanner caught something and told us what. Far more useful than the
+    // silence a thrown error used to produce.
+    if (result.error) {
+      setStatus(`The scanner hit an error on ${describeTab(tab)}: ${result.error}`);
+      addLogEntry(`Page: ${result.pageUrl}`);
+      if (result.stack) addLogEntry(result.stack);
       return;
     }
 
     const { records, summary } = result;
 
     if (summary.total === 0) {
-      setStatus(`No shifts found (checked ${result.rowCount} caregiver rows). Is a schedule visible on screen?`);
+      // Zero caregiver rows means the page had no schedule on it at all, which
+      // is a different problem from a schedule that happens to be empty -- so
+      // name the page in that case rather than asking a question the log
+      // already answers.
+      setStatus(
+        result.rowCount === 0
+          ? `No schedule on ${describeTab(tab)} — found 0 caregiver rows. ` +
+              'Switch that tab to the weekly schedule view and re-scan.'
+          : `No shifts found (checked ${result.rowCount} caregiver rows). Is a schedule visible on screen?`
+      );
       return;
     }
 

@@ -685,98 +685,113 @@
 
   // ---- Run it ----
 
-  const { records: allRecords, rowCount, eventElsByEventId, columnDates } = scan();
-  const today = todayIso();
-  // Keep anything without a parseable date too (rather than silently dropping
-  // it) -- it's already flagged as "unparsed" and needs a human look either way.
-  const records = sortRecords(allRecords.filter((r) => !r.shift_date || r.shift_date < today));
-  const skippedTodayOrFuture = allRecords.length - records.length;
+  // Everything that actually touches the page runs inside this try. An async
+  // injected script that rejects gives chrome.scripting.executeScript nothing
+  // to hand back, so a thrown error used to reach the panel as literally no
+  // result at all -- "the scanner returned nothing", with no way to tell a
+  // wrong page from a crash. Returning the error instead makes it readable.
+  // Only the run section needs this: everything above is declarations.
+  try {
+    const { records: allRecords, rowCount, eventElsByEventId, columnDates } = scan();
+    const today = todayIso();
+    // Keep anything without a parseable date too (rather than silently dropping
+    // it) -- it's already flagged as "unparsed" and needs a human look either way.
+    const records = sortRecords(allRecords.filter((r) => !r.shift_date || r.shift_date < today));
+    const skippedTodayOrFuture = allRecords.length - records.length;
 
-  let stoppedEarlyReason = null;
-  const enrichmentDiagnostics = [];
+    let stoppedEarlyReason = null;
+    const enrichmentDiagnostics = [];
 
-  // Activity notes first: reading one only needs hovers, no dialogs, so doing
-  // this pass separately keeps it clear of the click-through's popup state.
-  for (const record of records) {
-    if (!record.event_id) continue;
-    const eventEl = eventElsByEventId.get(record.event_id);
-    if (!eventEl) continue;
+    // Activity notes first: reading one only needs hovers, no dialogs, so doing
+    // this pass separately keeps it clear of the click-through's popup state.
+    for (const record of records) {
+      if (!record.event_id) continue;
+      const eventEl = eventElsByEventId.get(record.event_id);
+      if (!eventEl) continue;
 
-    const note = await readActivityNote(eventEl);
-    if (note.value) {
-      record.note = note.value;
-    } else if (note.error) {
-      // Only a genuine failure is worth reporting -- and the note field is
-      // marked unread so the Sheet keeps whatever it already had rather than
-      // blanking it on the strength of a failed request. A marker with nothing
-      // behind it is a real empty note and is left to blank the cell.
-      record.unread_fields.push('note');
-      enrichmentDiagnostics.push(
-        `${record.caregiver_name}/${record.client_name} (${record.shift_date}): couldn't read its activity note (${note.error}).`
-      );
-    }
-  }
-
-  for (const record of records) {
-    if (record.status !== 'completed' || !record.event_id) continue;
-    const eventEl = eventElsByEventId.get(record.event_id);
-    if (!eventEl) continue;
-
-    const { times, closedOk, diagnostic, unreadable } = await enrichCompletedShift(eventEl);
-    if (times) {
-      for (const field of TIME_FIELDS) {
-        times[field] = stripRedundantDate(times[field], record.shift_date);
+      const note = await readActivityNote(eventEl);
+      if (note.value) {
+        record.note = note.value;
+      } else if (note.error) {
+        // Only a genuine failure is worth reporting -- and the note field is
+        // marked unread so the Sheet keeps whatever it already had rather than
+        // blanking it on the strength of a failed request. A marker with nothing
+        // behind it is a real empty note and is left to blank the cell.
+        record.unread_fields.push('note');
+        enrichmentDiagnostics.push(
+          `${record.caregiver_name}/${record.client_name} (${record.shift_date}): couldn't read its activity note (${note.error}).`
+        );
       }
-      Object.assign(record, times);
-    }
-    // Whatever the click-through couldn't determine is marked unread, so the
-    // Sheet keeps its existing value for those fields instead of being told
-    // WellSky has nothing there. Everything it DID read -- including a
-    // genuinely absent scheduled time -- overwrites as normal.
-    for (const field of unreadable || TIME_FIELDS) {
-      if (record.unread_fields.indexOf(field) === -1) record.unread_fields.push(field);
-    }
-    if (diagnostic) {
-      enrichmentDiagnostics.push(`${record.caregiver_name}/${record.client_name} (${record.shift_date}): ${diagnostic}`);
     }
 
-    if (!closedOk) {
-      // The dialog didn't close the way we expect -- stop rather than risk
-      // clicking blindly into whatever state the page is actually in now.
-      // Include what's actually still matching, so a repeat of this is
-      // diagnosable from the log alone instead of needing another debug run.
-      const stillOpen = findSmallestMatch(SIGNALS.editCareLog);
-      const stillOpenDesc = stillOpen
-        ? `still matching: <${stillOpen.tagName.toLowerCase()} class="${stillOpen.className}">`
-        : 'nothing visible still matches (so this may be a false alarm)';
-      stoppedEarlyReason =
-        `Could not confirm the Edit Care Log dialog closed after reading ${record.caregiver_name}/` +
-        `${record.client_name} (${record.shift_date}) -- ${stillOpenDesc}. ` +
-        `Stopped early -- reload the WellSky page and re-scan.`;
-      break;
+    for (const record of records) {
+      if (record.status !== 'completed' || !record.event_id) continue;
+      const eventEl = eventElsByEventId.get(record.event_id);
+      if (!eventEl) continue;
+
+      const { times, closedOk, diagnostic, unreadable } = await enrichCompletedShift(eventEl);
+      if (times) {
+        for (const field of TIME_FIELDS) {
+          times[field] = stripRedundantDate(times[field], record.shift_date);
+        }
+        Object.assign(record, times);
+      }
+      // Whatever the click-through couldn't determine is marked unread, so the
+      // Sheet keeps its existing value for those fields instead of being told
+      // WellSky has nothing there. Everything it DID read -- including a
+      // genuinely absent scheduled time -- overwrites as normal.
+      for (const field of unreadable || TIME_FIELDS) {
+        if (record.unread_fields.indexOf(field) === -1) record.unread_fields.push(field);
+      }
+      if (diagnostic) {
+        enrichmentDiagnostics.push(`${record.caregiver_name}/${record.client_name} (${record.shift_date}): ${diagnostic}`);
+      }
+
+      if (!closedOk) {
+        // The dialog didn't close the way we expect -- stop rather than risk
+        // clicking blindly into whatever state the page is actually in now.
+        // Include what's actually still matching, so a repeat of this is
+        // diagnosable from the log alone instead of needing another debug run.
+        const stillOpen = findSmallestMatch(SIGNALS.editCareLog);
+        const stillOpenDesc = stillOpen
+          ? `still matching: <${stillOpen.tagName.toLowerCase()} class="${stillOpen.className}">`
+          : 'nothing visible still matches (so this may be a false alarm)';
+        stoppedEarlyReason =
+          `Could not confirm the Edit Care Log dialog closed after reading ${record.caregiver_name}/` +
+          `${record.client_name} (${record.shift_date}) -- ${stillOpenDesc}. ` +
+          `Stopped early -- reload the WellSky page and re-scan.`;
+        break;
+      }
     }
+
+    const summary = {
+      total: records.length,
+      completed: records.filter((r) => r.status === 'completed').length,
+      incomplete: records.filter((r) => r.status === 'incomplete').length,
+      upcoming: records.filter((r) => r.status === 'upcoming').length,
+      ongoing: records.filter((r) => r.status === 'ongoing').length,
+      cancelled: records.filter((r) => r.status.startsWith('cancelled_')).length,
+      unparsed: records.filter((r) => r.status === 'unparsed').length,
+      no_shift: records.filter((r) => r.status === 'no_shift').length,
+    };
+
+    return {
+      records,
+      summary,
+      rowCount,
+      columnDates,
+      skippedTodayOrFuture,
+      stoppedEarlyReason,
+      enrichmentDiagnostics,
+      pageUrl: window.location.href,
+      scannedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    return {
+      error: (err && err.message) || String(err),
+      stack: (err && err.stack) || null,
+      pageUrl: window.location.href,
+      pageTitle: document.title,
+    };
   }
-
-  const summary = {
-    total: records.length,
-    completed: records.filter((r) => r.status === 'completed').length,
-    incomplete: records.filter((r) => r.status === 'incomplete').length,
-    upcoming: records.filter((r) => r.status === 'upcoming').length,
-    ongoing: records.filter((r) => r.status === 'ongoing').length,
-    cancelled: records.filter((r) => r.status.startsWith('cancelled_')).length,
-    unparsed: records.filter((r) => r.status === 'unparsed').length,
-    no_shift: records.filter((r) => r.status === 'no_shift').length,
-  };
-
-  return {
-    records,
-    summary,
-    rowCount,
-    columnDates,
-    skippedTodayOrFuture,
-    stoppedEarlyReason,
-    enrichmentDiagnostics,
-    pageUrl: window.location.href,
-    scannedAt: new Date().toISOString(),
-  };
 })();

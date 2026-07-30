@@ -27,7 +27,7 @@ function buildFixture({ status, dataStart, dataEnd, clientName, caregiverName, e
   `;
 }
 
-async function runScanScript(bodyHtml, { runScripts = false, fetchImpl } = {}) {
+async function runScanScript(bodyHtml, { runScripts = false, fetchImpl, breakDocument = false } = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${bodyHtml}</body></html>`, {
     url: 'https://togetherhomecare.clearcareonline.com/dashboard/live/weekly/caregivers/',
     pretendToBeVisual: true,
@@ -42,6 +42,11 @@ async function runScanScript(bodyHtml, { runScripts = false, fetchImpl } = {}) {
   global.window = dom.window;
   global.MouseEvent = dom.window.MouseEvent;
   global.KeyboardEvent = dom.window.KeyboardEvent;
+  if (breakDocument) {
+    // Make a call the run section relies on throw, standing in for whatever
+    // real breakage (markup change, browser quirk) would take it down.
+    dom.window.document.querySelectorAll = () => { throw new Error('kaboom'); };
+  }
   try {
     // eslint-disable-next-line no-eval
     return await eval(SCAN_SCRIPT_SOURCE);
@@ -1064,4 +1069,32 @@ test('recovers when the first Edit click does not land', async () => {
     [],
     'a recovered click is not reported as a failure'
   );
+});
+
+test('an error during the scan is returned, not swallowed into nothing', async () => {
+  // A thrown error inside an async injected script rejects its promise, and
+  // chrome.scripting.executeScript then hands the panel no result at all -- so
+  // a crash and a wrong page looked identical ("the scanner returned nothing"),
+  // with nothing to debug from. The error has to come back as data.
+  const date = isoDateOffsetFromToday(-1);
+  const calendarHtml = buildGrid(
+    [
+      { name: 'Boom, Bea', shifts: [
+        { date, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client B', eventId: 'boom' },
+      ] },
+    ],
+    [date]
+  );
+
+  // Break something the run section depends on, the way a WellSky markup change
+  // or a browser quirk would.
+  const result = await runScanScript(calendarHtml, {
+    fetchImpl: () => Promise.reject(new Error('unused')),
+    breakDocument: true,
+  });
+
+  assert.ok(result, 'a result comes back at all');
+  assert.ok(result.error, 'and it carries the error');
+  assert.match(result.error, /kaboom/);
+  assert.ok(result.pageUrl, 'plus the page it happened on');
 });
