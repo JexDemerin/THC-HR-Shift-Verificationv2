@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Mirrors WellSky shift records (caregiver, client, date, actual/scheduled clock times, status) into a Google Sheet.",
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "WellSky Shift Log"
   },
   "background": {
     "service_worker": "background.js"

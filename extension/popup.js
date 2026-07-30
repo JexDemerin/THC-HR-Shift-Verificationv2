@@ -9,102 +9,36 @@ const logEl = document.getElementById('log');
 const exportBtn = document.getElementById('exportBtn');
 const scanBtn = document.getElementById('scanBtn');
 const inspectClickBtn = document.getElementById('inspectClickBtn');
-const detachBtn = document.getElementById('detachBtn');
-const clearLogBtn = document.getElementById('clearLogBtn');
+const closeBtn = document.getElementById('closeBtn');
 const webhookInput = document.getElementById('webhookUrl');
 const saveWebhookBtn = document.getElementById('saveWebhookBtn');
 
-// Chrome closes an extension's action popup the moment it loses focus, and
-// that can't be prevented from inside the popup. Two consequences, both
-// handled here:
-//
-//   1. The log vanished with it. Entries are now persisted, so reopening the
-//      popup shows the last run's log instead of an empty panel.
-//   2. Worse, the scan itself died -- it's driven from this popup's JS, so a
-//      popup that closes mid-scan takes the pending results with it and
-//      nothing ever reaches the Sheet. "Open in a window" runs this same page
-//      as a normal window, which does NOT close on focus loss, so a long scan
-//      can't be lost by an accidental click.
-const IS_DETACHED = new URLSearchParams(window.location.search).get('detached') === '1';
-const LOG_STORAGE_KEY = 'logEntries';
-const STATUS_STORAGE_KEY = 'lastStatus';
-const MAX_STORED_LOG_ENTRIES = 300;
-
-let logEntries = [];
-let saveTimer = null;
-
-// Debounced: a scan can emit a hundred-odd lines, and one storage write per
-// line is pointless churn.
-function persistLogSoon() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    chrome.storage.local.set({ [LOG_STORAGE_KEY]: logEntries.slice(0, MAX_STORED_LOG_ENTRIES) });
-  }, 250);
-}
-
+// This page runs as its own window (see background.js), not as the action
+// popup Chrome would close the instant it lost focus. That mattered for more
+// than convenience: the scan is driven from here, so a popup closing mid-scan
+// took the pending results with it and nothing reached the Sheet. Because the
+// window stays open until closed deliberately, the log simply stays on screen
+// -- no persisting it across closes, and nothing to clear.
 function setStatus(text) {
   statusEl.textContent = text;
-  chrome.storage.local.set({ [STATUS_STORAGE_KEY]: text });
-}
-
-function renderLogEntry(text, { append = false } = {}) {
-  const entry = document.createElement('div');
-  entry.className = 'log-entry';
-  entry.textContent = text;
-  if (append) logEl.append(entry);
-  else logEl.prepend(entry);
 }
 
 function addLogEntry(text) {
-  logEntries.unshift(text);
-  renderLogEntry(text);
-  persistLogSoon();
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.textContent = text;
+  logEl.prepend(entry);
 }
 
-async function restoreLog() {
-  const stored = await chrome.storage.local.get([LOG_STORAGE_KEY, STATUS_STORAGE_KEY]);
-  logEntries = stored[LOG_STORAGE_KEY] || [];
-  // Newest-first in the array, so appending in order keeps that on screen.
-  for (const text of logEntries) renderLogEntry(text, { append: true });
-  if (stored[STATUS_STORAGE_KEY]) statusEl.textContent = stored[STATUS_STORAGE_KEY];
-  if (logEntries.length > 0) {
-    renderLogEntry('--- last run, kept so closing this panel does not lose it ---', { append: false });
-  }
-}
-
-async function clearLog() {
-  logEntries = [];
-  logEl.textContent = '';
-  await chrome.storage.local.remove([LOG_STORAGE_KEY, STATUS_STORAGE_KEY]);
-  setStatus('Log cleared.');
-}
-
-// Each run starts from an empty log. Persisting it is only there so an
-// accidental click can't lose the run you just did -- carrying every previous
-// run forward as well would grow the panel without bound and bury the lines
-// that matter. The Sheet is the durable record; this panel is about the run in
-// front of you.
+// Each run shows only its own output, so the panel doesn't grow without bound
+// and bury the lines that matter.
 function startNewRunLog() {
-  logEntries = [];
   logEl.textContent = '';
-}
-
-function openInWindow() {
-  chrome.windows.create({
-    url: chrome.runtime.getURL('popup.html?detached=1'),
-    type: 'popup',
-    width: 420,
-    height: 640,
-  });
-  window.close(); // avoid two copies driving the same scan
 }
 
 async function getActiveTab() {
-  // Detached, "current window" is this extension's own window, so the WellSky
-  // tab has to be found among the browser's other windows instead.
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab && !String(tab.url || '').startsWith('chrome-extension://')) return tab;
-
+  // "Current window" is this panel's own window, so the WellSky tab has to be
+  // found among the browser's other windows.
   const activeTabs = await chrome.tabs.query({ active: true });
   const candidates = activeTabs.filter(
     (t) => !String(t.url || '').startsWith('chrome-extension://')
@@ -465,17 +399,7 @@ async function saveWebhookUrl() {
 exportBtn.addEventListener('click', exportCareLogHtml);
 scanBtn.addEventListener('click', scanSchedule);
 inspectClickBtn.addEventListener('click', inspectShiftClick);
-detachBtn.addEventListener('click', openInWindow);
-clearLogBtn.addEventListener('click', clearLog);
+closeBtn.addEventListener('click', () => window.close());
 saveWebhookBtn.addEventListener('click', saveWebhookUrl);
 
-// Already in a window of its own -- offering to open another would just
-// create a second copy fighting over the same scan.
-if (IS_DETACHED) {
-  detachBtn.style.display = 'none';
-  const hint = document.getElementById('detachHint');
-  if (hint) hint.textContent = 'Running in its own window — this will not close when you click elsewhere.';
-}
-
 loadWebhookUrl();
-restoreLog();

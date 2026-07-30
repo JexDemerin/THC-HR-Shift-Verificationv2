@@ -1,12 +1,46 @@
 // Service worker for the THC WellSky Shift Log extension.
 //
-// The popup does the scanning; this worker's only job is relaying the
-// resulting shift records to the configured Google Sheet Web App, since
-// fetches to an external URL belong in the background context rather than
-// the popup.
+// The control panel does the scanning; this worker opens that panel and
+// relays the resulting shift records to the configured Google Sheet Web App,
+// since fetches to an external URL belong in the background context.
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('THC WellSky Shift Log installed.');
+});
+
+// The panel is a real window, not the usual action popup. An action popup is
+// closed by Chrome the instant it loses focus, which can't be prevented from
+// inside it -- and since the scan is driven from that page, a stray click used
+// to kill a scan mid-run and lose everything it had gathered. A window closes
+// only when you close it.
+let panelWindowId = null;
+
+async function openPanel() {
+  // Reuse the existing panel if it's already open, so repeated clicks on the
+  // toolbar icon focus it instead of stacking up copies that would each try to
+  // drive the same scan.
+  if (panelWindowId !== null) {
+    try {
+      await chrome.windows.update(panelWindowId, { focused: true });
+      return;
+    } catch (err) {
+      panelWindowId = null; // it was closed since we last saw it
+    }
+  }
+
+  const win = await chrome.windows.create({
+    url: chrome.runtime.getURL('popup.html'),
+    type: 'popup',
+    width: 440,
+    height: 660,
+  });
+  panelWindowId = win.id;
+}
+
+chrome.action.onClicked.addListener(openPanel);
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (windowId === panelWindowId) panelWindowId = null;
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -25,7 +59,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'export-care-log-no-hover') return;
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  // Not `currentWindow`: from a service worker that resolves to whichever
+  // window was focused last, which can be the panel's own window now that the
+  // panel is a window rather than an action popup.
+  const activeTabs = await chrome.tabs.query({ active: true });
+  const candidates = activeTabs.filter(
+    (t) => !String(t.url || '').startsWith('chrome-extension://')
+  );
+  const tab =
+    candidates.find((t) => String(t.url || '').includes('clearcareonline.com')) || candidates[0];
   if (!tab || !tab.id) return;
 
   const injectionResults = await chrome.scripting.executeScript({

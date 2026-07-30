@@ -107,9 +107,6 @@
     <h1>WellSky Shift Log</h1>
     <p class="subtitle">Together Homecare — mirrors WellSky shift records into a Sheet</p>
 
-    <button id="detachBtn">Open in a window (stays open)</button>
-    <span class="phase-tag" id="detachHint">Recommended before a scan — this popup closes the moment you click anywhere else, which also kills a scan in progress. A window doesn't.</span>
-
     <button id="scanBtn" class="primary">Scan Schedule</button>
     <span class="phase-tag">Reads every visible past shift and, for completed ones, clicks through to read the real clock times.</span>
 
@@ -121,8 +118,6 @@
 
     <div id="status">Ready.</div>
     <div id="log"></div>
-    <button id="clearLogBtn">Clear log</button>
-    <span class="phase-tag">The log is kept between openings, so an accidental click can't lose it.</span>
 
     <details id="settings">
       <summary>Settings</summary>
@@ -130,6 +125,9 @@
       <input type="text" id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec" />
       <button id="saveWebhookBtn">Save</button>
     </details>
+
+    <button id="closeBtn">Close</button>
+    <span class="phase-tag">This window stays open until you close it, so clicking elsewhere won't lose the log — or interrupt a scan.</span>
 
     <script src="popup.js"></script>
   </body>
