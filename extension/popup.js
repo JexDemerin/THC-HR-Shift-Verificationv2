@@ -13,12 +13,14 @@ const closeBtn = document.getElementById('closeBtn');
 const webhookInput = document.getElementById('webhookUrl');
 const saveWebhookBtn = document.getElementById('saveWebhookBtn');
 
-// This page runs as its own window (see background.js), not as the action
-// popup Chrome would close the instant it lost focus. That mattered for more
-// than convenience: the scan is driven from here, so a popup closing mid-scan
-// took the pending results with it and nothing reached the Sheet. Because the
-// window stays open until closed deliberately, the log simply stays on screen
-// -- no persisting it across closes, and nothing to clear.
+// This page runs in Chrome's side panel (or, on Chrome older than 114, a
+// standalone window) -- never as the action popup Chrome would close the
+// instant it lost focus. That mattered for more than convenience: the scan is
+// driven from here, so a popup closing mid-scan took the pending results with
+// it and nothing reached the Sheet. Because the panel stays put, the log simply
+// stays on screen -- no persisting it across closes, and nothing to clear.
+const IS_SIDE_PANEL = new URLSearchParams(window.location.search).get('panel') === '1';
+
 function setStatus(text) {
   statusEl.textContent = text;
 }
@@ -401,5 +403,17 @@ scanBtn.addEventListener('click', scanSchedule);
 inspectClickBtn.addEventListener('click', inspectShiftClick);
 closeBtn.addEventListener('click', () => window.close());
 saveWebhookBtn.addEventListener('click', saveWebhookUrl);
+
+// The side panel has Chrome's own close control in its header, so a second
+// Close button here would be redundant -- and window.close() doesn't reliably
+// dismiss a side panel anyway. It's kept for the standalone-window fallback.
+if (IS_SIDE_PANEL) {
+  closeBtn.style.display = 'none';
+  const hint = document.getElementById('closeHint');
+  if (hint) {
+    hint.textContent =
+      'Stays open while you work in WellSky. Close it with the X at the top of this panel.';
+  }
+}
 
 loadWebhookUrl();

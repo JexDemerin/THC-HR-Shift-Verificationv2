@@ -212,12 +212,14 @@ successful scan.
 
 ## Using it
 
-Clicking the toolbar icon opens the control panel as **its own window**, not the usual dropdown
-popup — it stays open until you press **Close**, so clicking elsewhere never loses the log. That
-matters for more than convenience: Chrome closes an action popup the instant it loses focus and
-that can't be prevented from inside it, and since the scan is driven from that page, a stray click
-used to kill a scan mid-run and lose everything it had gathered. Clicking the icon again focuses the
-existing window rather than opening a second copy.
+Clicking the toolbar icon opens the control panel in Chrome's **side panel** — docked beside
+WellSky, staying open while you click around the page, closed with the X in its own header.
+
+It deliberately isn't the usual dropdown popup, and that isn't a preference: Chrome closes an action
+popup the instant it loses focus and there is no way to prevent that from inside it. Since the scan
+is driven from that page, a stray click used to kill a scan mid-run and lose everything it had
+gathered. (On Chrome older than 114, where side panels don't exist, it falls back to a standalone
+window — which survives losing focus too.)
 
 1. Log into WellSky and go to the weekly schedule view.
 2. Click the extension icon → **Scan Schedule**. Records get written to that month's Log and

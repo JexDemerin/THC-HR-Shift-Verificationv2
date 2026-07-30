@@ -4,43 +4,54 @@
 // relays the resulting shift records to the configured Google Sheet Web App,
 // since fetches to an external URL belong in the background context.
 
+// The panel opens in Chrome's side panel -- docked beside the page, staying
+// open while you click around WellSky, with the browser's own close control.
+//
+// It deliberately isn't the usual action popup: Chrome closes an action popup
+// the instant it loses focus and that can't be prevented from inside it. Since
+// the scan is driven from that page, a stray click used to kill a scan mid-run
+// and lose everything it had gathered.
+async function enableSidePanelOnActionClick() {
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('THC WellSky Shift Log installed.');
+  enableSidePanelOnActionClick().catch(() => {
+    // Side panels need Chrome 114+. On anything older this throws, and the
+    // action-click fallback below opens a standalone window instead.
+  });
 });
 
-// The panel is a real window, not the usual action popup. An action popup is
-// closed by Chrome the instant it loses focus, which can't be prevented from
-// inside it -- and since the scan is driven from that page, a stray click used
-// to kill a scan mid-run and lose everything it had gathered. A window closes
-// only when you close it.
-let panelWindowId = null;
+chrome.runtime.onStartup.addListener(() => {
+  enableSidePanelOnActionClick().catch(() => {});
+});
 
-async function openPanel() {
-  // Reuse the existing panel if it's already open, so repeated clicks on the
-  // toolbar icon focus it instead of stacking up copies that would each try to
-  // drive the same scan.
-  if (panelWindowId !== null) {
+// Only reached when the side panel isn't available: with
+// openPanelOnActionClick set, Chrome opens the panel itself and never fires
+// this. A standalone window is the fallback, since it also survives losing
+// focus -- unlike an action popup.
+let fallbackWindowId = null;
+
+chrome.action.onClicked.addListener(async () => {
+  if (fallbackWindowId !== null) {
     try {
-      await chrome.windows.update(panelWindowId, { focused: true });
+      await chrome.windows.update(fallbackWindowId, { focused: true });
       return;
     } catch (err) {
-      panelWindowId = null; // it was closed since we last saw it
+      fallbackWindowId = null; // closed since we last saw it
     }
   }
-
   const win = await chrome.windows.create({
     url: chrome.runtime.getURL('popup.html'),
     type: 'popup',
     width: 440,
     height: 660,
   });
-  panelWindowId = win.id;
-}
-
-chrome.action.onClicked.addListener(openPanel);
+  fallbackWindowId = win.id;
+});
 
 chrome.windows.onRemoved.addListener((windowId) => {
-  if (windowId === panelWindowId) panelWindowId = null;
+  if (windowId === fallbackWindowId) fallbackWindowId = null;
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

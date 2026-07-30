@@ -6,6 +6,9 @@
   "action": {
     "default_title": "WellSky Shift Log"
   },
+  "side_panel": {
+    "default_path": "popup.html?panel=1"
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -19,7 +22,8 @@
     "activeTab",
     "scripting",
     "downloads",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://script.google.com/*",
