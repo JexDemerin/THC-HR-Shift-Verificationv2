@@ -238,6 +238,15 @@ async function scanSchedule() {
       return;
     }
 
+    if (result.loggedOut) {
+      setStatus(
+        'WellSky is logged out — that tab is showing the login page. It signs you ' +
+          'out on its own after a while idle. Log back in, bring up the weekly ' +
+          'schedule, then scan again.'
+      );
+      return;
+    }
+
     // The scanner caught something and told us what. Far more useful than the
     // silence a thrown error used to produce.
     if (result.error) {

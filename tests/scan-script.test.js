@@ -1098,3 +1098,42 @@ test('an error during the scan is returned, not swallowed into nothing', async (
   assert.match(result.error, /kaboom/);
   assert.ok(result.pageUrl, 'plus the page it happened on');
 });
+
+test('a WellSky login page is reported as logged out, not as an empty schedule', async () => {
+  // WellSky ends an idle session by itself, leaving the tab on a login page at
+  // the same address. Without recognising it, that reads as "0 caregiver rows"
+  // -- the same as a genuinely empty schedule, whose fix is nothing alike.
+  const html = `
+    <form action="/accounts/login/" method="post">
+      <input type="text" name="username" />
+      <input type="password" name="password" />
+      <button>Sign in</button>
+    </form>
+  `;
+
+  const result = await runScanScript(html);
+
+  assert.equal(result.loggedOut, true);
+  assert.equal(result.records, undefined, 'no schedule is claimed to have been read');
+});
+
+test('a real schedule is never mistaken for a login page', async () => {
+  // The guard must not fire on the page it is meant to let through -- including
+  // one that happens to carry a password field somewhere (a change-password
+  // widget, a browser-injected field).
+  const date = isoDateOffsetFromToday(-1);
+  const html =
+    buildGrid(
+      [
+        { name: 'Real, Rae', shifts: [
+          { date, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client R', eventId: 'real' },
+        ] },
+      ],
+      [date]
+    ) + '<input type="password" name="change_password" />';
+
+  const result = await runScanScript(html);
+
+  assert.notEqual(result.loggedOut, true);
+  assert.equal(result.records.length, 1);
+});

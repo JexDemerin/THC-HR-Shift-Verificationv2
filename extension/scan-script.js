@@ -278,6 +278,20 @@
     return dates;
   }
 
+  // WellSky ends an idle session on its own, and the tab then sits on a login
+  // page at the same clearcareonline.com address. That page has no schedule rows
+  // on it, which is indistinguishable from "the schedule is empty" unless the
+  // login page is recognised for what it is -- and the fix (log back in) is
+  // nothing like the fix for a genuinely empty schedule, so it gets named.
+  function looksLoggedOut() {
+    if (document.querySelector('tr.sched_row')) return false;
+    if (/\/(login|signin|accounts\/login)/i.test(window.location.pathname)) return true;
+    return Boolean(
+      document.querySelector('input[type="password"]') ||
+        document.querySelector('form[action*="login" i]')
+    );
+  }
+
   function scan() {
     const rows = Array.from(document.querySelectorAll('tr.sched_row'));
     const records = [];
@@ -692,6 +706,13 @@
   // wrong page from a crash. Returning the error instead makes it readable.
   // Only the run section needs this: everything above is declarations.
   try {
+    if (looksLoggedOut()) {
+      return {
+        loggedOut: true,
+        pageUrl: window.location.href,
+      };
+    }
+
     const { records: allRecords, rowCount, eventElsByEventId, columnDates } = scan();
     const today = todayIso();
     // Keep anything without a parseable date too (rather than silently dropping
