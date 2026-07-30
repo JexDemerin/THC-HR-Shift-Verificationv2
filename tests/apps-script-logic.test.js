@@ -485,9 +485,14 @@ test('drops a column that no longer exists rather than shifting everything', () 
 // ---- Tab naming ----
 
 test('derives each tab name from the record\'s own month', () => {
+  // Not from when the tab was created or when the scan ran -- a 12/31 shift
+  // belongs to December even if it is scanned in January.
   assert.equal(code.monthKeyOf_('2026-01-05'), '2026-01');
-  assert.equal(code.logSheetName_(code.monthKeyOf_('2026-01-05')), 'January 2026 Log');
-  assert.equal(code.payrollSheetName_(code.monthKeyOf_('2026-12-31')), 'December 2026 Payroll');
+  assert.equal(code.logSheetName_(code.monthKeyOf_('2026-01-05')), '2026 - 01 Log (January)');
+  assert.equal(
+    code.payrollSheetName_(code.monthKeyOf_('2026-12-31')),
+    '2026 - 12 Payroll (December)'
+  );
 });
 
 // ---- Version handshake ----
@@ -743,12 +748,25 @@ test('builds the note in the requested two-line shape', () => {
 
 // ---- Human-readable tab names ----
 
-test('names tabs like "July 2026 Log" / "July 2026 Payroll"', () => {
-  assert.equal(code.monthLabelOf_('2026-07'), 'July 2026');
-  assert.equal(code.monthLabelOf_('2026-01'), 'January 2026');
-  assert.equal(code.monthLabelOf_('2026-12'), 'December 2026');
-  assert.equal(code.logSheetName_('2026-07'), 'July 2026 Log');
-  assert.equal(code.payrollSheetName_('2026-07'), 'July 2026 Payroll');
+test('names tabs to sort chronologically but still read clearly', () => {
+  assert.equal(code.logSheetName_('2026-07'), '2026 - 07 Log (July)');
+  assert.equal(code.payrollSheetName_('2026-07'), '2026 - 07 Payroll (July)');
+  assert.equal(code.logSheetName_('2026-01'), '2026 - 01 Log (January)');
+  assert.equal(code.logSheetName_('2026-12'), '2026 - 12 Log (December)');
+});
+
+test('tab names sort in true chronological order as plain strings', () => {
+  // The whole reason for leading with the zero-padded year and month: a
+  // month-name-first scheme sorted April before January.
+  const names = ['2026-01', '2026-02', '2026-09', '2026-10', '2026-12', '2027-01']
+    .map(code.logSheetName_);
+
+  assert.deepEqual(local(names).slice().sort(), local(names));
+});
+
+test('a malformed month key still yields a usable tab name', () => {
+  assert.equal(code.logSheetName_('nonsense'), 'nonsense Log');
+  assert.equal(code.logSheetName_('2026-13'), '2026 - 13 Log');
 });
 
 test('a malformed month key falls back to itself rather than "undefined 2026"', () => {
@@ -756,28 +774,39 @@ test('a malformed month key falls back to itself rather than "undefined 2026"', 
   assert.equal(code.monthLabelOf_('2026-13'), '2026-13');
 });
 
-test('knows the old tab names so they can be adopted rather than orphaned', () => {
-  assert.equal(code.legacyLogSheetName_('2026-07'), '2026-07 Log');
-  assert.equal(code.legacyPayrollSheetName_('2026-07'), '2026-07 Payroll');
+test('knows every previous tab naming so none is left orphaned', () => {
+  // Both earlier schemes have to be recognised, or a tab created under one of
+  // them keeps its already-scanned rows while a fresh empty tab appears too.
+  assert.deepEqual(local(code.legacyLogSheetNames_('2026-07')), ['2026-07 Log', 'July 2026 Log']);
+  assert.deepEqual(
+    local(code.legacyPayrollSheetNames_('2026-07')),
+    ['2026-07 Payroll', 'July 2026 Payroll']
+  );
 });
 
 test('renames a legacy tab, but never over an existing current one', () => {
+  const current = '2026 - 07 Log (July)';
+  const legacyNames = ['2026-07 Log', 'July 2026 Log'];
   const renamed = [];
-  const sheets = { '2026-07 Log': { setName: (n) => renamed.push(n) } };
+  const sheets = { 'July 2026 Log': { setName: (n) => renamed.push(n) } };
   code.SpreadsheetApp.getActiveSpreadsheet = () => ({
     getSheetByName: (name) => sheets[name] || null,
   });
 
-  assert.equal(code.renameLegacyTabIfPresent_('2026-07 Log', 'July 2026 Log'), true);
-  assert.deepEqual(local(renamed), ['July 2026 Log']);
+  // Adopts whichever older naming is actually present.
+  assert.equal(code.renameLegacyTabIfPresent_(legacyNames, current), true);
+  assert.deepEqual(local(renamed), [current]);
 
-  // With both names present, the legacy tab is left alone -- renaming would
-  // collide, and guessing which holds the real data risks losing it.
-  sheets['July 2026 Log'] = { setName: () => { throw new Error('must not rename'); } };
-  assert.equal(code.renameLegacyTabIfPresent_('2026-07 Log', 'July 2026 Log'), false);
+  // With the current name already present, any legacy tab is left alone --
+  // renaming would collide, and guessing which holds the real data risks
+  // losing it.
+  sheets[current] = { setName: () => { throw new Error('must not rename'); } };
+  assert.equal(code.renameLegacyTabIfPresent_(legacyNames, current), false);
 
   // Nothing to adopt is simply a no-op.
-  assert.equal(code.renameLegacyTabIfPresent_('2026-01 Log', 'January 2026 Log'), false);
+  delete sheets[current];
+  delete sheets['July 2026 Log'];
+  assert.equal(code.renameLegacyTabIfPresent_(legacyNames, current), false);
 });
 
 // ---- Activity notes in the payroll cell ----

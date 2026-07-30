@@ -77,10 +77,16 @@ What's working now:
 
 ### What lands in the Sheet
 
-Two tabs per month, created automatically and named `July 2026 Log` / `July 2026 Payroll`, keyed off
-each record's own `shift_date` — so a scan spanning a month boundary files each row in the right
-month. A tab left over from the earlier `2026-07 Log` naming is **renamed** rather than left orphaned
-beside a new one, so already-scanned rows carry over.
+Two tabs per month, created automatically and named `2026 - 07 Log (July)` /
+`2026 - 07 Payroll (July)` — leading with the zero-padded year and month so the tabs stay in
+chronological order, with the month name spelled out for readability.
+
+Which month a row lands in comes from its own `shift_date`, **not** from when the tab was created or
+when the scan ran: a 7/31 shift files under July even if scanned in August, and scanning a week that
+straddles a month boundary creates both months' tabs and splits the rows correctly. A tab left over
+from either earlier naming (`2026-07 Log` or `July 2026 Log`) is **renamed** rather than left orphaned
+beside a new one, so already-scanned rows carry over. The rename is skipped if a tab under the
+current name already exists, so it can never collide — and nothing is ever deleted.
 
 **Headers are verified on every write, not just when a tab is created.** If a tab's header row was
 deleted or edited by hand, it's restored. If a tab predates a column being added, its existing rows
@@ -91,14 +97,14 @@ exists are dropped rather than shifted; genuinely new columns start blank. The P
 rebuilt each scan (notes included, since a stale note would strand an old breakdown on a changed
 cell), so its date/weekday header rows can't drift.
 
-- **`July 2026 Log`** — one row per shift (or per idle caregiver/day, reading `-`), with
+- **`2026 - 07 Log (July)`** — one row per shift (or per idle caregiver/day, reading `-`), with
   `caregiver_name`, `client_name`, `shift_date`, `time_in`, `time_out`, `duration_minutes`,
   `label_duration_minutes`, the four actual/scheduled times, `status`, `status_raw`, `note`,
   `event_id`, `row_key`, `scanned_at`. (`duration_minutes` is the payable span — zero for a missed
   clock-in/out — while `label_duration_minutes` keeps the scheduled span regardless of status, so
   the payroll note can show it without it reaching the total.)
   See "Re-scanning" below for how repeat scans merge into it.
-- **`July 2026 Payroll`** — caregivers down the left, **every** date in the month across the top as
+- **`2026 - 07 Payroll (July)`** — caregivers down the left, **every** date in the month across the top as
   `7/1`, `7/2`, … with its weekday (`Mon`, `Tue`, …) beneath, and a shaded spacer column between
   each Saturday and Sunday so weeks read separately. The whole month's grid exists upfront; each
   scan drops data into the right columns, so it fills in progressively as you scan more weeks.

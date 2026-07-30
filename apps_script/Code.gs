@@ -5,10 +5,10 @@
 // (see extension/background.js -- body is `JSON.stringify(records)`, a bare
 // array, not wrapped in an object) and mirrors them into two tabs PER MONTH:
 //
-//   "July 2026 Log"     -- one row per shift (or per caregiver/day with no
-//                          shift, which reads "-"), sorted by date then
+//   "2026 - 07 Log (July)"     -- one row per shift (or per caregiver/day with
+//                          no shift, which reads "-"), sorted by date then
 //                          caregiver name.
-//   "July 2026 Payroll" -- caregivers down the left, every date in the month
+//   "2026 - 07 Payroll (July)" -- caregivers down the left, every date in the month
 //                          across the top with its weekday beneath, a spacer
 //                          column between each Saturday and Sunday. Each cell
 //                          holds that caregiver's total hours for the day as a
@@ -27,7 +27,7 @@
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 8;
+var SCRIPT_VERSION = 9;
 
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
@@ -91,7 +91,8 @@ function monthKeyOf_(isoDate) {
   return isoDate ? isoDate.slice(0, 7) : null; // "2026-07-28" -> "2026-07"
 }
 
-// "2026-07" -> "July 2026"
+// "2026-07" -> "July 2026". Used for the readable suffix and for reporting
+// which months a scan touched.
 function monthLabelOf_(monthKey) {
   var parts = String(monthKey).split('-');
   var monthIndex = parseInt(parts[1], 10) - 1;
@@ -99,40 +100,72 @@ function monthLabelOf_(monthKey) {
   return MONTH_NAMES[monthIndex] + ' ' + parts[0];
 }
 
+// "2026-07" -> "2026 - 07". Leads with the zero-padded year and month so the
+// tabs stay in chronological order, with the month name appended after the tab
+// type for readability -- "2026 - 07 Log (July)".
+function monthNumberPrefixOf_(monthKey) {
+  var parts = String(monthKey).split('-');
+  if (parts.length !== 2) return String(monthKey);
+  return parts[0] + ' - ' + parts[1];
+}
+
+function monthNameOf_(monthKey) {
+  var monthIndex = parseInt(String(monthKey).split('-')[1], 10) - 1;
+  return MONTH_NAMES[monthIndex] || null;
+}
+
+function sheetNameFor_(monthKey, kind) {
+  var monthName = monthNameOf_(monthKey);
+  var base = monthNumberPrefixOf_(monthKey) + ' ' + kind;
+  return monthName ? base + ' (' + monthName + ')' : base;
+}
+
 function logSheetName_(monthKey) {
-  return monthLabelOf_(monthKey) + ' Log';
+  return sheetNameFor_(monthKey, 'Log');
 }
 
 function payrollSheetName_(monthKey) {
-  return monthLabelOf_(monthKey) + ' Payroll';
+  return sheetNameFor_(monthKey, 'Payroll');
 }
 
-// Earlier versions named these tabs "2026-07 Log" / "2026-07 Payroll". Renaming
-// rather than letting a differently-named tab be created alongside them, which
-// would strand every already-scanned row in an orphaned tab.
-function legacyLogSheetName_(monthKey) {
-  return monthKey + ' Log';
+// Every naming scheme this script has used, so a tab created under an older one
+// gets adopted instead of being left orphaned beside a newly-created tab -- that
+// would strand every already-scanned row in it.
+function legacyLogSheetNames_(monthKey) {
+  return [
+    monthKey + ' Log',                  // "2026-07 Log"
+    monthLabelOf_(monthKey) + ' Log'    // "July 2026 Log"
+  ];
 }
 
-function legacyPayrollSheetName_(monthKey) {
-  return monthKey + ' Payroll';
+function legacyPayrollSheetNames_(monthKey) {
+  return [
+    monthKey + ' Payroll',
+    monthLabelOf_(monthKey) + ' Payroll'
+  ];
 }
 
-function renameLegacyTabIfPresent_(legacyName, currentName) {
+function renameLegacyTabIfPresent_(legacyNames, currentName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  // If a tab under the current name already exists, the legacy one is a
+  // If a tab under the current name already exists, any legacy tab is a
   // leftover -- leave it alone rather than risk a name collision or clobbering
-  // whichever holds the real data. Nothing is ever deleted here.
+  // whichever one holds the real data. Nothing is ever deleted here.
   if (ss.getSheetByName(currentName)) return false;
-  var legacy = ss.getSheetByName(legacyName);
-  if (!legacy) return false;
-  legacy.setName(currentName);
-  return true;
+
+  for (var i = 0; i < legacyNames.length; i++) {
+    if (legacyNames[i] === currentName) continue;
+    var legacy = ss.getSheetByName(legacyNames[i]);
+    if (legacy) {
+      legacy.setName(currentName);
+      return true;
+    }
+  }
+  return false;
 }
 
 function migrateLegacyTabNames_(monthKey) {
-  renameLegacyTabIfPresent_(legacyLogSheetName_(monthKey), logSheetName_(monthKey));
-  renameLegacyTabIfPresent_(legacyPayrollSheetName_(monthKey), payrollSheetName_(monthKey));
+  renameLegacyTabIfPresent_(legacyLogSheetNames_(monthKey), logSheetName_(monthKey));
+  renameLegacyTabIfPresent_(legacyPayrollSheetNames_(monthKey), payrollSheetName_(monthKey));
 }
 
 function getOrCreateSheet_(name, headers) {

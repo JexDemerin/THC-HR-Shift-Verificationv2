@@ -2,7 +2,7 @@
 // the Sheet-side script changes in a way this extension depends on, so a
 // stale deployment is reported loudly instead of silently doing the wrong
 // thing (or nothing).
-const EXPECTED_SCRIPT_VERSION = 8;
+const EXPECTED_SCRIPT_VERSION = 9;
 
 const statusEl = document.getElementById('status');
 const logEl = document.getElementById('log');
