@@ -5,15 +5,15 @@
 // (see extension/background.js -- body is `JSON.stringify(records)`, a bare
 // array, not wrapped in an object) and mirrors them into two tabs PER MONTH:
 //
-//   "2026-07 Log"     -- one row per shift (or per caregiver/day with no
-//                        shift, which reads "-"), sorted by date then
-//                        caregiver name.
-//   "2026-07 Payroll" -- caregivers down the left, every date in the month
-//                        across the top with its weekday beneath, a spacer
-//                        column between each Saturday and Sunday. Each cell
-//                        holds that caregiver's total hours for the day as a
-//                        decimal, colored by shift status, with a hover note
-//                        breaking down each client visit.
+//   "July 2026 Log"     -- one row per shift (or per caregiver/day with no
+//                          shift, which reads "-"), sorted by date then
+//                          caregiver name.
+//   "July 2026 Payroll" -- caregivers down the left, every date in the month
+//                          across the top with its weekday beneath, a spacer
+//                          column between each Saturday and Sunday. Each cell
+//                          holds that caregiver's total hours for the day as a
+//                          decimal, colored by shift status, with a hover note
+//                          breaking down each client visit and its note.
 //
 // Which month a record lands in is decided by its own shift_date, so a scan
 // spanning a month boundary files each row correctly.
@@ -27,7 +27,7 @@
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 7;
+var SCRIPT_VERSION = 8;
 
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
@@ -77,18 +77,62 @@ var STATUS_URGENCY = [
 
 var WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+var MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Separates the hours from the activity note inside a payroll cell's note.
+var NOTE_SEPARATOR = '-----------------------------';
+
 // ---- Helpers ----
 
 function monthKeyOf_(isoDate) {
   return isoDate ? isoDate.slice(0, 7) : null; // "2026-07-28" -> "2026-07"
 }
 
+// "2026-07" -> "July 2026"
+function monthLabelOf_(monthKey) {
+  var parts = String(monthKey).split('-');
+  var monthIndex = parseInt(parts[1], 10) - 1;
+  if (parts.length !== 2 || isNaN(monthIndex) || !MONTH_NAMES[monthIndex]) return String(monthKey);
+  return MONTH_NAMES[monthIndex] + ' ' + parts[0];
+}
+
 function logSheetName_(monthKey) {
-  return monthKey + ' Log';
+  return monthLabelOf_(monthKey) + ' Log';
 }
 
 function payrollSheetName_(monthKey) {
+  return monthLabelOf_(monthKey) + ' Payroll';
+}
+
+// Earlier versions named these tabs "2026-07 Log" / "2026-07 Payroll". Renaming
+// rather than letting a differently-named tab be created alongside them, which
+// would strand every already-scanned row in an orphaned tab.
+function legacyLogSheetName_(monthKey) {
+  return monthKey + ' Log';
+}
+
+function legacyPayrollSheetName_(monthKey) {
   return monthKey + ' Payroll';
+}
+
+function renameLegacyTabIfPresent_(legacyName, currentName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // If a tab under the current name already exists, the legacy one is a
+  // leftover -- leave it alone rather than risk a name collision or clobbering
+  // whichever holds the real data. Nothing is ever deleted here.
+  if (ss.getSheetByName(currentName)) return false;
+  var legacy = ss.getSheetByName(legacyName);
+  if (!legacy) return false;
+  legacy.setName(currentName);
+  return true;
+}
+
+function migrateLegacyTabNames_(monthKey) {
+  renameLegacyTabIfPresent_(legacyLogSheetName_(monthKey), logSheetName_(monthKey));
+  renameLegacyTabIfPresent_(legacyPayrollSheetName_(monthKey), payrollSheetName_(monthKey));
 }
 
 function getOrCreateSheet_(name, headers) {
@@ -387,6 +431,21 @@ function formatMmDdYyyy_(isoDate) {
   return parts[1] + '/' + parts[2] + '/' + parts[0];
 }
 
+// WellSky pads every activity note with a bookkeeping parenthetical -- e.g.
+// "(Added to shift that Occurs once on 07/27/2026 from 06:00 AM PDT to 08:00 AM
+// PDT for Samson Pallapati; assigned to caregiver Natalia Williams)" -- often
+// twice, once before the note text and once after. It repeats the shift, client
+// and caregiver the payroll cell already identifies, so it's stripped out here
+// and only the human-written part is kept. The full untouched note stays in the
+// Log tab's `note` column for anyone who needs it.
+function cleanActivityNote_(note) {
+  if (note === null || note === undefined) return '';
+  var text = String(note).trim();
+  if (text === '' || text === '-') return '';
+  text = text.replace(/\(\s*Added to shift[^)]*\)/gi, ' ');
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 // ---- Payroll tab ----
 
 // Builds the column layout: every date in the month in order, with a spacer
@@ -466,17 +525,26 @@ function aggregateByCaregiverAndDate_(records) {
     }
 
     if (noteMinutes !== null) {
-      // Two lines per shift -- date and client, then the hours:
-      //   07/29/2026 (Leiker, Myles)
-      //   12:00pm - 5:45pm = 5h45m
+      // Per shift: date and client, then the hours, then its activity note if
+      // it has one -- hours first, note last:
+      //   07/27/2026 (Kozuka-Ssenyan, Mia)
+      //   9:00am - 4:00pm = 7h
+      //   -----------------------------
+      //   Activity Note: On a vacation with their father, July 22-31
       // Same shape whatever the status; the cell's own color already says
       // which shifts need follow-up, so the note doesn't repeat it.
-      cell.noteLines.push(
+      var block =
         formatMmDdYyyy_(date) + ' (' + (record.client_name || 'unknown client') + ')\n' +
         normalizeTimeValue_(record.time_in || '?') + ' - ' +
         normalizeTimeValue_(record.time_out || '?') +
-        ' = ' + formatHoursMinutes_(noteMinutes)
-      );
+        ' = ' + formatHoursMinutes_(noteMinutes);
+
+      var activityNote = cleanActivityNote_(record.note);
+      if (activityNote) {
+        block += '\n' + NOTE_SEPARATOR + '\nActivity Note: ' + activityNote;
+      }
+
+      cell.noteLines.push(block);
     }
   });
 
@@ -636,9 +704,13 @@ function doPost(e) {
   var written = 0;
   var monthsTouched = [];
   Object.keys(byMonth).sort().forEach(function (monthKey) {
+    // Before anything is written: adopt a tab left over from the old
+    // "2026-07 Log" naming, so previously-scanned rows carry over instead of
+    // being stranded in an orphaned tab next to a newly-created one.
+    migrateLegacyTabNames_(monthKey);
     written += upsertLogRows_(monthKey, byMonth[monthKey]);
     rebuildPayrollSheet_(monthKey);
-    monthsTouched.push(monthKey);
+    monthsTouched.push(monthLabelOf_(monthKey));
   });
 
   return jsonOutput_({

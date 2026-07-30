@@ -77,9 +77,10 @@ What's working now:
 
 ### What lands in the Sheet
 
-Two tabs per month, created automatically and named `YYYY-MM Log` / `YYYY-MM Payroll` (zero-padded
-so the tabs sort chronologically), keyed off each record's own `shift_date` — so a scan spanning a
-month boundary files each row in the right month.
+Two tabs per month, created automatically and named `July 2026 Log` / `July 2026 Payroll`, keyed off
+each record's own `shift_date` — so a scan spanning a month boundary files each row in the right
+month. A tab left over from the earlier `2026-07 Log` naming is **renamed** rather than left orphaned
+beside a new one, so already-scanned rows carry over.
 
 **Headers are verified on every write, not just when a tab is created.** If a tab's header row was
 deleted or edited by hand, it's restored. If a tab predates a column being added, its existing rows
@@ -90,14 +91,14 @@ exists are dropped rather than shifted; genuinely new columns start blank. The P
 rebuilt each scan (notes included, since a stale note would strand an old breakdown on a changed
 cell), so its date/weekday header rows can't drift.
 
-- **`2026-07 Log`** — one row per shift (or per idle caregiver/day, reading `-`), with
+- **`July 2026 Log`** — one row per shift (or per idle caregiver/day, reading `-`), with
   `caregiver_name`, `client_name`, `shift_date`, `time_in`, `time_out`, `duration_minutes`,
   `label_duration_minutes`, the four actual/scheduled times, `status`, `status_raw`, `note`,
   `event_id`, `row_key`, `scanned_at`. (`duration_minutes` is the payable span — zero for a missed
   clock-in/out — while `label_duration_minutes` keeps the scheduled span regardless of status, so
   the payroll note can show it without it reaching the total.)
   See "Re-scanning" below for how repeat scans merge into it.
-- **`2026-07 Payroll`** — caregivers down the left, **every** date in the month across the top as
+- **`July 2026 Payroll`** — caregivers down the left, **every** date in the month across the top as
   `7/1`, `7/2`, … with its weekday (`Mon`, `Tue`, …) beneath, and a shaded spacer column between
   each Saturday and Sunday so weeks read separately. The whole month's grid exists upfront; each
   scan drops data into the right columns, so it fills in progressively as you scan more weeks.
@@ -118,9 +119,20 @@ quarter-hour rounding applied to the day's total (0–7 leftover minutes → `.0
 | no shift that day | `-` | none |
 
 If a caregiver had more than one shift that day, the **most urgent status wins** the color, so an
-incomplete log can never hide behind a completed one. Hover any cell for a per-client breakdown,
-one line per shift in a single consistent format — `1:00pm - 5:05pm = 4h5m (Chiang, Ryan)` — with
-nothing else appended; the cell's own color already says which shifts need follow-up.
+incomplete log can never hide behind a completed one. Hover any cell for a per-shift breakdown —
+hours first, then the activity note if there is one, with a blank line between shifts:
+
+```
+07/27/2026 (Kozuka-Ssenyan, Mia)
+9:00am - 4:00pm = 7h
+-----------------------------
+Activity Note: 07/14/26: On a vacation with their father, July 22-31
+```
+
+WellSky pads every note with a bookkeeping parenthetical — `(Added to shift that Occurs once on
+07/27/2026 from 06:00 AM PDT ... assigned to caregiver Natalia Williams)`, often twice — which just
+repeats the shift, client and caregiver the cell already identifies. That's stripped from the payroll
+note; the full untouched text stays in the Log tab's `note` column.
 
 An **incomplete** shift's cell reads `0`, but its note line still shows the scheduled span, total,
 and client so the office knows what was supposed to happen. Those hours deliberately don't reach the

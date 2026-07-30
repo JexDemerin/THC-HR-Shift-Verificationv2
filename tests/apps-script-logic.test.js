@@ -484,13 +484,10 @@ test('drops a column that no longer exists rather than shifting everything', () 
 
 // ---- Tab naming ----
 
-test('names the tabs per month, in a stable sortable form', () => {
-  assert.equal(code.logSheetName_('2026-07'), '2026-07 Log');
-  assert.equal(code.payrollSheetName_('2026-07'), '2026-07 Payroll');
-  assert.equal(code.logSheetName_('2026-12'), '2026-12 Log');
-  // Zero-padded so the tabs sort chronologically rather than 1, 10, 11, 2...
+test('derives each tab name from the record\'s own month', () => {
   assert.equal(code.monthKeyOf_('2026-01-05'), '2026-01');
-  assert.equal(code.logSheetName_(code.monthKeyOf_('2026-01-05')), '2026-01 Log');
+  assert.equal(code.logSheetName_(code.monthKeyOf_('2026-01-05')), 'January 2026 Log');
+  assert.equal(code.payrollSheetName_(code.monthKeyOf_('2026-12-31')), 'December 2026 Payroll');
 });
 
 // ---- Version handshake ----
@@ -742,4 +739,111 @@ test('builds the note in the requested two-line shape', () => {
   const cell = code.aggregateByCaregiverAndDate_(records)['Antonio, Imee']['2026-07-29'];
 
   assert.equal(local(cell.noteLines)[0], '07/29/2026 (Leiker, Myles)\n12:00pm - 5:45pm = 5h45m');
+});
+
+// ---- Human-readable tab names ----
+
+test('names tabs like "July 2026 Log" / "July 2026 Payroll"', () => {
+  assert.equal(code.monthLabelOf_('2026-07'), 'July 2026');
+  assert.equal(code.monthLabelOf_('2026-01'), 'January 2026');
+  assert.equal(code.monthLabelOf_('2026-12'), 'December 2026');
+  assert.equal(code.logSheetName_('2026-07'), 'July 2026 Log');
+  assert.equal(code.payrollSheetName_('2026-07'), 'July 2026 Payroll');
+});
+
+test('a malformed month key falls back to itself rather than "undefined 2026"', () => {
+  assert.equal(code.monthLabelOf_('nonsense'), 'nonsense');
+  assert.equal(code.monthLabelOf_('2026-13'), '2026-13');
+});
+
+test('knows the old tab names so they can be adopted rather than orphaned', () => {
+  assert.equal(code.legacyLogSheetName_('2026-07'), '2026-07 Log');
+  assert.equal(code.legacyPayrollSheetName_('2026-07'), '2026-07 Payroll');
+});
+
+test('renames a legacy tab, but never over an existing current one', () => {
+  const renamed = [];
+  const sheets = { '2026-07 Log': { setName: (n) => renamed.push(n) } };
+  code.SpreadsheetApp.getActiveSpreadsheet = () => ({
+    getSheetByName: (name) => sheets[name] || null,
+  });
+
+  assert.equal(code.renameLegacyTabIfPresent_('2026-07 Log', 'July 2026 Log'), true);
+  assert.deepEqual(local(renamed), ['July 2026 Log']);
+
+  // With both names present, the legacy tab is left alone -- renaming would
+  // collide, and guessing which holds the real data risks losing it.
+  sheets['July 2026 Log'] = { setName: () => { throw new Error('must not rename'); } };
+  assert.equal(code.renameLegacyTabIfPresent_('2026-07 Log', 'July 2026 Log'), false);
+
+  // Nothing to adopt is simply a no-op.
+  assert.equal(code.renameLegacyTabIfPresent_('2026-01 Log', 'January 2026 Log'), false);
+});
+
+// ---- Activity notes in the payroll cell ----
+
+test('strips WellSky\'s "Added to shift that..." bookkeeping from a note', () => {
+  const raw =
+    '(Added to shift that Occurs once on 07/27/2026 from 06:00 AM PDT to 08:00 AM PDT ' +
+    'for Samson Pallapati; assigned to caregiver Natalia Williams) 07/14/26: On a vacation ' +
+    'with their father, July 22-31 (Added to shift that Occurs once on 07/27/2026 from ' +
+    '06:00 AM PDT to 08:00 AM PDT for Samson Pallapati; assigned to caregiver Natalia Williams)';
+
+  // Both copies of the parenthetical go, leaving only the human-written part.
+  assert.equal(
+    code.cleanActivityNote_(raw),
+    '07/14/26: On a vacation with their father, July 22-31'
+  );
+});
+
+test('treats an empty or placeholder note as no note at all', () => {
+  assert.equal(code.cleanActivityNote_(''), '');
+  assert.equal(code.cleanActivityNote_('-'), '');
+  assert.equal(code.cleanActivityNote_(null), '');
+  assert.equal(code.cleanActivityNote_(undefined), '');
+  // A note that is nothing BUT the stripped parenthetical leaves nothing behind.
+  assert.equal(code.cleanActivityNote_('(Added to shift that Occurs once on 07/27/2026)'), '');
+});
+
+test('leaves a note with no bookkeeping parenthetical untouched', () => {
+  assert.equal(
+    code.cleanActivityNote_('Client cancelled, family out of town'),
+    'Client cancelled, family out of town'
+  );
+});
+
+test('puts the hours first and the activity note last, with a separator', () => {
+  const records = [
+    {
+      caregiver_name: 'Williams, Natalia', client_name: 'Kozuka-Ssenyan, Mia',
+      shift_date: '2026-07-27', time_in: '9:00am', time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'completed',
+      note: '07/14/26: On a vacation with their father, July 22-31 (Added to shift that ' +
+        'Occurs once on 07/27/2026 for Samson Pallapati; assigned to caregiver Natalia Williams)',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Williams, Natalia']['2026-07-27'];
+
+  assert.equal(
+    local(cell.noteLines)[0],
+    '07/27/2026 (Kozuka-Ssenyan, Mia)\n' +
+      '9:00am - 4:00pm = 7h\n' +
+      '-----------------------------\n' +
+      'Activity Note: 07/14/26: On a vacation with their father, July 22-31'
+  );
+});
+
+test('a shift with no note gets no separator line', () => {
+  const records = [
+    {
+      caregiver_name: 'Plain, Pat', client_name: 'Client P', shift_date: '2026-07-27',
+      time_in: '9:00am', time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'completed', note: '',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Plain, Pat']['2026-07-27'];
+
+  assert.equal(local(cell.noteLines)[0], '07/27/2026 (Client P)\n9:00am - 4:00pm = 7h');
 });
