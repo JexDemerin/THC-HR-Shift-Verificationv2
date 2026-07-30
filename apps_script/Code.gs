@@ -27,7 +27,7 @@
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 6;
+var SCRIPT_VERSION = 7;
 
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
@@ -35,6 +35,16 @@ var LOG_HEADERS = [
   'actual_time_in', 'scheduled_time_in',
   'actual_time_out', 'scheduled_time_out',
   'status', 'status_raw', 'note', 'event_id', 'row_key', 'scanned_at'
+];
+
+// Columns Sheets would otherwise reinterpret: a time like "2:13pm" becomes a
+// time value stored as a fraction of a day, and a date string becomes a Date.
+// Written as plain text so a value survives the round trip unchanged.
+var TEXT_COLUMNS = [
+  'shift_date', 'time_in', 'time_out',
+  'actual_time_in', 'scheduled_time_in',
+  'actual_time_out', 'scheduled_time_out',
+  'scanned_at'
 ];
 
 // Matches the WellSky legend colors the original scanner used, so a cell's
@@ -293,6 +303,17 @@ function upsertLogRows_(monthKey, records) {
   sheet.clearContents();
   sheet.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]).setFontWeight('bold');
   if (finalRows.length) {
+    // Force the text-ish columns to plain text BEFORE writing, so Sheets stops
+    // helpfully reinterpreting them: "2:13pm" was being stored as a time value
+    // (a fraction of a day) and read back as a Date on 1899-12-30, and a date
+    // string likewise became a Date. Keeping them as text means what goes in is
+    // exactly what comes back out.
+    TEXT_COLUMNS.forEach(function (name) {
+      var index = LOG_HEADERS.indexOf(name);
+      if (index >= 0) {
+        sheet.getRange(2, index + 1, finalRows.length, 1).setNumberFormat('@');
+      }
+    });
     sheet.getRange(2, 1, finalRows.length, LOG_HEADERS.length)
       .setValues(finalRows.map(rowValuesFor_));
   }
@@ -319,24 +340,51 @@ function readLogRecords_(monthKey) {
     headerRow.forEach(function (key, index) {
       if (key) record[String(key)] = row[index];
     });
-    // Sheets may hand a date column back as a Date object rather than the
-    // string that was written. Normalising here means every date comparison,
+    // Sheets may hand a date or time column back as a Date object rather than
+    // the string that was written. Normalising here means every comparison,
     // sort and lookup downstream works on one consistent form -- otherwise a
-    // re-scan would fail to recognise its own previously-written rows.
+    // re-scan would fail to recognise its own previously-written rows, and the
+    // payroll notes would print raw Date objects.
     record.shift_date = normalizeDateValue_(record.shift_date);
+    record.time_in = normalizeTimeValue_(record.time_in);
+    record.time_out = normalizeTimeValue_(record.time_out);
     return record;
   });
 }
 
-function normalizeDateValue_(value) {
+function isDateLike_(value) {
   // Duck-typed rather than `instanceof Date`: instanceof compares against one
   // specific realm's Date constructor and quietly returns false for a Date
   // that came from anywhere else, which would send the value down the
-  // String() path and produce "Mon Jul 27 2026 00:00:00 GMT..." as a date key.
-  if (value && typeof value.getTime === 'function') {
+  // String() path and produce "Mon Jul 27 2026 00:00:00 GMT..." instead.
+  return Boolean(value) && typeof value.getTime === 'function';
+}
+
+function normalizeDateValue_(value) {
+  if (isDateLike_(value)) {
     return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
   return value === null || value === undefined ? '' : String(value);
+}
+
+// Sheets recognises "2:13pm" as a time and stores it as a fraction of a day,
+// handing it back as a Date on its time epoch (1899-12-30). Left alone that
+// surfaces in a payroll note as "Sat Dec 30 1899 14:13:00 GMT-0800 (Pacific
+// Standard Time)". Reading it back through here restores the 12-hour form.
+// (Newly written rows also get a plain-text column format so the coercion
+// stops happening in the first place -- this covers rows already in the sheet.)
+function normalizeTimeValue_(value) {
+  if (isDateLike_(value)) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'h:mma').toLowerCase();
+  }
+  return value === null || value === undefined ? '' : String(value);
+}
+
+// "2026-07-29" -> "07/29/2026"
+function formatMmDdYyyy_(isoDate) {
+  var parts = String(isoDate).split('-');
+  if (parts.length !== 3) return String(isoDate);
+  return parts[1] + '/' + parts[2] + '/' + parts[0];
 }
 
 // ---- Payroll tab ----
@@ -418,13 +466,16 @@ function aggregateByCaregiverAndDate_(records) {
     }
 
     if (noteMinutes !== null) {
-      // One consistent format for every line, whatever the status -- the
-      // cell's own color already says which shifts need follow-up, so the
-      // note doesn't repeat it. e.g. "1:00pm - 5:05pm = 4h5m (Chiang, Ryan)"
+      // Two lines per shift -- date and client, then the hours:
+      //   07/29/2026 (Leiker, Myles)
+      //   12:00pm - 5:45pm = 5h45m
+      // Same shape whatever the status; the cell's own color already says
+      // which shifts need follow-up, so the note doesn't repeat it.
       cell.noteLines.push(
-        (record.time_in || '?') + ' - ' + (record.time_out || '?') +
-        ' = ' + formatHoursMinutes_(noteMinutes) +
-        ' (' + (record.client_name || 'unknown client') + ')'
+        formatMmDdYyyy_(date) + ' (' + (record.client_name || 'unknown client') + ')\n' +
+        normalizeTimeValue_(record.time_in || '?') + ' - ' +
+        normalizeTimeValue_(record.time_out || '?') +
+        ' = ' + formatHoursMinutes_(noteMinutes)
       );
     }
   });
@@ -521,7 +572,9 @@ function rebuildPayrollSheet_(monthKey) {
 
       var status = mostUrgentStatus_(cell.statuses);
       rowValues.push(cellValueFor_(status, cell.totalMinutes, cell.hasRealShift));
-      rowNotes.push(cell.noteLines.join('\n'));
+      // Blank line between shifts: each entry is already two lines, so without
+      // the gap a caregiver with two clients reads as one four-line blur.
+      rowNotes.push(cell.noteLines.join('\n\n'));
       rowColors.push(STATUS_COLORS[status] || null);
     });
 

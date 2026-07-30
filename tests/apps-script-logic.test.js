@@ -168,9 +168,10 @@ test('sums a day across two clients and notes each visit separately', () => {
 
   assert.equal(cell.totalMinutes, 345); // 5h45m
   assert.equal(code.cellValueFor_('completed', cell.totalMinutes, true), 5.75);
+  // Two lines per shift: date + client, then the hours.
   assert.deepEqual(local(cell.noteLines), [
-    '3:00pm - 6:00pm = 3h (A. Palapati)',
-    '6:15pm - 9:00pm = 2h45m (S. Palapati)',
+    '07/27/2026 (A. Palapati)\n3:00pm - 6:00pm = 3h',
+    '07/27/2026 (S. Palapati)\n6:15pm - 9:00pm = 2h45m',
   ]);
 });
 
@@ -235,7 +236,9 @@ test('an incomplete shift shows its scheduled span and client in the note, cell 
   assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 0);
   // Same plain format as any other line -- the red cell already signals that
   // this one needs follow-up, so the note doesn't restate it.
-  assert.deepEqual(local(cell.noteLines), ['11:00am - 6:00pm = 7h (Joyner, Yusuf)']);
+  assert.deepEqual(local(cell.noteLines), [
+    '07/27/2026 (Joyner, Yusuf)\n11:00am - 6:00pm = 7h',
+  ]);
 });
 
 // ---- Sibling care ----
@@ -266,8 +269,8 @@ test('sibling care counts identical times once, not per client', () => {
   // Both siblings still get their own plain note line, and nothing else is
   // appended -- the hours being counted once is intentional, not annotated.
   assert.deepEqual(local(cell.noteLines), [
-    '1:00pm - 4:00pm = 3h (Pallapati, Samson)',
-    '1:00pm - 4:00pm = 3h (Pallapati, Aaron)',
+    '07/27/2026 (Pallapati, Samson)\n1:00pm - 4:00pm = 3h',
+    '07/27/2026 (Pallapati, Aaron)\n1:00pm - 4:00pm = 3h',
   ]);
 });
 
@@ -679,4 +682,64 @@ test('a caregiver/date pair the scan covered is resynced, other dates are untouc
   );
   // evt-deleted was inside coverage but absent from the scan -> dropped, so a
   // shift removed in WellSky does not linger as a ghost row.
+});
+
+// ---- Sheets' time/date coercion ----
+
+test('a time Sheets handed back as an 1899 Date is restored to 12-hour form', () => {
+  // Sheets reads "2:13pm" as a time, stores it as a fraction of a day, and
+  // hands it back as a Date on its own epoch (1899-12-30). Printed raw that
+  // became "Sat Dec 30 1899 14:13:00 GMT-0800 (Pacific Standard Time)" in a
+  // payroll note.
+  code.Utilities.formatDate = (date, _tz, format) => {
+    const h24 = date.getUTCHours();
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    if (format === 'h:mma') {
+      const h12 = ((h24 + 11) % 12) + 1;
+      return `${h12}:${minutes}${h24 < 12 ? 'AM' : 'PM'}`;
+    }
+    return date.toISOString().slice(0, 10);
+  };
+
+  assert.equal(code.normalizeTimeValue_(new Date(Date.UTC(1899, 11, 30, 14, 13))), '2:13pm');
+  assert.equal(code.normalizeTimeValue_(new Date(Date.UTC(1899, 11, 30, 0, 0))), '12:00am');
+  assert.equal(code.normalizeTimeValue_(new Date(Date.UTC(1899, 11, 30, 12, 0))), '12:00pm');
+  // Values that are already strings pass straight through, including "-".
+  assert.equal(code.normalizeTimeValue_('5:45pm'), '5:45pm');
+  assert.equal(code.normalizeTimeValue_('-'), '-');
+  assert.equal(code.normalizeTimeValue_(null), '');
+});
+
+test('formats a note date as mm/dd/yyyy', () => {
+  assert.equal(code.formatMmDdYyyy_('2026-07-29'), '07/29/2026');
+  assert.equal(code.formatMmDdYyyy_('2026-01-05'), '01/05/2026');
+  // Anything unexpected is passed through rather than mangled into nonsense.
+  assert.equal(code.formatMmDdYyyy_('not a date'), 'not a date');
+});
+
+test('every column Sheets would reinterpret is written as plain text', () => {
+  // If a time or date column is left in Sheets' default format, the value gets
+  // coerced on write and comes back as a Date -- so each of these has to be in
+  // TEXT_COLUMNS, and each has to be a real column name.
+  ['shift_date', 'time_in', 'time_out', 'actual_time_in', 'scheduled_time_in',
+    'actual_time_out', 'scheduled_time_out'].forEach((name) => {
+    assert.ok(local(code.TEXT_COLUMNS).indexOf(name) !== -1, `${name} should be plain text`);
+  });
+  local(code.TEXT_COLUMNS).forEach((name) => {
+    assert.ok(local(code.LOG_HEADERS).indexOf(name) !== -1, `${name} should be a real column`);
+  });
+});
+
+test('builds the note in the requested two-line shape', () => {
+  const records = [
+    {
+      caregiver_name: 'Antonio, Imee', client_name: 'Leiker, Myles', shift_date: '2026-07-29',
+      time_in: '12:00pm', time_out: '5:45pm',
+      duration_minutes: 345, label_duration_minutes: 345, status: 'completed',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Antonio, Imee']['2026-07-29'];
+
+  assert.equal(local(cell.noteLines)[0], '07/29/2026 (Leiker, Myles)\n12:00pm - 5:45pm = 5h45m');
 });
