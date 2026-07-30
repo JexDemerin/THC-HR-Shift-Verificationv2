@@ -876,3 +876,170 @@ test('a shift with no note gets no separator line', () => {
 
   assert.equal(local(cell.noteLines)[0], '07/27/2026 (Client P)\n9:00am - 4:00pm = 7h');
 });
+
+// ---- Re-scanning a day overwrites it rather than appending ----
+
+// A fuller fake spreadsheet than makeFakeSheet, so upsertLogRows_ can be run
+// end to end. Worth the setup: "does re-scanning the same day overwrite or
+// duplicate?" is the single most important property of the Log tab, and the
+// pure helpers alone can't answer it.
+function makeFakeSpreadsheet() {
+  const sheets = {};
+
+  function makeSheet(name) {
+    const cells = [];
+    let maxColumns = 40;
+    return {
+      _cells: cells,
+      getLastRow: () => cells.length,
+      getLastColumn: () => Math.max(0, ...cells.map((r) => r.length)),
+      getMaxColumns: () => maxColumns,
+      insertColumnsAfter: (_after, count) => { maxColumns += count; },
+      setFrozenRows: () => {},
+      clear: () => { cells.length = 0; },
+      clearContents: () => { cells.length = 0; },
+      clearNotes: () => {},
+      setName: (n) => { name = n; },
+      getRange: (row, col, numRows, numCols) => ({
+        getValues: () => {
+          const out = [];
+          for (let r = 0; r < numRows; r++) {
+            const src = cells[row - 1 + r] || [];
+            const line = [];
+            for (let c = 0; c < numCols; c++) line.push(src[col - 1 + c] ?? '');
+            out.push(line);
+          }
+          return out;
+        },
+        setValues: (values) => {
+          values.forEach((line, r) => {
+            const target = row - 1 + r;
+            while (cells.length <= target) cells.push([]);
+            line.forEach((v, c) => { cells[target][col - 1 + c] = v; });
+          });
+          return { setFontWeight: () => ({}) };
+        },
+        setNumberFormat: () => ({}),
+        setNotes: () => ({}),
+        setBackgrounds: () => ({}),
+        sort: () => ({}),
+      }),
+    };
+  }
+
+  code.SpreadsheetApp.getActiveSpreadsheet = () => ({
+    getSheetByName: (n) => sheets[n] || null,
+    insertSheet: (n) => { sheets[n] = makeSheet(n); return sheets[n]; },
+  });
+  code.Utilities.formatDate = (d) => d.toISOString().slice(0, 10);
+
+  return {
+    rowsOf(sheetName) {
+      const sheet = sheets[sheetName];
+      if (!sheet) return [];
+      return sheet._cells.slice(1).map((row) => {
+        const record = {};
+        local(code.LOG_HEADERS).forEach((h, i) => { record[h] = row[i]; });
+        return record;
+      });
+    },
+  };
+}
+
+function logRecord(overrides) {
+  const base = {};
+  local(code.LOG_HEADERS).forEach((h) => { base[h] = ''; });
+  base.status = 'completed';
+  base.unread_fields = [];
+  return Object.assign(base, overrides);
+}
+
+test('re-scanning the same day overwrites its rows instead of adding more', () => {
+  const ss = makeFakeSpreadsheet();
+  const tab = code.logSheetName_('2026-07');
+
+  const firstScan = [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
+      time_in: '9:00am', time_out: '4:00pm', duration_minutes: 420,
+      event_id: '846292420', row_key: '846292420', scanned_at: 'run1',
+    }),
+    logRecord({
+      caregiver_name: 'Abaigar, Kit', client_name: '-', shift_date: '2026-07-27',
+      status: 'no_shift', row_key: 'no-shift:Abaigar, Kit:2026-07-27', scanned_at: 'run1',
+    }),
+  ];
+  code.upsertLogRows_('2026-07', firstScan);
+  assert.equal(ss.rowsOf(tab).length, 2);
+
+  // Same day again, with the shift's hours corrected in WellSky in between.
+  const reScan = [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia', shift_date: '2026-07-27',
+      time_in: '9:00am', time_out: '5:00pm', duration_minutes: 480,
+      event_id: '846292420', row_key: '846292420', scanned_at: 'run2',
+    }),
+    logRecord({
+      caregiver_name: 'Abaigar, Kit', client_name: '-', shift_date: '2026-07-27',
+      status: 'no_shift', row_key: 'no-shift:Abaigar, Kit:2026-07-27', scanned_at: 'run2',
+    }),
+  ];
+  code.upsertLogRows_('2026-07', reScan);
+
+  const rows = ss.rowsOf(tab);
+  assert.equal(rows.length, 2, 'still two rows -- updated in place, not appended');
+  const shift = rows.find((r) => r.caregiver_name === 'Barberi, Miku');
+  assert.equal(shift.duration_minutes, 480, 'the corrected hours replaced the old ones');
+  assert.equal(shift.scanned_at, 'run2');
+});
+
+test('scanning a different day leaves the already-scanned day intact', () => {
+  const ss = makeFakeSpreadsheet();
+  const tab = code.logSheetName_('2026-07');
+
+  code.upsertLogRows_('2026-07', [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Client A', shift_date: '2026-07-27',
+      duration_minutes: 420, event_id: 'a', row_key: 'a',
+    }),
+  ]);
+  code.upsertLogRows_('2026-07', [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Client A', shift_date: '2026-07-28',
+      duration_minutes: 300, event_id: 'b', row_key: 'b',
+    }),
+  ]);
+
+  const rows = ss.rowsOf(tab);
+  assert.equal(rows.length, 2, 'the new day was added, the old one kept');
+  assert.deepEqual(rows.map((r) => r.shift_date).sort(), ['2026-07-27', '2026-07-28']);
+});
+
+test('a shift deleted in WellSky is dropped on the next scan of that day', () => {
+  const ss = makeFakeSpreadsheet();
+  const tab = code.logSheetName_('2026-07');
+
+  code.upsertLogRows_('2026-07', [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Still There', shift_date: '2026-07-27',
+      event_id: 'keep', row_key: 'keep',
+    }),
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Since Deleted', shift_date: '2026-07-27',
+      event_id: 'gone', row_key: 'gone',
+    }),
+  ]);
+  assert.equal(ss.rowsOf(tab).length, 2);
+
+  // Second scan of the same day reports only one of them.
+  code.upsertLogRows_('2026-07', [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Still There', shift_date: '2026-07-27',
+      event_id: 'keep', row_key: 'keep',
+    }),
+  ]);
+
+  const rows = ss.rowsOf(tab);
+  assert.equal(rows.length, 1, 'the vanished shift left no ghost row');
+  assert.equal(rows[0].client_name, 'Still There');
+});
