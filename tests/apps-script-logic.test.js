@@ -989,6 +989,9 @@ function makeFakeSpreadsheet() {
 
   function makeSheet(name) {
     const cells = [];
+    const backgrounds = {};
+    const alignments = {};
+    const columnWidths = {};
     let maxColumns = 40;
     return {
       _cells: cells,
@@ -1022,9 +1025,29 @@ function makeFakeSpreadsheet() {
         },
         setNumberFormat: () => ({}),
         setNotes: () => ({}),
-        setBackgrounds: () => ({}),
+        // Recorded per cell rather than discarded, so the payroll tab's
+        // formatting is testable at all -- backgrounds and alignment ARE the
+        // deliverable there (the legend colors are how a reader tells a missed
+        // clock-in from a completed shift), and until now nothing checked them.
+        setBackgrounds: (rows) => {
+          rows.forEach((line, r) => {
+            line.forEach((color, c) => { backgrounds[`${row + r},${col + c}`] = color; });
+          });
+          return {};
+        },
+        setHorizontalAlignment: (value) => {
+          for (let r = 0; r < numRows; r++) {
+            for (let c = 0; c < numCols; c++) alignments[`${row + r},${col + c}`] = value;
+          }
+          return {};
+        },
         sort: () => ({}),
       }),
+      setColumnWidth: (column, width) => { columnWidths[column] = width; },
+      setFrozenColumns: () => {},
+      _backgroundAt: (r, c) => backgrounds[`${r},${c}`],
+      _alignmentAt: (r, c) => alignments[`${r},${c}`],
+      _widthOf: (c) => columnWidths[c],
     };
   }
 
@@ -1043,6 +1066,9 @@ function makeFakeSpreadsheet() {
         local(code.LOG_HEADERS).forEach((h, i) => { record[h] = row[i]; });
         return record;
       });
+    },
+    sheetNamed(sheetName) {
+      return sheets[sheetName] || null;
     },
   };
 }
@@ -1143,4 +1169,83 @@ test('a shift deleted in WellSky is dropped on the next scan of that day', () =>
   const rows = ss.rowsOf(tab);
   assert.equal(rows.length, 1, 'the vanished shift left no ghost row');
   assert.equal(rows[0].client_name, 'Still There');
+});
+
+// ---- Payroll tab formatting ----
+
+// Builds a July payroll tab from one scanned shift and hands back the sheet.
+// July 2026 starts on a Wednesday, so the first Sat/Sun boundary -- and with it
+// the first spacer column -- falls between the 4th and the 5th.
+function buildJulyPayroll() {
+  const ss = makeFakeSpreadsheet();
+  code.upsertLogRows_('2026-07', [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+      shift_date: '2026-07-01', official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420,
+      event_id: 'fmt-1', row_key: 'fmt-1',
+    }),
+  ]);
+  code.rebuildPayrollSheet_('2026-07');
+  return ss.sheetNamed(code.payrollSheetName_('2026-07'));
+}
+
+test('date columns are 45 wide and the week spacers 20', () => {
+  const sheet = buildJulyPayroll();
+
+  // Column 1 is the caregiver name, so 2 is July 1st.
+  assert.equal(sheet._widthOf(2), 45, 'a date column');
+  assert.equal(sheet._widthOf(5), 45, 'July 4th, the last column before the spacer');
+  assert.equal(sheet._widthOf(6), 20, 'the Sat/Sun spacer');
+  assert.equal(sheet._widthOf(7), 45, 'July 5th, straight after the spacer');
+  // The caregiver column is left at its default -- names need room the date
+  // columns do not.
+  assert.equal(sheet._widthOf(1), undefined);
+});
+
+test('both header rows are green, and the spacer stays grey through them', () => {
+  const sheet = buildJulyPayroll();
+
+  assert.equal(sheet._backgroundAt(1, 1), '#93c47d', 'the "Caregiver" corner');
+  assert.equal(sheet._backgroundAt(1, 2), '#93c47d', 'the date row');
+  assert.equal(sheet._backgroundAt(2, 2), '#93c47d', 'the weekday row');
+  // A divider that only starts below the headers would break each week into two
+  // visually unrelated pieces.
+  assert.equal(sheet._backgroundAt(1, 6), '#d9d9d9');
+  assert.equal(sheet._backgroundAt(2, 6), '#d9d9d9');
+});
+
+test('the header green is not the same green as a completed shift', () => {
+  // If they matched, every header would read as a green data cell -- the legend
+  // colors are the whole point of the tab, so they have to stay unambiguous.
+  assert.notEqual(code.HEADER_COLOR, code.STATUS_COLORS.completed);
+});
+
+test('dates, weekdays and hours are centered; caregiver names are not', () => {
+  const sheet = buildJulyPayroll();
+
+  assert.equal(sheet._alignmentAt(1, 2), 'center', 'the date');
+  assert.equal(sheet._alignmentAt(2, 2), 'center', 'the weekday');
+  assert.equal(sheet._alignmentAt(3, 2), 'center', 'the hours cell');
+  assert.equal(sheet._alignmentAt(1, 1), undefined, 'the "Caregiver" header');
+  assert.equal(sheet._alignmentAt(3, 1), undefined, 'the caregiver name');
+});
+
+test('an empty month still gets its column widths and header colors', () => {
+  // The tab is built for the whole month upfront, so a month with nothing
+  // scanned yet takes the early return -- which must not skip the formatting.
+  const ss = makeFakeSpreadsheet();
+  code.rebuildPayrollSheet_('2026-08');
+  const sheet = ss.sheetNamed(code.payrollSheetName_('2026-08'));
+
+  assert.equal(sheet._widthOf(2), 45);
+  assert.equal(sheet._backgroundAt(1, 2), '#93c47d');
+  assert.equal(sheet._alignmentAt(1, 2), 'center');
+});
+
+test('the hours cell keeps its status color under the new formatting', () => {
+  // Centering and the header green must not have displaced what the body
+  // backgrounds mean: a completed shift is still green, per the WellSky legend.
+  const sheet = buildJulyPayroll();
+  assert.equal(sheet._backgroundAt(3, 2), code.STATUS_COLORS.completed);
 });

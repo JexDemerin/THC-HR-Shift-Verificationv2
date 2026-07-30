@@ -27,7 +27,7 @@
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 10;
+var SCRIPT_VERSION = 11;
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -100,6 +100,19 @@ var STATUS_URGENCY = [
   'upcoming',
   'no_shift'
 ];
+
+// Payroll tab layout. A date column only ever holds "7/27", "Mon" or a number
+// like 7.25, so it can be narrow -- and it has to be, since a month puts 31 of
+// them plus spacers across the screen. The spacer is a divider rather than
+// data, so it needs just enough width to read as a gap between the weeks.
+var DATE_COLUMN_WIDTH = 45;
+var SPACER_COLUMN_WIDTH = 20;
+
+// The date/weekday header rows. Deliberately a stronger green than the
+// completed-shift green below it, so a header never reads as a green (completed)
+// data cell.
+var HEADER_COLOR = '#93c47d';
+var SPACER_COLOR = '#d9d9d9';
 
 var WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -705,6 +718,22 @@ function rebuildPayrollSheet_(monthKey) {
   sheet.getRange(1, 1, 1, width).setValues([dateRow]).setFontWeight('bold');
   sheet.getRange(2, 1, 1, width).setValues([weekdayRow]).setFontWeight('bold');
 
+  // Green across both header rows -- except the spacer columns, which stay grey
+  // all the way to the top so each week reads as one block rather than having
+  // its divider start halfway down the tab.
+  var headerColors = [HEADER_COLOR];
+  columns.forEach(function (column) {
+    headerColors.push(column.spacer ? SPACER_COLOR : HEADER_COLOR);
+  });
+  sheet.getRange(1, 1, 2, width).setBackgrounds([headerColors.slice(), headerColors.slice()]);
+
+  // Everything but the caregiver-name column is centered: a date, a weekday and
+  // a decimal are all short enough that centering keeps the grid readable
+  // column-wise. Names stay left-aligned, where they're easiest to scan down.
+  sheet.getRange(1, 2, 2, columns.length).setHorizontalAlignment('center');
+
+  applyPayrollColumnWidths_(sheet, columns);
+
   if (caregivers.length === 0) {
     sheet.setFrozenRows(2);
     sheet.setFrozenColumns(1);
@@ -724,7 +753,7 @@ function rebuildPayrollSheet_(monthKey) {
       if (column.spacer) {
         rowValues.push('');
         rowNotes.push('');
-        rowColors.push('#d9d9d9'); // visible divider between weeks
+        rowColors.push(SPACER_COLOR); // visible divider between weeks
         return;
       }
 
@@ -756,10 +785,24 @@ function rebuildPayrollSheet_(monthKey) {
   body.setValues(grid);
   body.setNotes(notes);
   body.setBackgrounds(colors);
+  sheet.getRange(3, 2, grid.length, columns.length).setHorizontalAlignment('center');
 
   sheet.setFrozenRows(2);
   sheet.setFrozenColumns(1);
   return caregivers.length;
+}
+
+// Set after the header rows are written, and before the early return for a
+// month with no caregivers yet -- an empty tab still shows its date columns, so
+// they need to be the right width too.
+function applyPayrollColumnWidths_(sheet, columns) {
+  columns.forEach(function (column, index) {
+    var columnNumber = index + 2; // +1 for the caregiver column, +1 for 1-based
+    sheet.setColumnWidth(
+      columnNumber,
+      column.spacer ? SPACER_COLUMN_WIDTH : DATE_COLUMN_WIDTH
+    );
+  });
 }
 
 // ---- Entry point ----

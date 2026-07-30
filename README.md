@@ -121,6 +121,13 @@ cell), so its date/weekday header rows can't drift.
   each Saturday and Sunday so weeks read separately. The whole month's grid exists upfront; each
   scan drops data into the right columns, so it fills in progressively as you scan more weeks.
 
+  **Layout** (all of it rewritten on every scan, so hand edits to the tab's formatting won't stick):
+  date columns are 45px and the week spacers 20px, so a 31-day month plus its spacers stays on one
+  screen. Both header rows are green (`#93c47d` — deliberately a stronger green than the
+  completed-shift `#b7e1cd` below, so a header never reads as a data cell), with the spacer columns
+  staying grey right through the headers so each week reads as one block. Dates, weekdays and hours
+  are centered; caregiver names stay left-aligned, where a column of names is easiest to scan down.
+
 Each payroll cell holds that caregiver's **total hours for the day** as a decimal, using payroll's
 quarter-hour rounding applied to the day's total (0–7 leftover minutes → `.00`, 8–22 → `.25`,
 23–37 → `.50`, 38–52 → `.75`, 53+ → next full hour), colored to match the WellSky legend:
