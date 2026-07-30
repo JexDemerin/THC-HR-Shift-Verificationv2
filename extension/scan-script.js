@@ -560,9 +560,20 @@
   // debuggable instead of just silently leaving the four fields blank.
   async function enrichCompletedShift(eventEl) {
     const before = snapshotAllElements();
-    simulateClick(shiftClickTarget(eventEl));
 
-    const popup = await waitFor(() => findSmallestMatch(SIGNALS.summaryPopup), { timeoutMs: CLICK_SETTLE_MS });
+    // Clicked up to twice: on a real run a handful of shifts out of ~60 saw
+    // nothing at all appear, with no wrong popup either -- the signature of a
+    // click that simply didn't land (the row still settling, or the previous
+    // shift's popup only just finished tearing down) rather than a wrong
+    // target, which would have opened something. One retry costs a second and
+    // fixes a transient miss; anything still failing after it gets reported.
+    let popup = null;
+    for (let attempt = 0; attempt < 2 && !popup; attempt++) {
+      if (attempt > 0) await sleep(CLOSE_SETTLE_MS);
+      simulateClick(shiftClickTarget(eventEl));
+      popup = await waitFor(() => findSmallestMatch(SIGNALS.summaryPopup), { timeoutMs: CLICK_SETTLE_MS });
+    }
+
     if (!popup) {
       const newEls = findNewTopLevelElements(before, snapshotAllElements());
       const closedOk = await closeDialog();

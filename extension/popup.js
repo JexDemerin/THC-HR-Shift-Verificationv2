@@ -1,3 +1,9 @@
+// Must match SCRIPT_VERSION in apps_script/Code.gs. Bumped together whenever
+// the Sheet-side script changes in a way this extension depends on, so a
+// stale deployment is reported loudly instead of silently doing the wrong
+// thing (or nothing).
+const EXPECTED_SCRIPT_VERSION = 4;
+
 const statusEl = document.getElementById('status');
 const logEl = document.getElementById('log');
 const exportBtn = document.getElementById('exportBtn');
@@ -192,17 +198,27 @@ async function scanSchedule() {
 
     const sheetResult = response && response.result;
     if (response && response.ok && sheetResult && sheetResult.ok) {
-      if (typeof sheetResult.written !== 'number') {
-        // The current apps_script/Code.gs always returns a numeric `written`
-        // -- getting anything else back means the Apps Script project is
-        // very likely still running an older pasted-in version. Re-paste
-        // the current Code.gs and create a NEW deployment (editing the
-        // script alone doesn't update an existing Web App URL).
-        setStatus(parts.join(' — ') + ' — sent to sheet, but got an unexpected response shape.');
+      // The deployed Apps Script reports its own version. Anything other than
+      // the version this extension expects means the Sheet is running older
+      // code -- which is exactly what produces "the monthly Log/Payroll tabs
+      // never appeared", since an older script simply doesn't build them.
+      // Publishing a NEW DEPLOYMENT VERSION is what updates a live Web App;
+      // editing and saving the script does not.
+      if (sheetResult.script_version !== EXPECTED_SCRIPT_VERSION) {
+        const found = sheetResult.script_version === undefined
+          ? 'an older version that does not report one'
+          : `version ${sheetResult.script_version}`;
+        setStatus(parts.join(' — ') + ' — sheet is running OLD Code.gs, nothing was written properly.');
         addLogEntry(
-          'Sent to Google Sheet, but the response didn\'t look like the current Code.gs -- ' +
-            're-paste apps_script/Code.gs into the Apps Script editor and create a NEW deployment ' +
-            '(saving alone doesn\'t update an existing Web App URL).'
+          `The Sheet is running ${found}, but this extension needs version ${EXPECTED_SCRIPT_VERSION}. ` +
+            'Monthly Log/Payroll tabs will NOT appear until it is updated.'
+        );
+        addLogEntry(
+          'Fix: open the Sheet -> Extensions -> Apps Script, replace all the code with ' +
+            'apps_script/Code.gs, Save, then Deploy -> Manage deployments -> pencil icon -> ' +
+            'Version: "New version" -> Deploy. Do NOT create a separate new deployment, that ' +
+            'makes a different URL. To check what is live, open your Web App URL in a browser: ' +
+            `it should show script_version ${EXPECTED_SCRIPT_VERSION}.`
         );
       } else {
         setStatus(parts.join(' — ') + ` — sent to sheet (${sheetResult.written} written).`);
@@ -211,6 +227,11 @@ async function scanSchedule() {
           `Sent to Google Sheet: ${sheetResult.written} row(s) written/updated` +
             (months ? ` in ${months} (Log + Payroll tabs).` : '.')
         );
+        if (sheetResult.skipped_undated > 0) {
+          addLogEntry(
+            `${sheetResult.skipped_undated} record(s) had no usable date and were not written anywhere.`
+          );
+        }
       }
     } else {
       const errorMessage =

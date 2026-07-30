@@ -149,12 +149,25 @@ scan only sees one visible week, a full month's Payroll tab fills in over severa
    per your security needs). Copy the deployment URL.
 3. Click the extension icon → **Settings** → paste the Web App URL → **Save**.
 
-**If you already deployed an earlier version of `Code.gs`** (e.g. from before this project switched
-from the Python screen-bot to the extension), re-paste the current `apps_script/Code.gs` and use
-**Deploy → Manage deployments → Edit (pencil icon) → Version: New version → Deploy**. Just saving
-the script does *not* update an already-published Web App URL — the extension will keep talking to
-whatever code was live at the last deployed version until you publish a new one. The popup will
-warn you if the Sheet's response doesn't look like it came from the current script.
+### Updating the Apps Script (this is the #1 thing that goes wrong)
+
+**Saving the script does NOT change what a published Web App serves.** A live Web App keeps serving
+the last *deployed version*, so pasting new code and hitting Save leaves the extension talking to
+the old code — which quietly produces no monthly Log/Payroll tabs at all, since older versions don't
+know how to build them. To actually update it:
+
+1. Sheet → **Extensions → Apps Script**, replace all the code with `apps_script/Code.gs`, **Save**.
+2. **Deploy → Manage deployments →** the **pencil icon** on the existing deployment →
+   Version: **New version** → **Deploy**.
+
+Use the pencil on the *existing* deployment — creating a separate "New deployment" mints a
+different URL that the extension isn't pointed at.
+
+**To check what's actually live:** open your Web App URL in a browser. It returns the deployed
+version, e.g. `{"ok":true,"script_version":4,...}`. Both sides also check this automatically —
+`Code.gs` reports its `SCRIPT_VERSION` on every write, and the popup names the mismatch and the fix
+if it doesn't match what the extension expects, rather than letting a stale deployment look like a
+successful scan.
 
 ## Using it
 

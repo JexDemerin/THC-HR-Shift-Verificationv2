@@ -489,3 +489,37 @@ test('names the tabs per month, in a stable sortable form', () => {
   assert.equal(code.monthKeyOf_('2026-01-05'), '2026-01');
   assert.equal(code.logSheetName_(code.monthKeyOf_('2026-01-05')), '2026-01 Log');
 });
+
+// ---- Version handshake ----
+
+test('the script reports a version the extension can check against', () => {
+  assert.equal(typeof code.SCRIPT_VERSION, 'number');
+  assert.ok(code.SCRIPT_VERSION > 0);
+});
+
+test('Code.gs SCRIPT_VERSION matches the extension\'s EXPECTED_SCRIPT_VERSION', () => {
+  // These two must be bumped together. If they drift, the extension either
+  // rejects a perfectly current deployment or accepts a stale one -- and a
+  // stale one silently produces no monthly Log/Payroll tabs at all, which is
+  // exactly the failure this handshake exists to make obvious.
+  const popupSource = fs.readFileSync(path.join(__dirname, '..', 'extension', 'popup.js'), 'utf8');
+  const match = popupSource.match(/EXPECTED_SCRIPT_VERSION\s*=\s*(\d+)/);
+
+  assert.ok(match, 'popup.js should declare EXPECTED_SCRIPT_VERSION');
+  assert.equal(Number(match[1]), code.SCRIPT_VERSION);
+});
+
+test('doGet reports the version so the live deployment can be checked in a browser', () => {
+  const captured = [];
+  code.ContentService.createTextOutput = (text) => {
+    captured.push(text);
+    return { setMimeType: () => 'output' };
+  };
+
+  code.doGet();
+
+  const payload = JSON.parse(captured[0]);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.script_version, code.SCRIPT_VERSION);
+  assert.deepEqual(payload.log_headers, local(code.LOG_HEADERS));
+});

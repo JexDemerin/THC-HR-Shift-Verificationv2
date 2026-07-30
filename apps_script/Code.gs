@@ -22,6 +22,13 @@
 // Payroll tab for that month is rebuilt from it. That keeps Payroll correct
 // even though each scan only sees one week of the schedule at a time.
 
+// Bumped whenever this file changes in a way the extension depends on.
+// Reported back on every doPost, and readable by opening the Web App URL in a
+// browser (see doGet), so "is the deployed script actually current?" is a
+// question with a definite answer instead of a guess. Saving the script does
+// NOT change what a published Web App serves -- a new deployment version does.
+var SCRIPT_VERSION = 4;
+
 var LOG_HEADERS = [
   'caregiver_name', 'client_name', 'shift_date',
   'time_in', 'time_out', 'duration_minutes', 'label_duration_minutes',
@@ -495,6 +502,26 @@ function rebuildPayrollSheet_(monthKey) {
 
 // ---- Entry point ----
 
+function jsonOutput_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Open the Web App URL in a browser to see which version is actually live.
+// A published Web App keeps serving the last DEPLOYED version, so editing and
+// saving the script changes nothing until a new deployment version is
+// published -- this makes that difference visible instead of leaving you to
+// infer it from missing tabs.
+function doGet() {
+  return jsonOutput_({
+    ok: true,
+    script_version: SCRIPT_VERSION,
+    log_headers: LOG_HEADERS,
+    message: 'THC WellSky Shift Log — Apps Script is deployed and reachable.'
+  });
+}
+
 function doPost(e) {
   var records = JSON.parse(e.postData.contents);
   if (!Array.isArray(records)) records = records.records || [];
@@ -502,22 +529,32 @@ function doPost(e) {
   // Group by month so a scan spanning a month boundary files each row in the
   // right pair of tabs.
   var byMonth = {};
+  var undated = 0;
   records.forEach(function (record) {
     var monthKey = monthKeyOf_(record.shift_date);
-    if (!monthKey) return;
+    if (!monthKey) {
+      undated++;
+      return;
+    }
     if (!byMonth[monthKey]) byMonth[monthKey] = [];
     byMonth[monthKey].push(record);
   });
 
   var written = 0;
   var monthsTouched = [];
-  Object.keys(byMonth).forEach(function (monthKey) {
+  Object.keys(byMonth).sort().forEach(function (monthKey) {
     written += upsertLogRows_(monthKey, byMonth[monthKey]);
     rebuildPayrollSheet_(monthKey);
     monthsTouched.push(monthKey);
   });
 
-  return ContentService
-    .createTextOutput(JSON.stringify({ ok: true, written: written, months: monthsTouched }))
-    .setMimeType(ContentService.MimeType.JSON);
+  return jsonOutput_({
+    ok: true,
+    script_version: SCRIPT_VERSION,
+    written: written,
+    // Surfaced rather than silently swallowed: a record with no parseable
+    // shift_date has no month to file under, so it is not written anywhere.
+    skipped_undated: undated,
+    months: monthsTouched
+  });
 }
