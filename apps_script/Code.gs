@@ -567,7 +567,18 @@ function cleanActivityNote_(note) {
   var text = String(note).trim();
   if (text === '' || text === '-') return '';
   text = text.replace(/\(\s*Added to shift[^)]*\)/gi, ' ');
-  return text.replace(/\s+/g, ' ').trim();
+  text = text.replace(/\s+/g, ' ').trim();
+  // WellSky's note text already opens with its own "Activity Note:" label, and
+  // the grid cell adds one when it assembles the block -- which read as
+  // "Activity Note: Activity Note: 07/18/26: No Shift as per Mom". Strip the
+  // source's label so exactly one survives, the one this script controls.
+  //
+  // The + handles the label arriving more than once, and this runs AFTER the
+  // parenthetical strip on purpose: WellSky sometimes puts "(Added to shift...)"
+  // in front of the label, so anchoring to the start only works once that is
+  // gone. The Log tab's `note` column still holds the full untouched text.
+  text = text.replace(/^(?:activity\s*notes?\s*:\s*)+/i, '');
+  return text.trim();
 }
 
 // ---- Payroll tab ----

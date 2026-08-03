@@ -1414,3 +1414,60 @@ test('a scan rebuilds both grid tabs, not just payroll', () => {
   assert.ok(ss.sheetNamed(code.payrollSheetName_('2026-07')), 'payroll tab exists');
   assert.ok(ss.sheetNamed(code.clientHoursSheetName_('2026-07')), 'client hours tab exists');
 });
+
+test("WellSky's own \"Activity Note:\" label is not doubled by ours", () => {
+  // Seen for real: "Activity Note: Activity Note: 07/18/26: No Shift as per Mom".
+  // WellSky's note text carries its own label and the cell adds one when it
+  // assembles the block, so the source's has to go.
+  assert.equal(
+    code.cleanActivityNote_('Activity Note: 07/18/26: No Shift as per Mom'),
+    '07/18/26: No Shift as per Mom'
+  );
+  // Casing and spacing vary in real data; the label is stripped either way.
+  assert.equal(code.cleanActivityNote_('activity note:  Called out sick'), 'Called out sick');
+  assert.equal(code.cleanActivityNote_('ACTIVITY NOTE:Called out sick'), 'Called out sick');
+  assert.equal(code.cleanActivityNote_('Activity Notes: Called out sick'), 'Called out sick');
+  // Arriving more than once still leaves none behind.
+  assert.equal(
+    code.cleanActivityNote_('Activity Note: Activity Note: Called out sick'),
+    'Called out sick'
+  );
+});
+
+test('the label is stripped even when the boilerplate comes first', () => {
+  // WellSky sometimes puts the parenthetical ahead of the label, so anchoring to
+  // the start of the string only works once the parenthetical is gone.
+  assert.equal(
+    code.cleanActivityNote_(
+      '(Added to shift that Occurs once on 07/18/2026 for Elias C.) Activity Note: No Shift as per Mom'
+    ),
+    'No Shift as per Mom'
+  );
+});
+
+test('a note that merely mentions activity notes is left alone', () => {
+  // Only a LEADING label is a duplicate of ours. Stripping the phrase anywhere
+  // would edit what a human actually wrote.
+  assert.equal(
+    code.cleanActivityNote_('Mom asked us to check the activity note: it was wrong'),
+    'Mom asked us to check the activity note: it was wrong'
+  );
+});
+
+test('the assembled block carries exactly one label', () => {
+  const records = [
+    {
+      caregiver_name: 'Labeled, Lee', client_name: 'Elias C.', shift_date: '2026-07-18',
+      official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'cancelled_by_client',
+      note: 'Activity Note: 07/18/26: No Shift as per Mom',
+    },
+  ];
+
+  const block = local(
+    code.aggregateByCaregiverAndDate_(records)['Labeled, Lee']['2026-07-18'].noteLines
+  )[0];
+
+  assert.match(block, /Activity Note: 07\/18\/26: No Shift as per Mom/);
+  assert.equal(block.match(/Activity Note:/g).length, 1, 'exactly one label');
+});

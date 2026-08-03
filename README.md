@@ -156,8 +156,11 @@ Activity Note: 07/14/26: On a vacation with their father, July 22-31
 
 WellSky pads every note with a bookkeeping parenthetical — `(Added to shift that Occurs once on
 07/27/2026 from 06:00 AM PDT ... assigned to caregiver Natalia Williams)`, often twice — which just
-repeats the shift, client and caregiver the cell already identifies. That's stripped from the payroll
-note; the full untouched text stays in the Log tab's `note` column.
+repeats the shift, client and caregiver the cell already identifies. Its note text also carries its
+own `Activity Note:` label, which the cell would otherwise double up
+(`Activity Note: Activity Note: 07/18/26: No Shift as per Mom`). Both are stripped from the grid
+notes; the full untouched text stays in the Log tab's `note` column. Only a *leading* label is
+removed — a note that happens to mention the phrase mid-sentence is left exactly as written.
 
 An **incomplete** shift's cell reads `0`, but its note line still shows the scheduled span, total,
 and client so the office knows what was supposed to happen. Those hours deliberately don't reach the
