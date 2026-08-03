@@ -89,6 +89,62 @@ function tabNotReadyReason(tab) {
   return null;
 }
 
+// A version mismatch has TWO directions, and they need opposite fixes.
+//
+// This used to assume one: that the Sheet was always the stale side. When the
+// Sheet was actually NEWER -- Code.gs re-deployed but the extension not yet
+// reloaded -- the panel told the user to re-deploy Code.gs until it reported the
+// OLDER version number. Following that means pasting an old Code.gs over a newer
+// one, which silently removes whatever the newer version added. Advice that
+// destroys work is worse than no advice.
+//
+// It also claimed "nothing was written properly" in both directions. The records
+// are posted BEFORE this check runs, so the write already happened; and a newer
+// Sheet understands everything an older extension sends, so those rows are fine.
+function versionMismatchReport(found, expected) {
+  if (found === undefined) {
+    return {
+      status: 'sheet is running OLD Code.gs, monthly tabs will not appear.',
+      lines: [
+        'The Sheet is running an older version that does not report one, but this ' +
+          `extension needs version ${expected}.`,
+        REDEPLOY_INSTRUCTIONS(expected),
+      ],
+    };
+  }
+  if (found < expected) {
+    return {
+      status: 'sheet is running OLD Code.gs, monthly tabs will not appear.',
+      lines: [
+        `The Sheet is running version ${found}, but this extension needs version ${expected}. ` +
+          'Monthly tabs will NOT appear until it is updated.',
+        REDEPLOY_INSTRUCTIONS(expected),
+      ],
+    };
+  }
+  return {
+    status: 'written, but this extension is out of date — reload it.',
+    lines: [
+      `The Sheet is running version ${found}, which is NEWER than this extension's ${expected}. ` +
+        'Your rows were still written — a newer Code.gs understands everything an older ' +
+        'extension sends.',
+      'Fix: reload the EXTENSION, not the Sheet — chrome://extensions, then the reload ' +
+        'arrow on this extension. Do NOT re-deploy Code.gs to match; that would replace ' +
+        'your current script with an older one and remove whatever it added.',
+    ],
+  };
+}
+
+function REDEPLOY_INSTRUCTIONS(expected) {
+  return (
+    'Fix: open the Sheet -> Extensions -> Apps Script, replace all the code with ' +
+    'apps_script/Code.gs, Save, then Deploy -> Manage deployments -> pencil icon -> ' +
+    'Version: "New version" -> Deploy. Do NOT create a separate new deployment, that ' +
+    'makes a different URL. To check what is live, open your Web App URL in a browser: ' +
+    `it should show script_version ${expected}.`
+  );
+}
+
 // Which page a scan actually ran against. Worth showing on every failure: the
 // panel picks the tab on its own, so without this a failure gives no way to
 // tell "wrong page" from "right page, real bug".
@@ -318,21 +374,12 @@ async function scanSchedule() {
       // Publishing a NEW DEPLOYMENT VERSION is what updates a live Web App;
       // editing and saving the script does not.
       if (sheetResult.script_version !== EXPECTED_SCRIPT_VERSION) {
-        const found = sheetResult.script_version === undefined
-          ? 'an older version that does not report one'
-          : `version ${sheetResult.script_version}`;
-        setStatus(parts.join(' — ') + ' — sheet is running OLD Code.gs, nothing was written properly.');
-        addLogEntry(
-          `The Sheet is running ${found}, but this extension needs version ${EXPECTED_SCRIPT_VERSION}. ` +
-            'Monthly Log/Payroll tabs will NOT appear until it is updated.'
-        );
-        addLogEntry(
-          'Fix: open the Sheet -> Extensions -> Apps Script, replace all the code with ' +
-            'apps_script/Code.gs, Save, then Deploy -> Manage deployments -> pencil icon -> ' +
-            'Version: "New version" -> Deploy. Do NOT create a separate new deployment, that ' +
-            'makes a different URL. To check what is live, open your Web App URL in a browser: ' +
-            `it should show script_version ${EXPECTED_SCRIPT_VERSION}.`
-        );
+        const report = versionMismatchReport(sheetResult.script_version, EXPECTED_SCRIPT_VERSION);
+        setStatus(parts.join(' — ') + ' — ' + report.status);
+        // The row count regardless of direction: it is the answer to "did my
+        // scan actually land?", which is the first thing anyone wants to know.
+        addLogEntry(`Sheet reported ${sheetResult.written} row(s) written/updated.`);
+        for (const line of report.lines) addLogEntry(line);
       } else {
         setStatus(parts.join(' — ') + ` — sent to sheet (${sheetResult.written} written).`);
         const months = (sheetResult.months || []).join(', ');

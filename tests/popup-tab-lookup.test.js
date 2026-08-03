@@ -50,7 +50,8 @@ function loadPopup({ tabs = [] } = {}) {
 
   dom.window.chrome = chrome;
   const sandboxSource = `${POPUP_SOURCE}\n;window.__findWellSkyTab = findWellSkyTab;` +
-    `\nwindow.__NO_WELLSKY_TAB = NO_WELLSKY_TAB;`;
+    `\nwindow.__NO_WELLSKY_TAB = NO_WELLSKY_TAB;` +
+    `\nwindow.__versionMismatchReport = versionMismatchReport;`;
   dom.window.eval(sandboxSource);
   return { dom, window: dom.window, queries };
 }
@@ -135,4 +136,47 @@ test('only matches clearcareonline over https, not a lookalike host', async () =
   });
 
   assert.equal(await window.__findWellSkyTab(), null);
+});
+
+test('a stale Sheet is told to re-deploy Code.gs', async () => {
+  const { window } = loadPopup();
+  const report = window.__versionMismatchReport(11, 12);
+
+  assert.match(report.status, /OLD Code\.gs/);
+  assert.match(report.lines.join(' '), /New version/);
+  assert.match(report.lines.join(' '), /script_version 12/, 'names the version to deploy to');
+});
+
+test('a Sheet with no version at all is treated as stale', async () => {
+  const { window } = loadPopup();
+  const report = window.__versionMismatchReport(undefined, 12);
+
+  assert.match(report.status, /OLD Code\.gs/);
+  assert.match(report.lines.join(' '), /New version/);
+});
+
+test('a NEWER Sheet is told to reload the extension, never to downgrade', async () => {
+  // The direction that used to give destructive advice: Code.gs re-deployed but
+  // the extension not yet reloaded. The old message said to re-deploy until the
+  // Sheet reported the OLDER number, which means pasting an old Code.gs over a
+  // newer one and silently removing whatever it added.
+  const { window } = loadPopup();
+  const report = window.__versionMismatchReport(12, 11);
+  const text = report.lines.join(' ');
+
+  assert.match(text, /reload the EXTENSION/);
+  assert.match(text, /Do NOT re-deploy/);
+  assert.doesNotMatch(text, /New version/, 'must not walk them into a downgrade');
+  assert.doesNotMatch(text, /script_version 11/, 'must not name the older version as the target');
+});
+
+test('a newer Sheet does not claim the rows were lost', async () => {
+  // The records are posted before the version check runs, and a newer Code.gs
+  // understands everything an older extension sends -- so "nothing was written"
+  // would send someone hunting for data that is already in the Sheet.
+  const { window } = loadPopup();
+  const report = window.__versionMismatchReport(12, 11);
+
+  assert.doesNotMatch(report.status, /nothing was written/);
+  assert.match(report.lines.join(' '), /rows were still written/);
 });
