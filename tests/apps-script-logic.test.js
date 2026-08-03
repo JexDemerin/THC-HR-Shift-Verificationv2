@@ -1249,3 +1249,168 @@ test('the hours cell keeps its status color under the new formatting', () => {
   const sheet = buildJulyPayroll();
   assert.equal(sheet._backgroundAt(3, 2), code.STATUS_COLORS.completed);
 });
+
+// ---- Client Hours: the same grid pivoted onto clients ----
+
+test('sibling care counts once for the caregiver but in full for each sibling', () => {
+  // The reason the two tabs exist separately. One caregiver, two siblings, the
+  // exact same 1-4pm: the caregiver worked three hours, and EACH child received
+  // three hours of care. Payroll must not double-pay; Client Hours must not
+  // halve what either child got.
+  const records = [
+    {
+      caregiver_name: 'Solo, Sam', client_name: 'Sibling, One', shift_date: '2026-07-27',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+    {
+      caregiver_name: 'Solo, Sam', client_name: 'Sibling, Two', shift_date: '2026-07-27',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+  ];
+
+  const byCaregiver = code.aggregateByCaregiverAndDate_(records);
+  assert.equal(
+    byCaregiver['Solo, Sam']['2026-07-27'].totalMinutes, 180,
+    'the caregiver worked three hours, not six'
+  );
+
+  const byClient = code.aggregateByClientAndDate_(records);
+  assert.equal(byClient['Sibling, One']['2026-07-27'].totalMinutes, 180);
+  assert.equal(byClient['Sibling, Two']['2026-07-27'].totalMinutes, 180);
+});
+
+test('a client with two caregivers in a day sums both visits', () => {
+  // The mirror of a caregiver with two clients: a morning and an afternoon
+  // caregiver on one child is six hours of care, and both appear in the note.
+  const records = [
+    {
+      caregiver_name: 'Morning, Mo', client_name: 'Shared, Sky', shift_date: '2026-07-27',
+      official_time_in: '9:00am', official_time_out: '12:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+    {
+      caregiver_name: 'Afternoon, Ana', client_name: 'Shared, Sky', shift_date: '2026-07-27',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+  ];
+
+  const cell = code.aggregateByClientAndDate_(records)['Shared, Sky']['2026-07-27'];
+
+  assert.equal(cell.totalMinutes, 360);
+  assert.equal(code.cellValueFor_('completed', cell.totalMinutes, true), 6);
+  assert.equal(local(cell.noteLines).length, 2);
+});
+
+test("the client note names the caregiver, not the client's own name", () => {
+  // Naming the row's own subject would just repeat the row label.
+  const records = [
+    {
+      caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+      shift_date: '2026-07-27', official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'completed',
+      note: 'Client cancelled, family out of town',
+    },
+  ];
+
+  const cell = code.aggregateByClientAndDate_(records)['Kozuka-Ssenyan, Mia']['2026-07-27'];
+
+  assert.equal(
+    local(cell.noteLines)[0],
+    '07/27/2026 (Barberi, Miku)\n' +
+      '9:00am - 4:00pm = 7h\n' +
+      '-----------------------------\n' +
+      'Activity Note: Client cancelled, family out of town'
+  );
+});
+
+test('idle-caregiver placeholder rows never become a phantom "-" client', () => {
+  // The Log carries a row per caregiver per past date, with client_name "-" for
+  // the ones who did not work. Pivoted naively those all collapse into a client
+  // called "-" spanning the whole month.
+  const records = [
+    {
+      caregiver_name: 'Idle, Ida', client_name: '-', shift_date: '2026-07-27',
+      official_time_in: '-', official_time_out: '-', status: 'no_shift',
+      duration_minutes: null, label_duration_minutes: null,
+    },
+    {
+      caregiver_name: 'Busy, Bea', client_name: 'Real, Rae', shift_date: '2026-07-27',
+      official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'completed',
+    },
+  ];
+
+  const byClient = code.aggregateByClientAndDate_(records);
+
+  assert.deepEqual(Object.keys(byClient), ['Real, Rae']);
+});
+
+test('an incomplete visit reads 0 in the client grid too', () => {
+  const records = [
+    {
+      caregiver_name: 'Missed, Mel', client_name: 'Waiting, Wren', shift_date: '2026-07-27',
+      official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 0, label_duration_minutes: 420, status: 'incomplete',
+    },
+  ];
+
+  const cell = code.aggregateByClientAndDate_(records)['Waiting, Wren']['2026-07-27'];
+
+  assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, cell.hasRealShift), 0);
+  // The scheduled span still shows in the note, so the office can see what was
+  // supposed to happen while the total stays zero.
+  assert.match(local(cell.noteLines)[0], /9:00am - 4:00pm = 7h/);
+});
+
+test('the Client Hours tab is named alongside the others', () => {
+  assert.equal(code.clientHoursSheetName_('2026-07'), '2026 - 07 Client Hours (July)');
+  assert.equal(code.clientHoursSheetName_('2026-12'), '2026 - 12 Client Hours (December)');
+});
+
+test('the client grid gets the same layout as the payroll grid', () => {
+  const ss = makeFakeSpreadsheet();
+  code.upsertLogRows_('2026-07', [
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+      shift_date: '2026-07-01', official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420,
+      event_id: 'ch-1', row_key: 'ch-1',
+    }),
+  ]);
+  code.rebuildClientHoursSheet_('2026-07');
+  const sheet = ss.sheetNamed(code.clientHoursSheetName_('2026-07'));
+
+  assert.equal(sheet._cells[0][0], 'Client', 'the corner names the axis');
+  assert.equal(sheet._cells[0][1], '7/1');
+  assert.equal(sheet._cells[1][1], 'Wed');
+  assert.equal(sheet._cells[2][0], 'Kozuka-Ssenyan, Mia', 'clients down the left');
+  assert.equal(sheet._cells[2][1], 7);
+  // Same formatting as Payroll -- 45px dates, 20px spacer, green headers, centered.
+  assert.equal(sheet._widthOf(2), 45);
+  assert.equal(sheet._widthOf(6), 20);
+  assert.equal(sheet._backgroundAt(1, 2), '#93c47d');
+  assert.equal(sheet._alignmentAt(3, 2), 'center');
+  assert.equal(sheet._backgroundAt(3, 2), code.STATUS_COLORS.completed);
+});
+
+test('a scan rebuilds both grid tabs, not just payroll', () => {
+  const ss = makeFakeSpreadsheet();
+  code.doPost({
+    postData: {
+      contents: JSON.stringify([
+        logRecord({
+          caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+          shift_date: '2026-07-01', official_time_in: '9:00am', official_time_out: '4:00pm',
+          duration_minutes: 420, label_duration_minutes: 420,
+          event_id: 'both-1', row_key: 'both-1',
+        }),
+      ]),
+    },
+  });
+
+  assert.ok(ss.sheetNamed(code.payrollSheetName_('2026-07')), 'payroll tab exists');
+  assert.ok(ss.sheetNamed(code.clientHoursSheetName_('2026-07')), 'client hours tab exists');
+});

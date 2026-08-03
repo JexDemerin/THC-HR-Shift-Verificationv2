@@ -167,14 +167,42 @@ cell total, since nobody has verified them yet.
 same hours shows up as two shifts with identical start and end times, and those hours were only
 worked once. So `1:00pm-4:00pm` for two siblings totals **3 hours, not 6**. Both clients still get
 their own note line. Only exactly-identical times count — back-to-back or partially overlapping
-shifts are both counted in full.
+shifts are both counted in full. (This is the one place the Client Hours tab deliberately disagrees
+— see below.)
 
 A date with no record at all (not yet scanned, or still in the future) is left **blank** rather than
 `-`, since `-` specifically means "scanned, and they didn't work".
 
+- **`2026 - 07 Client Hours (July)`** — the same grid pivoted onto **clients**, built from the same
+  Log tab. Identical layout, colors, rounding and hover notes; the only differences are that the left
+  column lists clients and each note names the **caregiver** rather than the client (naming the row's
+  own subject would just repeat the row label).
+
+**Payroll answers "how many hours did this caregiver work?"; Client Hours answers "how many hours of
+care did this client receive?"** Those are the same number except for sibling care, where they
+legitimately differ:
+
+| | Payroll | Client Hours |
+|---|---|---|
+| One caregiver, two siblings, both `1:00pm-4:00pm` | **3h** on the caregiver | **3h** on *each* child |
+
+The caregiver worked three hours and must not be paid for six; each child received three hours of
+care and neither should show half of it. Pivoting the axis produces this on its own — the
+"identical times count once" rule is scoped within a cell, and two siblings are two different cells
+on the client axis. So a day's totals across the two tabs won't always match, and that's correct
+rather than a bug.
+
+Two things follow from clients having no equivalent of WellSky's caregiver column:
+
+- **There is no client roster**, so a client only appears if they had a shift. A client with no
+  visits in a scanned week has no row at all, which means blank cells are more common here than in
+  Payroll and `-` appears less often.
+- **The idle-caregiver placeholder rows are excluded.** Those carry `client_name` of `-`, which
+  pivoted naively would collapse into a phantom client called `-` spanning the whole month.
+
 Scanning a shift with a click-through takes a few seconds each (open, read, close), so a schedule
 with many completed shifts visible at once will take a while to finish — that's expected. Since each
-scan only sees one visible week, a full month's Payroll tab fills in over several scans.
+scan only sees one visible week, a full month's grid tabs fill in over several scans.
 
 ### Re-scanning: what changes and what doesn't
 

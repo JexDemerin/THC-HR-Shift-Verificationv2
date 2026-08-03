@@ -3,7 +3,7 @@
 //
 // Receives the array of shift records the extension's background.js posts
 // (see extension/background.js -- body is `JSON.stringify(records)`, a bare
-// array, not wrapped in an object) and mirrors them into two tabs PER MONTH:
+// array, not wrapped in an object) and mirrors them into three tabs PER MONTH:
 //
 //   "2026 - 07 Log (July)"     -- one row per shift (or per caregiver/day with
 //                          no shift, which reads "-"), sorted by date then
@@ -14,20 +14,24 @@
 //                          holds that caregiver's total hours for the day as a
 //                          decimal, colored by shift status, with a hover note
 //                          breaking down each client visit and its note.
+//   "2026 - 07 Client Hours (July)" -- the same grid pivoted onto clients. Hours
+//                          are what the CLIENT received rather than what the
+//                          caregiver worked, so sibling care counts once in
+//                          Payroll but in full for each sibling here.
 //
 // Which month a record lands in is decided by its own shift_date, so a scan
 // spanning a month boundary files each row correctly.
 //
-// The Log tab is the source of truth: every scan upserts into it, then the
-// Payroll tab for that month is rebuilt from it. That keeps Payroll correct
-// even though each scan only sees one week of the schedule at a time.
+// The Log tab is the source of truth: every scan upserts into it, then both grid
+// tabs for that month are rebuilt from it. That keeps them correct even though
+// each scan only sees one week of the schedule at a time.
 
 // Bumped whenever this file changes in a way the extension depends on.
 // Reported back on every doPost, and readable by opening the Web App URL in a
 // browser (see doGet), so "is the deployed script actually current?" is a
 // question with a definite answer instead of a guess. Saving the script does
 // NOT change what a published Web App serves -- a new deployment version does.
-var SCRIPT_VERSION = 11;
+var SCRIPT_VERSION = 12;
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -165,6 +169,12 @@ function logSheetName_(monthKey) {
 
 function payrollSheetName_(monthKey) {
   return sheetNameFor_(monthKey, 'Payroll');
+}
+
+// Same grid as Payroll, pivoted onto clients. Named with the same scheme so the
+// month's three tabs stay together in chronological order.
+function clientHoursSheetName_(monthKey) {
+  return sheetNameFor_(monthKey, 'Client Hours');
 }
 
 // Every naming scheme this script has used, so a tab created under an older one
@@ -585,11 +595,38 @@ function shortDateLabel_(isoDate) {
   return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10); // "2026-07-05" -> "7/5"
 }
 
-// caregiver -> date -> { totalMinutes, statuses, noteLines, hasRealShift }
+// The two grid views are the same aggregation seen from opposite ends, so they
+// share one function rather than drifting apart:
+//
+//   Payroll      -- axis = caregiver, note names the client
+//   Client Hours -- axis = client,    note names the caregiver
+//
+// Swapping the axis is all sibling care needs. One caregiver covering two
+// siblings 1-4pm is ONE cell in Payroll (3h, counted once -- they only worked
+// three hours) and TWO cells in Client Hours (3h each -- each child received
+// three hours of care). The dedup below is keyed within a cell, so pivoting
+// makes it stop applying across siblings without any special case. Totals
+// legitimately differ between the two tabs for those days.
 function aggregateByCaregiverAndDate_(records) {
+  return aggregateByAxisAndDate_(records, 'caregiver_name', 'client_name');
+}
+
+// Clients have no equivalent of WellSky's caregiver column, so there is no
+// client roster to enumerate -- a client exists here only if they had a shift.
+// The idle-caregiver placeholder rows carry client_name "-", which would
+// otherwise become a phantom client, so they are dropped rather than plotted.
+function aggregateByClientAndDate_(records) {
+  var realShifts = records.filter(function (record) {
+    return record.status !== 'no_shift';
+  });
+  return aggregateByAxisAndDate_(realShifts, 'client_name', 'caregiver_name');
+}
+
+// axis -> date -> { totalMinutes, statuses, noteLines, hasRealShift }
+function aggregateByAxisAndDate_(records, axisField, counterpartField) {
   var byCaregiver = {};
   records.forEach(function (record) {
-    var caregiver = record.caregiver_name;
+    var caregiver = record[axisField];
     var date = normalizeDateValue_(record.shift_date);
     if (!caregiver || !date) return;
 
@@ -600,13 +637,15 @@ function aggregateByCaregiverAndDate_(records) {
         statuses: [],
         noteLines: [],
         hasRealShift: false,
-        // Sibling care: one caregiver looking after two siblings in the same
-        // house over the exact same hours shows up as two separate shifts
-        // with identical start AND end times. Those hours were only worked
-        // once, so minutes are tracked PER DISTINCT TIME RANGE and summed at
-        // the end -- deliberately not "first one wins", which would zero out
-        // a real shift that happened to share its times with an incomplete
-        // one processed just before it. Both clients still show in the note.
+        // Sibling care (Payroll axis): one caregiver looking after two siblings
+        // in the same house over the exact same hours shows up as two separate
+        // shifts with identical start AND end times. Those hours were only
+        // worked once, so minutes are tracked PER DISTINCT TIME RANGE and
+        // summed at the end -- deliberately not "first one wins", which would
+        // zero out a real shift that happened to share its times with an
+        // incomplete one processed just before it. Both clients still show in
+        // the note. On the client axis siblings are separate cells, so this
+        // only fires there if one client somehow had two identical shifts.
         minutesByTimeRange: {},
         timeRangeCounts: {},
         siblingCare: false
@@ -639,16 +678,18 @@ function aggregateByCaregiverAndDate_(records) {
     }
 
     if (noteMinutes !== null) {
-      // Per shift: date and client, then the hours, then its activity note if
-      // it has one -- hours first, note last:
+      // Per shift: date and the OTHER party, then the hours, then its activity
+      // note if it has one -- hours first, note last:
       //   07/27/2026 (Kozuka-Ssenyan, Mia)
       //   9:00am - 4:00pm = 7h
       //   -----------------------------
       //   Activity Note: On a vacation with their father, July 22-31
       // Same shape whatever the status; the cell's own color already says
-      // which shifts need follow-up, so the note doesn't repeat it.
+      // which shifts need follow-up, so the note doesn't repeat it. On the
+      // client axis the parenthetical names the caregiver instead -- naming the
+      // row's own subject would just repeat the row label.
       var block =
-        formatMmDdYyyy_(date) + ' (' + (record.client_name || 'unknown client') + ')\n' +
+        formatMmDdYyyy_(date) + ' (' + (record[counterpartField] || 'unknown') + ')\n' +
         normalizeTimeValue_(record.official_time_in || '?') + ' - ' +
         normalizeTimeValue_(record.official_time_out || '?') +
         ' = ' + formatHoursMinutes_(noteMinutes);
@@ -689,9 +730,32 @@ function cellValueFor_(status, totalMinutes, hasRealShift) {
   return roundedDecimalHours_(totalMinutes);
 }
 
+// Caregivers down the left. Hours are what the caregiver worked, so sibling
+// care counts once.
 function rebuildPayrollSheet_(monthKey) {
   var records = readLogRecords_(monthKey);
-  var sheet = getOrCreateSheet_(payrollSheetName_(monthKey), null);
+  return rebuildGridSheet_(
+    payrollSheetName_(monthKey),
+    monthKey,
+    'Caregiver',
+    aggregateByCaregiverAndDate_(records)
+  );
+}
+
+// The same grid pivoted onto clients. Hours are what the client received, so
+// two siblings each show the full span rather than sharing it.
+function rebuildClientHoursSheet_(monthKey) {
+  var records = readLogRecords_(monthKey);
+  return rebuildGridSheet_(
+    clientHoursSheetName_(monthKey),
+    monthKey,
+    'Client',
+    aggregateByClientAndDate_(records)
+  );
+}
+
+function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver) {
+  var sheet = getOrCreateSheet_(sheetName, null);
   // clear() drops values and formatting but leaves cell notes behind, which
   // would strand an old hours breakdown on a cell whose data has since
   // changed -- so notes are cleared explicitly. The whole tab is rebuilt from
@@ -701,15 +765,14 @@ function rebuildPayrollSheet_(monthKey) {
   sheet.clearNotes();
 
   var columns = buildPayrollColumns_(monthKey);
-  var byCaregiver = aggregateByCaregiverAndDate_(records);
   var caregivers = Object.keys(byCaregiver).sort(function (a, b) {
     return a.toLowerCase() < b.toLowerCase() ? -1 : 1;
   });
 
-  var width = columns.length + 1; // +1 for the caregiver-name column
+  var width = columns.length + 1; // +1 for the row-label column
 
   // Header rows: dates across the top, weekday beneath each.
-  var dateRow = ['Caregiver'];
+  var dateRow = [axisHeader];
   var weekdayRow = [''];
   columns.forEach(function (column) {
     dateRow.push(column.spacer ? '' : shortDateLabel_(column.date));
@@ -854,6 +917,7 @@ function doPost(e) {
     migrateLegacyTabNames_(monthKey);
     written += upsertLogRows_(monthKey, byMonth[monthKey]);
     rebuildPayrollSheet_(monthKey);
+    rebuildClientHoursSheet_(monthKey);
     monthsTouched.push(monthLabelOf_(monthKey));
   });
 
