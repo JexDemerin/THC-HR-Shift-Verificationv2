@@ -33,6 +33,14 @@
 // NOT change what a published Web App serves -- a new deployment version does.
 var SCRIPT_VERSION = 12;
 
+// Changes on EVERY edit to this file, including ones the extension does not
+// depend on -- so "did my re-deploy actually take?" has a definite answer.
+// SCRIPT_VERSION alone cannot answer it: a Sheet-only fix leaves it unchanged on
+// purpose (bumping it would force an extension update for nothing), which left
+// no way to tell a deployed fix from a forgotten one. Open the Web App URL in a
+// browser and read `build`.
+var CODE_GS_BUILD = 'activity-note-label-2';
+
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
 // It's read straight off the schedule with no click, and it's what
@@ -577,7 +585,11 @@ function cleanActivityNote_(note) {
   // parenthetical strip on purpose: WellSky sometimes puts "(Added to shift...)"
   // in front of the label, so anchoring to the start only works once that is
   // gone. The Log tab's `note` column still holds the full untouched text.
-  text = text.replace(/^(?:activity\s*notes?\s*:\s*)+/i, '');
+  // The leading [^A-Za-z0-9]* tolerates junk in front of the label -- a dash, a
+  // colon, a bullet, or a fragment the parenthetical strip left behind. Without
+  // it the ^ anchor fails and the label survives, which is not obvious from
+  // looking at the cell.
+  text = text.replace(/^(?:[^A-Za-z0-9]*activity\s*notes?\s*:\s*)+/i, '');
   return text.trim();
 }
 
@@ -896,6 +908,7 @@ function doGet() {
   return jsonOutput_({
     ok: true,
     script_version: SCRIPT_VERSION,
+    build: CODE_GS_BUILD,
     log_headers: LOG_HEADERS,
     message: 'THC WellSky Shift Log — Apps Script is deployed and reachable.'
   });
@@ -935,6 +948,7 @@ function doPost(e) {
   return jsonOutput_({
     ok: true,
     script_version: SCRIPT_VERSION,
+    build: CODE_GS_BUILD,
     written: written,
     // Surfaced rather than silently swallowed: a record with no parseable
     // shift_date has no month to file under, so it is not written anywhere.

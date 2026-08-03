@@ -1471,3 +1471,57 @@ test('the assembled block carries exactly one label', () => {
   assert.match(block, /Activity Note: 07\/18\/26: No Shift as per Mom/);
   assert.equal(block.match(/Activity Note:/g).length, 1, 'exactly one label');
 });
+
+test('the label is stripped even with junk in front of it', () => {
+  // The ^ anchor fails silently if anything precedes the label -- a dash, a
+  // bullet, or a fragment the parenthetical strip left behind -- and the result
+  // looks identical to the fix not being deployed at all.
+  assert.equal(
+    code.cleanActivityNote_('- Activity Note: 07/30/26: care not needed'),
+    '07/30/26: care not needed'
+  );
+  assert.equal(
+    code.cleanActivityNote_('• Activity Note: care not needed'),
+    'care not needed'
+  );
+  assert.equal(
+    code.cleanActivityNote_(': Activity Note: care not needed'),
+    'care not needed'
+  );
+  // A non-breaking space inside the label, as HTML often carries.
+  assert.equal(
+    code.cleanActivityNote_('Activity Note: care not needed'),
+    'care not needed'
+  );
+});
+
+test('doGet reports a build marker so a Sheet-only fix can be verified', () => {
+  // SCRIPT_VERSION deliberately does not move for a fix the extension does not
+  // depend on -- bumping it would force an extension update for nothing. That
+  // left "did my re-deploy actually take?" unanswerable, which is how a deployed
+  // fix and a forgotten one came to look identical. The build marker answers it.
+  const captured = [];
+  code.ContentService.createTextOutput = (text) => {
+    captured.push(text);
+    return { setMimeType: () => 'output' };
+  };
+
+  code.doGet();
+
+  const payload = JSON.parse(captured[0]);
+  assert.ok(payload.build, 'doGet carries a build marker');
+  assert.equal(payload.build, code.CODE_GS_BUILD);
+});
+
+test('doPost reports the build marker too', () => {
+  const captured = [];
+  makeFakeSpreadsheet();
+  code.ContentService.createTextOutput = (text) => {
+    captured.push(text);
+    return { setMimeType: () => 'output' };
+  };
+
+  code.doPost({ postData: { contents: JSON.stringify([]) } });
+
+  assert.equal(JSON.parse(captured[0]).build, code.CODE_GS_BUILD);
+});
