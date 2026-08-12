@@ -39,7 +39,7 @@ var SCRIPT_VERSION = 12;
 // purpose (bumping it would force an extension update for nothing), which left
 // no way to tell a deployed fix from a forgotten one. Open the Web App URL in a
 // browser and read `build`.
-var CODE_GS_BUILD = 'activity-note-label-2';
+var CODE_GS_BUILD = 'mixed-day-hours-1';
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -98,20 +98,41 @@ var STATUS_COLORS = {
   unparsed: '#d9d2e9'                // leftover: something needs a human look
 };
 
-// Most urgent status wins the cell when a caregiver worked more than one
-// shift that day -- an incomplete log must never be hidden behind a
-// completed one.
+// Which status decides a day's COLOR when a caregiver worked more than one shift.
+// Ordered by what the day needs from a human, NOT by how bad the status sounds.
+// A cancellation is a SETTLED fact -- nothing to chase -- so it must not outrank
+// real work done the same day. A missed clock-in is unresolved and still does
+// outrank it, since a day needing verification must never read as a finished
+// green one.
+//
+// Cancelled used to sit above completed, which turned any day mixing a
+// cancellation with a worked shift blue: two cancelled 6-8am sibling visits plus
+// a completed 1-4pm one showed as cancelled, and the three real hours vanished.
 var STATUS_URGENCY = [
   'unparsed',
   'incomplete',
+  'ongoing',
+  'completed',
   'cancelled_by_client',
   'cancelled_by_office',
   'cancelled_by_caregiver',
-  'ongoing',
-  'completed',
   'upcoming',
   'no_shift'
 ];
+
+// Whether a shift's hours belong in the day's total. A cancelled visit did not
+// happen, and a missed clock-in is not verified yet, so neither adds hours --
+// but neither may ZERO the day either, which is what deciding the whole cell
+// from one winning status used to do. Hours are summed per shift; the color
+// still comes from the most urgent status across the day.
+function contributesHours_(status) {
+  if (status === 'no_shift') return false;
+  if (status === 'incomplete') return false;
+  if (status === 'upcoming') return false;
+  if (status === 'ongoing') return false;
+  if (String(status).indexOf('cancelled_') === 0) return false;
+  return true; // completed, and unparsed (its label hours are real; purple flags it)
+}
 
 // Payroll tab layout. A date column only ever holds "7/27", "Mon" or a number
 // like 7.25, so it can be narrow -- and it has to be, since a month puts 31 of
@@ -691,12 +712,16 @@ function aggregateByAxisAndDate_(records, axisField, counterpartField) {
     cell.timeRangeCounts[timeRangeKey] = (cell.timeRangeCounts[timeRangeKey] || 0) + 1;
     if (cell.timeRangeCounts[timeRangeKey] > 1) cell.siblingCare = true;
 
-    if (minutes !== null) {
-      // Highest wins for a shared time range, so a completed shift's real
-      // hours aren't lost to an incomplete sibling shift's zero.
+    // A cancelled or unverified shift occupies its time range but earns no
+    // hours. Recording it as 0 rather than skipping it matters for sibling
+    // care: the range still has to be present so a completed shift sharing it
+    // is not double-counted, and "highest wins" below then lets the completed
+    // one's real hours through instead of the cancelled one's zero.
+    var earned = contributesHours_(record.status) ? minutes : 0;
+    if (earned !== null) {
       var existing = cell.minutesByTimeRange[timeRangeKey];
-      if (existing === undefined || minutes > existing) {
-        cell.minutesByTimeRange[timeRangeKey] = minutes;
+      if (existing === undefined || earned > existing) {
+        cell.minutesByTimeRange[timeRangeKey] = earned;
       }
     }
 
@@ -744,13 +769,18 @@ function toMinutes_(value) {
   return isNaN(number) ? null : number;
 }
 
+// totalMinutes already counts only the shifts that earn hours (see
+// contributesHours_), so any hours present are real hours worked -- show them,
+// whatever else happened that day. The status is consulted only when there are
+// none, to say WHY the day is empty. Deciding the whole cell from the winning
+// status is what discarded a completed shift's hours whenever a cancellation
+// shared the day with it.
 function cellValueFor_(status, totalMinutes, hasRealShift) {
   if (!hasRealShift) return '-';
+  if (totalMinutes > 0) return roundedDecimalHours_(totalMinutes);
   if (status === 'ongoing') return 'ongoing';
-  if (status === 'incomplete') return 0;
-  if (status.indexOf('cancelled_') === 0) return 0;
   if (status === 'upcoming') return '';
-  return roundedDecimalHours_(totalMinutes);
+  return 0;
 }
 
 // Caregivers down the left. Hours are what the caregiver worked, so sibling

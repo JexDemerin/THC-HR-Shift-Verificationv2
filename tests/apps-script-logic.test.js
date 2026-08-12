@@ -122,7 +122,12 @@ test('marks each date with its real weekday', () => {
 test('an incomplete shift wins the cell over a completed one', () => {
   assert.equal(code.mostUrgentStatus_(['completed', 'incomplete']), 'incomplete');
   assert.equal(code.mostUrgentStatus_(['completed', 'ongoing']), 'ongoing');
-  assert.equal(code.mostUrgentStatus_(['completed', 'cancelled_by_client']), 'cancelled_by_client');
+  // A cancellation is settled -- nothing to chase -- so it must not outrank real
+  // work done the same day, or a day with hours in it reads as a cancelled one.
+  assert.equal(code.mostUrgentStatus_(['completed', 'cancelled_by_client']), 'completed');
+  assert.equal(code.mostUrgentStatus_(['cancelled_by_office', 'completed']), 'completed');
+  // Incomplete still outranks completed: unresolved beats settled.
+  assert.equal(code.mostUrgentStatus_(['completed', 'incomplete']), 'incomplete');
   assert.equal(code.mostUrgentStatus_(['completed']), 'completed');
   assert.equal(code.mostUrgentStatus_(['no_shift']), 'no_shift');
 });
@@ -138,15 +143,28 @@ test('cell shows rounded decimal hours for a completed day', () => {
   assert.equal(code.cellValueFor_('completed', 245, true), 4); // 4h5m rounds down
 });
 
-test('cell shows 0 for incomplete and cancelled shifts', () => {
-  assert.equal(code.cellValueFor_('incomplete', 480, true), 0);
-  assert.equal(code.cellValueFor_('cancelled_by_client', 480, true), 0);
-  assert.equal(code.cellValueFor_('cancelled_by_office', 480, true), 0);
-  assert.equal(code.cellValueFor_('cancelled_by_caregiver', 480, true), 0);
+test('cell shows 0 when the day earned no hours', () => {
+  // contributesHours_ keeps these out of the total upstream, so what reaches the
+  // cell is 0 -- and 0 is what shows. (Passing a nonzero total with one of these
+  // statuses is not a state the aggregation can produce.)
+  assert.equal(code.cellValueFor_('incomplete', 0, true), 0);
+  assert.equal(code.cellValueFor_('cancelled_by_client', 0, true), 0);
+  assert.equal(code.cellValueFor_('cancelled_by_office', 0, true), 0);
+  assert.equal(code.cellValueFor_('cancelled_by_caregiver', 0, true), 0);
+});
+
+test('real hours show even when a more urgent status won the color', () => {
+  // The reported bug: two cancelled 6-8am sibling visits plus a completed
+  // 1-4pm one. The day earned three hours and the cell must say so, whatever
+  // color the status ranking picked.
+  assert.equal(code.cellValueFor_('cancelled_by_client', 180, true), 3);
+  assert.equal(code.cellValueFor_('incomplete', 180, true), 3);
 });
 
 test('cell says "ongoing" for a shift still in progress', () => {
-  assert.equal(code.cellValueFor_('ongoing', 120, true), 'ongoing');
+  // An in-progress shift earns no hours yet, so its total arrives as 0 and the
+  // status is what the cell has to say.
+  assert.equal(code.cellValueFor_('ongoing', 0, true), 'ongoing');
 });
 
 // ---- Aggregation across clients ----
@@ -360,10 +378,12 @@ test('a completed shift keeps its hours when an incomplete sibling shares its ti
   const cell = byCaregiver['Mixed, Morgan']['2026-07-27'];
 
   assert.equal(cell.totalMinutes, 180, 'the real hours survive, counted once');
-  // The cell itself still reads 0, because incomplete outranks completed --
-  // a missing clock-in has to stay visible for follow-up.
+  // Incomplete still wins the COLOR -- a missing clock-in has to stay visible
+  // for follow-up -- but the hours show. The caregiver demonstrably worked
+  // 1-4pm; one of the two sibling logs proves it. Reading 0 here meant a
+  // caregiver showed no hours for a day they had provably worked.
   assert.equal(code.mostUrgentStatus_(local(cell.statuses)), 'incomplete');
-  assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 0);
+  assert.equal(code.cellValueFor_('incomplete', cell.totalMinutes, true), 3);
 });
 
 // ---- Header row integrity ----
@@ -1524,4 +1544,84 @@ test('doPost reports the build marker too', () => {
   code.doPost({ postData: { contents: JSON.stringify([]) } });
 
   assert.equal(JSON.parse(captured[0]).build, code.CODE_GS_BUILD);
+});
+
+test('a day mixing cancellations with real work shows the hours, in green', () => {
+  // The reported case, end to end: 6:00-8:00a Pallapati Samson and Pallapati
+  // Aaron both cancelled by the client, plus a completed 1:00-4:00p Wang
+  // Jackson. The cell was reading blue with no hours; it must read 3, green.
+  const records = [
+    {
+      caregiver_name: 'Mixed, Day', client_name: 'Pallapati, Samson', shift_date: '2026-07-30',
+      official_time_in: '6:00am', official_time_out: '8:00am',
+      duration_minutes: 120, label_duration_minutes: 120, status: 'cancelled_by_client',
+    },
+    {
+      caregiver_name: 'Mixed, Day', client_name: 'Pallapati, Aaron', shift_date: '2026-07-30',
+      official_time_in: '6:00am', official_time_out: '8:00am',
+      duration_minutes: 120, label_duration_minutes: 120, status: 'cancelled_by_client',
+    },
+    {
+      caregiver_name: 'Mixed, Day', client_name: 'Wang, Jackson', shift_date: '2026-07-30',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Mixed, Day']['2026-07-30'];
+  const status = code.mostUrgentStatus_(local(cell.statuses));
+
+  assert.equal(cell.totalMinutes, 180, 'only the worked shift adds hours');
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 3);
+  assert.equal(status, 'completed');
+  assert.equal(code.STATUS_COLORS[status], '#b7e1cd', 'green, not the cancelled blue');
+  // All three visits still appear in the hover note, cancellations included.
+  assert.equal(local(cell.noteLines).length, 3);
+});
+
+test('a day of nothing but cancellations still reads 0, in its own color', () => {
+  // The other half: with no real work, the cancellation is what the day was,
+  // and the cell must not suddenly claim the cancelled hours.
+  const records = [
+    {
+      caregiver_name: 'AllOff, Ali', client_name: 'Client C', shift_date: '2026-07-30',
+      official_time_in: '6:00am', official_time_out: '8:00am',
+      duration_minutes: 120, label_duration_minutes: 120, status: 'cancelled_by_client',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['AllOff, Ali']['2026-07-30'];
+  const status = code.mostUrgentStatus_(local(cell.statuses));
+
+  assert.equal(cell.totalMinutes, 0);
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 0);
+  assert.equal(status, 'cancelled_by_client');
+  // The scheduled span still shows in the note so the office can see what was
+  // meant to happen.
+  assert.match(local(cell.noteLines)[0], /6:00am - 8:00am = 2h/);
+});
+
+test('an unresolved shift still colors a day that also has real hours', () => {
+  // Hours showing must not cost the day its warning: a missed clock-in alongside
+  // a completed shift still turns the cell red, it just no longer erases the
+  // hours that were worked.
+  const records = [
+    {
+      caregiver_name: 'Both, Bo', client_name: 'Client A', shift_date: '2026-07-30',
+      official_time_in: '6:00am', official_time_out: '8:00am',
+      duration_minutes: 0, label_duration_minutes: 120, status: 'incomplete',
+    },
+    {
+      caregiver_name: 'Both, Bo', client_name: 'Client B', shift_date: '2026-07-30',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Both, Bo']['2026-07-30'];
+  const status = code.mostUrgentStatus_(local(cell.statuses));
+
+  assert.equal(status, 'incomplete', 'the day still needs following up');
+  assert.equal(code.STATUS_COLORS[status], '#f4c7c3', 'still red');
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 3);
 });
