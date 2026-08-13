@@ -180,3 +180,55 @@ test('a newer Sheet does not claim the rows were lost', async () => {
   assert.doesNotMatch(report.status, /nothing was written/);
   assert.match(report.lines.join(' '), /rows were still written/);
 });
+
+// ---- The panel's markup matches what popup.js reaches for ----
+
+test('every element popup.js grabs exists in popup.html', () => {
+  // popup.js takes each of these at load time and attaches listeners without
+  // null-checking, so a single renamed or dropped id throws before any listener
+  // is bound and the whole panel goes dead -- with nothing on screen to say why.
+  // Restyling the page is exactly when that happens.
+  const { window } = loadPopup();
+  const required = [
+    'status', 'log', 'exportBtn', 'scanBtn', 'inspectClickBtn',
+    'closeBtn', 'webhookUrl', 'saveWebhookBtn', 'closeHint',
+    'settings', 'settingsBtn',
+  ];
+
+  for (const id of required) {
+    assert.ok(window.document.getElementById(id), `#${id} is missing from popup.html`);
+  }
+});
+
+test('the header names the tool and the org', () => {
+  const { window } = loadPopup();
+
+  assert.equal(window.document.querySelector('.brandbar h1').textContent, 'WellSky Shift Scanner');
+  assert.match(window.document.querySelector('.brandbar .org').textContent, /Together Homecare/);
+});
+
+test('the gear opens and closes the settings section', () => {
+  const { window } = loadPopup();
+  const gear = window.document.getElementById('settingsBtn');
+  const settings = window.document.getElementById('settings');
+
+  assert.equal(settings.open, false);
+  assert.equal(gear.getAttribute('aria-expanded'), 'false');
+
+  gear.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.equal(settings.open, true);
+  assert.equal(gear.getAttribute('aria-expanded'), 'true', 'the control reports its own state');
+
+  gear.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.equal(settings.open, false);
+  assert.equal(gear.getAttribute('aria-expanded'), 'false');
+});
+
+test('the settings section survives the gear never binding', () => {
+  // The gear hides the <summary> via CSS, so if the section were a plain div the
+  // settings would be unreachable whenever that listener failed. Keeping it a
+  // real <details> means the fallback is structural, not hopeful.
+  const { window } = loadPopup();
+  assert.equal(window.document.getElementById('settings').tagName, 'DETAILS');
+  assert.ok(window.document.querySelector('#settings > summary'), 'summary still in the markup');
+});

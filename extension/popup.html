@@ -2,140 +2,277 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>THC WellSky Shift Log</title>
+    <title>WellSky Shift Scanner</title>
     <style>
-      body {
-        /* Fluid rather than the fixed width an action popup needed: the side
-           panel is user-resizable, so a hard width would either clip or leave
-           dead space at most sizes. */
-        min-width: 260px;
+      /* ---- Together Homecare brand ----------------------------------------
+         Every brand value lives here as a custom property, so recolouring the
+         whole panel is an edit to this block and nothing else. The maroons are
+         read off the Text Blaster panel screenshot rather than a brand sheet --
+         swap in the official hex values and the rest follows automatically. */
+      :root {
+        --thc-maroon: #8e4a57;
+        --thc-maroon-dark: #703a44;
+        --thc-maroon-deep: #5a2e37;
+        --thc-rose: #a8626e;
+        --thc-tint: #f7eef0;
+        --thc-tint-edge: #e8d5d9;
+
+        --ink: #2a2a2a;
+        --ink-soft: #6b5c5f;
+        --ink-faint: #9a8b8e;
+        --surface: #ffffff;
+        --rule: #e6dcde;
+      }
+
+      * {
         box-sizing: border-box;
-        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+
+      body {
+        /* Fluid rather than a fixed width: the side panel is user-resizable, so
+           a hard width would either clip or leave dead space at most sizes. */
+        min-width: 260px;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
         margin: 0;
-        padding: 12px;
-        color: #1a1a1a;
+        padding: 0;
+        color: var(--ink);
+        background: var(--surface);
       }
-      h1 {
-        font-size: 14px;
-        margin: 0 0 2px;
+
+      /* ---- Branded header ---- */
+      .brandbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        background: var(--thc-maroon);
+        color: #fff;
       }
-      .subtitle {
+
+      /* The logo sits as a background image, so a missing file leaves a clean
+         white tile rather than a broken-image icon. Drop the logo in at
+         extension/icons/logo.png and it appears with no other change. */
+      .brandbar .logo {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        border-radius: 8px;
+        background-color: #fff;
+        background-image: url("icons/logo.png");
+        background-size: 30px 30px;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+
+      .brandbar .titles {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .brandbar h1 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      .brandbar .org {
         font-size: 11px;
-        color: #666;
-        margin: 0 0 12px;
+        margin: 2px 0 0;
+        color: rgba(255, 255, 255, 0.78);
       }
+
+      .brandbar .gear {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        margin: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .brandbar .gear:hover,
+      .brandbar .gear[aria-expanded="true"] {
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+      }
+
+      main {
+        padding: 12px 14px 14px;
+      }
+
+      /* ---- Buttons ---- */
       button {
         width: 100%;
-        padding: 8px 10px;
+        padding: 9px 10px;
         font-size: 13px;
+        font-family: inherit;
         border-radius: 6px;
-        border: 1px solid #ccc;
-        background: #f5f5f5;
+        border: 1px solid var(--thc-tint-edge);
+        background: var(--thc-tint);
+        color: var(--thc-maroon-deep);
         cursor: pointer;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
+
       button:hover:not(:disabled) {
-        background: #ececec;
+        background: #f0e0e3;
       }
+
       button:disabled {
         cursor: not-allowed;
         opacity: 0.5;
       }
+
       button.primary {
-        background: #1565c0;
-        border-color: #1565c0;
+        background: var(--thc-maroon);
+        border-color: var(--thc-maroon);
         color: #fff;
+        font-weight: 600;
       }
+
       button.primary:hover:not(:disabled) {
-        background: #0f4c96;
+        background: var(--thc-maroon-dark);
+        border-color: var(--thc-maroon-dark);
       }
+
+      /* Keyboard focus stays visible -- the panel is fully operable without a
+         mouse, and the brand colours alone don't show focus. */
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--thc-rose);
+        outline-offset: 2px;
+      }
+
       .phase-tag {
         font-size: 10px;
-        color: #999;
+        color: var(--ink-faint);
         display: block;
-        margin-top: -4px;
-        margin-bottom: 8px;
+        margin: -2px 0 10px;
+        line-height: 1.35;
       }
+
+      /* ---- Status + log ---- */
       #status {
         font-size: 12px;
-        color: #333;
+        color: var(--ink);
         min-height: 16px;
-        margin: 8px 0;
+        margin: 10px 0 0;
+        padding: 8px 10px;
+        border-left: 3px solid var(--thc-rose);
+        background: var(--thc-tint);
+        border-radius: 0 4px 4px 0;
         word-break: break-word;
       }
+
       #log {
-        border-top: 1px solid #e0e0e0;
-        margin-top: 8px;
+        border-top: 1px solid var(--rule);
+        margin-top: 10px;
         padding-top: 8px;
-        /* A side panel is full browser height, so the log gets to use it --
-           the old 160px cap was sized for a small dropdown and made a scan's
+        /* A side panel is full browser height, so the log gets to use it -- the
+           old 160px cap was sized for a small dropdown and made a scan's
            diagnostics need constant scrolling. */
         max-height: 55vh;
         min-height: 120px;
         overflow-y: auto;
       }
+
       .log-entry {
         font-size: 11px;
-        color: #555;
+        color: var(--ink-soft);
         padding: 4px 0;
-        border-bottom: 1px dashed #eee;
+        border-bottom: 1px dashed var(--rule);
+        word-break: break-word;
       }
+
       .log-entry:last-child {
         border-bottom: none;
       }
-      details {
-        margin-top: 4px;
+
+      /* ---- Settings ---- */
+      details#settings {
+        margin-top: 10px;
         font-size: 11px;
+        border-top: 1px solid var(--rule);
+        padding-top: 10px;
       }
-      summary {
-        cursor: pointer;
-        color: #555;
+
+      /* Opened by the header gear instead, matching the reference panel. The
+         summary stays in the markup so the section is still a real <details>
+         and keeps working if the gear ever fails to bind. */
+      details#settings > summary {
+        display: none;
       }
+
       details label {
         display: block;
-        margin-top: 8px;
         margin-bottom: 3px;
-        color: #555;
+        color: var(--ink-soft);
+        font-weight: 600;
       }
+
       details input {
         width: 100%;
-        box-sizing: border-box;
-        padding: 5px 6px;
+        padding: 6px;
         font-size: 11px;
-        border: 1px solid #ccc;
+        font-family: inherit;
+        border: 1px solid var(--thc-tint-edge);
         border-radius: 4px;
         margin-bottom: 6px;
+        color: var(--ink);
       }
+
       details button {
         margin-bottom: 0;
       }
     </style>
   </head>
   <body>
-    <h1>WellSky Shift Log</h1>
-    <p class="subtitle">Together Homecare — mirrors WellSky shift records into a Sheet</p>
+    <header class="brandbar">
+      <div class="logo" role="img" aria-label="Together Homecare"></div>
+      <div class="titles">
+        <h1>WellSky Shift Scanner</h1>
+        <p class="org">Together Homecare · WellSky</p>
+      </div>
+      <button
+        id="settingsBtn"
+        class="gear"
+        type="button"
+        aria-expanded="false"
+        aria-controls="settings"
+        title="Settings"
+      >⚙</button>
+    </header>
 
-    <button id="scanBtn" class="primary">Scan Schedule</button>
-    <span class="phase-tag">Reads every visible past shift and, for completed ones, clicks through to read the real clock times.</span>
+    <main>
+      <button id="scanBtn" class="primary">Scan Schedule</button>
+      <span class="phase-tag">Reads every visible past shift and, for completed ones, clicks through to read the real clock times.</span>
 
-    <button id="exportBtn">Export Care Log HTML</button>
-    <span class="phase-tag">DOM discovery tool — open a shift's Edit Care Log popup first, then click this to capture its real markup.</span>
+      <button id="exportBtn">Export Care Log HTML</button>
+      <span class="phase-tag">DOM discovery tool — open a shift's Edit Care Log popup first, then click this to capture its real markup.</span>
 
-    <button id="inspectClickBtn">Debug: Inspect Shift Click</button>
-    <span class="phase-tag">Diagnostic only — tries a few click targets on one completed shift and reports what each one actually does. Reload the WellSky tab afterward regardless of the result.</span>
+      <button id="inspectClickBtn">Debug: Inspect Shift Click</button>
+      <span class="phase-tag">Diagnostic only — tries a few click targets on one completed shift and reports what each one actually does. Reload the WellSky tab afterward regardless of the result.</span>
 
-    <div id="status">Ready.</div>
-    <div id="log"></div>
+      <div id="status">Ready.</div>
+      <div id="log"></div>
 
-    <details id="settings">
-      <summary>Settings</summary>
-      <label for="webhookUrl">Google Sheet Web App URL</label>
-      <input type="text" id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec" />
-      <button id="saveWebhookBtn">Save</button>
-    </details>
+      <details id="settings">
+        <summary>Settings</summary>
+        <label for="webhookUrl">Google Sheet Web App URL</label>
+        <input type="text" id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+        <button id="saveWebhookBtn">Save</button>
+      </details>
 
-    <button id="closeBtn">Close</button>
-    <span class="phase-tag" id="closeHint">Stays open until you close it, so clicking elsewhere won't lose the log — or interrupt a scan.</span>
+      <button id="closeBtn">Close</button>
+      <span class="phase-tag" id="closeHint">Stays open until you close it, so clicking elsewhere won't lose the log — or interrupt a scan.</span>
+    </main>
 
     <script src="popup.js"></script>
   </body>

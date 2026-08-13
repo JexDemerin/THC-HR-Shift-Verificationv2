@@ -12,6 +12,8 @@ const inspectClickBtn = document.getElementById('inspectClickBtn');
 const closeBtn = document.getElementById('closeBtn');
 const webhookInput = document.getElementById('webhookUrl');
 const saveWebhookBtn = document.getElementById('saveWebhookBtn');
+const settingsEl = document.getElementById('settings');
+const settingsBtn = document.getElementById('settingsBtn');
 
 // This page runs in Chrome's side panel (or, on Chrome older than 114, a
 // standalone window) -- never as the action popup Chrome would close the
@@ -539,6 +541,22 @@ scanBtn.addEventListener('click', scanSchedule);
 inspectClickBtn.addEventListener('click', inspectShiftClick);
 closeBtn.addEventListener('click', () => window.close());
 saveWebhookBtn.addEventListener('click', saveWebhookUrl);
+
+// The gear in the header opens the settings section, matching how the rest of
+// Together Homecare's panels work. It stays a real <details> underneath, so the
+// section is still reachable if this listener ever fails to bind -- and
+// aria-expanded is kept in step so the control reads correctly to a screen
+// reader rather than being an unlabelled glyph.
+if (settingsBtn && settingsEl) {
+  settingsBtn.addEventListener('click', () => {
+    settingsEl.open = !settingsEl.open;
+    settingsBtn.setAttribute('aria-expanded', String(settingsEl.open));
+  });
+  // Also covers the section being opened any other way.
+  settingsEl.addEventListener('toggle', () => {
+    settingsBtn.setAttribute('aria-expanded', String(settingsEl.open));
+  });
+}
 
 // The side panel has Chrome's own close control in its header, so a second
 // Close button here would be redundant -- and window.close() doesn't reliably
