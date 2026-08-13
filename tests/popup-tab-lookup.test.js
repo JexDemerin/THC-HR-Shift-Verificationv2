@@ -192,7 +192,7 @@ test('every element popup.js grabs exists in popup.html', () => {
   const required = [
     'status', 'log', 'exportBtn', 'scanBtn', 'inspectClickBtn',
     'closeBtn', 'webhookUrl', 'saveWebhookBtn', 'closeHint',
-    'settings', 'settingsBtn',
+    'settings', 'settingsBtn', 'brandLogo',
   ];
 
   for (const id of required) {
@@ -291,4 +291,35 @@ test('the manifest name matches the panel header', () => {
 
   assert.ok(manifest.name.includes(heading), `"${manifest.name}" should contain "${heading}"`);
   assert.equal(manifest.action.default_title, heading);
+});
+
+test('the panel declares itself light so Chrome will not auto-darken it', () => {
+  // Chrome auto-darkens extension pages when the browser is in dark mode. That
+  // inverted the white body and turned the grey supporting text green -- a
+  // colour in no part of the brand -- undoing the white-dominant look entirely.
+  const html = fs.readFileSync(path.join(EXTENSION_DIR, 'popup.html'), 'utf8');
+
+  assert.match(html, /<meta\s+name="color-scheme"\s+content="light"/, 'meta tag missing');
+  assert.match(html, /color-scheme:\s*light/, ':root property missing');
+});
+
+test('a missing logo file hides its plate instead of leaving a white box', () => {
+  // What was actually on screen: an empty white square, which reads as broken
+  // rather than as a file not yet dropped in.
+  const { window } = loadPopup();
+  const img = window.document.getElementById('brandLogo');
+  const plate = img.closest('.logo-plate');
+
+  assert.equal(plate.classList.contains('is-missing'), false);
+  img.dispatchEvent(new window.Event('error'));
+  assert.equal(plate.classList.contains('is-missing'), true);
+});
+
+test('the logo is sized by its own proportions, not forced into a square', () => {
+  // The real file is a wide lockup -- mark above wordmark. A fixed square either
+  // squashes it or shrinks it past reading.
+  const html = fs.readFileSync(path.join(EXTENSION_DIR, 'popup.html'), 'utf8');
+  const plate = html.slice(html.indexOf('.brandbar .logo-plate img'));
+
+  assert.match(plate.slice(0, 200), /width:\s*auto/);
 });

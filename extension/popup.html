@@ -2,6 +2,13 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <!-- Chrome auto-darkens extension pages when the browser is in dark mode,
+         which inverted the white body and pushed the grey supporting text to a
+         green that is in no part of the brand. The palette is explicitly a
+         light one -- white 60-75% is the guideline -- so the page declares
+         itself light and is left alone. Both the meta and the :root property
+         are needed: the meta covers the page before CSS parses. -->
+    <meta name="color-scheme" content="light" />
     <title>WellSky Shift Scanner</title>
     <style>
       /* ---- Together Homecare brand -----------------------------------------
@@ -12,6 +19,8 @@
          5-10%: the body is white with black type, and rose is confined to the
          header, the primary action, and thin accents. No filled pink panels. */
       :root {
+        color-scheme: light;
+
         --dusty-rose: #ac6b75;   /* primary: CTA, headline accents */
         --soft-blush: #d99fb7;   /* waves, secondary accents */
         --light-pink: #efb1d6;   /* soft highlights */
@@ -62,28 +71,35 @@
         color: var(--white);
       }
 
-      /* White backing for the logo, as the guideline specifies. A background
-         image rather than an <img> so a missing file leaves a clean white tile
-         instead of a broken-image icon -- drop the logo at
-         extension/icons/logo.png and it appears with no other change. */
-      .brandbar .logo {
-        width: 40px;
+      /* White backing for the logo, as the guideline specifies. Sized to the
+         artwork rather than the other way round: the real logo is a wide
+         lockup -- the mark above the "Together Homecare" wordmark -- and a
+         fixed square either squashed it or rendered it too small to read. An
+         <img> with auto width takes whatever proportions the file has, square
+         or wide, and max-width keeps a very wide one from crowding the title. */
+      .brandbar .logo-plate {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
         height: 40px;
-        flex: 0 0 40px;
-        /* box-sizing: border-box above means the padding insets the content box
-           to 30x30, which is where the logo is drawn. */
-        padding: 5px;
+        padding: 4px 7px;
         border-radius: var(--radius);
-        background-color: var(--white);
-        background-image: url("icons/logo.png");
-        /* `contain` rather than a fixed 30x30: a fixed square stretches any
-           logo that isn't itself square, which is exactly what squashed the real
-           one. This fits the logo inside the tile at its own proportions,
-           whatever shape it is. */
-        background-size: contain;
-        background-origin: content-box;
-        background-position: center;
-        background-repeat: no-repeat;
+        background: var(--white);
+      }
+
+      .brandbar .logo-plate img {
+        display: block;
+        height: 32px;
+        width: auto;
+        max-width: 118px;
+      }
+
+      /* If the file is absent the plate goes too. Leaving it behind is what
+         produced the empty white box -- worse than no logo, because it reads as
+         something broken rather than something not yet added. */
+      .brandbar .logo-plate.is-missing {
+        display: none;
       }
 
       .brandbar .titles {
@@ -310,7 +326,9 @@
   </head>
   <body>
     <header class="brandbar">
-      <div class="logo" role="img" aria-label="Together Homecare"></div>
+      <div class="logo-plate">
+        <img id="brandLogo" src="icons/logo.png" alt="Together Homecare" />
+      </div>
       <div class="titles">
         <h1>WellSky Shift Scanner</h1>
         <p class="org">Together Homecare · WellSky</p>

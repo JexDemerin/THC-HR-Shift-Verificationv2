@@ -14,6 +14,18 @@ const webhookInput = document.getElementById('webhookUrl');
 const saveWebhookBtn = document.getElementById('saveWebhookBtn');
 const settingsEl = document.getElementById('settings');
 const settingsBtn = document.getElementById('settingsBtn');
+const brandLogo = document.getElementById('brandLogo');
+
+// Hide the white plate when the logo file isn't there, rather than leaving an
+// empty white box in the header -- that reads as something broken instead of
+// something not yet dropped in. An inline onerror would be blocked by the
+// extension's content security policy, so it's bound here.
+if (brandLogo) {
+  brandLogo.addEventListener('error', () => {
+    const plate = brandLogo.closest('.logo-plate');
+    if (plate) plate.classList.add('is-missing');
+  });
+}
 
 // This page runs in Chrome's side panel (or, on Chrome older than 114, a
 // standalone window) -- never as the action popup Chrome would close the
