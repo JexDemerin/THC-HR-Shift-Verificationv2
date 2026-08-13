@@ -1,10 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "THC WellSky Shift Log",
-  "version": "0.1.0",
+  "name": "THC WellSky Shift Scanner",
+  "version": "0.2.0",
   "description": "Mirrors WellSky shift records (caregiver, client, date, actual/scheduled clock times, status) into a Google Sheet.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
-    "default_title": "WellSky Shift Log"
+    "default_title": "WellSky Shift Scanner",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "side_panel": {
     "default_path": "popup.html?panel=1"

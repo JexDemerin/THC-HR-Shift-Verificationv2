@@ -256,3 +256,39 @@ test('the palette holds the official brand values', () => {
     assert.match(html.toLowerCase(), new RegExp(hex), `${hex} should be in the palette`);
   }
 });
+
+// ---- Manifest icons ----
+
+test('every icon the manifest declares actually exists', () => {
+  // Chrome refuses to load an extension whose manifest points at a missing icon
+  // -- not a degraded icon, a dead extension. That is why icons were left
+  // undeclared until real files existed, and why this is worth asserting.
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(EXTENSION_DIR, 'manifest.json'), 'utf8')
+  );
+  const declared = [
+    ...Object.values(manifest.icons || {}),
+    ...Object.values((manifest.action || {}).default_icon || {}),
+  ];
+
+  assert.ok(declared.length > 0, 'the extension should declare icons');
+  for (const rel of declared) {
+    assert.ok(
+      fs.existsSync(path.join(EXTENSION_DIR, rel)),
+      `${rel} is declared in manifest.json but not present`
+    );
+  }
+});
+
+test('the manifest name matches the panel header', () => {
+  // The toolbar entry and the panel are the same tool; two names for it is just
+  // a thing to trip over.
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(EXTENSION_DIR, 'manifest.json'), 'utf8')
+  );
+  const { window } = loadPopup();
+  const heading = window.document.querySelector('.brandbar h1').textContent;
+
+  assert.ok(manifest.name.includes(heading), `"${manifest.name}" should contain "${heading}"`);
+  assert.equal(manifest.action.default_title, heading);
+});
