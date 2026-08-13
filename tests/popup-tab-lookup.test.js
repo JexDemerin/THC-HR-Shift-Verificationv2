@@ -232,3 +232,27 @@ test('the settings section survives the gear never binding', () => {
   assert.equal(window.document.getElementById('settings').tagName, 'DETAILS');
   assert.ok(window.document.querySelector('#settings > summary'), 'summary still in the markup');
 });
+
+test('every colour in the panel comes from the brand palette', () => {
+  // The palette is only useful if nothing bypasses it. Any literal hex outside
+  // the :root block means a colour that a brand change would silently miss.
+  const html = fs.readFileSync(path.join(EXTENSION_DIR, 'popup.html'), 'utf8');
+  const rootBlock = html.slice(html.indexOf(':root'), html.indexOf('}', html.indexOf(':root')));
+  const palette = new Set(
+    (rootBlock.match(/#[0-9a-f]{3,8}/gi) || []).map((h) => h.toLowerCase())
+  );
+
+  const outside = html.replace(rootBlock, '');
+  const strays = (outside.match(/#[0-9a-f]{6}\b/gi) || [])
+    .map((h) => h.toLowerCase())
+    .filter((h) => !palette.has(h));
+
+  assert.deepEqual([...new Set(strays)], [], 'hex colours found outside the palette');
+});
+
+test('the palette holds the official brand values', () => {
+  const html = fs.readFileSync(path.join(EXTENSION_DIR, 'popup.html'), 'utf8');
+  for (const hex of ['#ac6b75', '#d99fb7', '#efb1d6', '#a76d83']) {
+    assert.match(html.toLowerCase(), new RegExp(hex), `${hex} should be in the palette`);
+  }
+});

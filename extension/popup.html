@@ -4,24 +4,37 @@
     <meta charset="utf-8" />
     <title>WellSky Shift Scanner</title>
     <style>
-      /* ---- Together Homecare brand ----------------------------------------
-         Every brand value lives here as a custom property, so recolouring the
-         whole panel is an edit to this block and nothing else. The maroons are
-         read off the Text Blaster panel screenshot rather than a brand sheet --
-         swap in the official hex values and the rest follows automatically. */
-      :root {
-        --thc-maroon: #8e4a57;
-        --thc-maroon-dark: #703a44;
-        --thc-maroon-deep: #5a2e37;
-        --thc-rose: #a8626e;
-        --thc-tint: #f7eef0;
-        --thc-tint-edge: #e8d5d9;
+      /* ---- Together Homecare brand -----------------------------------------
+         Official palette. Every colour used anywhere in the panel resolves to
+         one of these, so the brand can be adjusted here and nowhere else.
 
-        --ink: #2a2a2a;
-        --ink-soft: #6b5c5f;
-        --ink-faint: #9a8b8e;
-        --surface: #ffffff;
-        --rule: #e6dcde;
+         Balance follows the guideline -- white 60-75%, rose 15-30%, black
+         5-10%: the body is white with black type, and rose is confined to the
+         header, the primary action, and thin accents. No filled pink panels. */
+      :root {
+        --dusty-rose: #ac6b75;   /* primary: CTA, headline accents */
+        --soft-blush: #d99fb7;   /* waves, secondary accents */
+        --light-pink: #efb1d6;   /* soft highlights */
+        --muted-mauve: #a76d83;  /* darker pink accent */
+        --white: #ffffff;
+        --black: #000000;
+
+        /* A shade of Dusty Rose, used ONLY as the header fill. White text on
+           #ac6b75 measures 4.1:1, which is under the 4.5:1 needed for the small
+           subheading; this darker member of the same family reaches 5.8:1 and
+           keeps every size legible. Dusty Rose itself stays the accent colour on
+           white, where it reads correctly. */
+        --rose-deep: #8f5560;
+
+        --ink: #111111;          /* body text -- black per the guideline */
+        --ink-support: #6b6b6b;  /* supporting text: neutral grey, not tinted */
+        --hairline: #e9e2e4;
+        --blush-tint: #fdf7f9;   /* the one permitted soft fill */
+
+        /* One radius, one padding step, one gap -- containers stay consistent
+           rather than each being sized by eye. */
+        --radius: 8px;
+        --pad: 14px;
       }
 
       * {
@@ -36,28 +49,29 @@
         margin: 0;
         padding: 0;
         color: var(--ink);
-        background: var(--surface);
+        background: var(--white);
       }
 
-      /* ---- Branded header ---- */
+      /* ---- Header ---- */
       .brandbar {
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 12px 14px;
-        background: var(--thc-maroon);
-        color: #fff;
+        padding: 14px var(--pad);
+        background: var(--rose-deep);
+        color: var(--white);
       }
 
-      /* The logo sits as a background image, so a missing file leaves a clean
-         white tile rather than a broken-image icon. Drop the logo in at
+      /* White backing for the logo, as the guideline specifies. A background
+         image rather than an <img> so a missing file leaves a clean white tile
+         instead of a broken-image icon -- drop the logo at
          extension/icons/logo.png and it appears with no other change. */
       .brandbar .logo {
-        width: 38px;
-        height: 38px;
-        flex: 0 0 38px;
-        border-radius: 8px;
-        background-color: #fff;
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        border-radius: var(--radius);
+        background-color: var(--white);
         background-image: url("icons/logo.png");
         background-size: 30px 30px;
         background-position: center;
@@ -69,29 +83,35 @@
         min-width: 0;
       }
 
+      /* Headline: large and bold. */
       .brandbar h1 {
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 700;
+        letter-spacing: 0.1px;
         margin: 0;
         line-height: 1.2;
       }
 
+      /* Subheading: noticeably smaller, and full-strength white rather than a
+         faded one, which would undo the contrast the deeper header buys. */
       .brandbar .org {
         font-size: 11px;
-        margin: 2px 0 0;
-        color: rgba(255, 255, 255, 0.78);
+        font-weight: 500;
+        margin: 3px 0 0;
+        color: var(--white);
+        opacity: 0.92;
       }
 
       .brandbar .gear {
         flex: 0 0 auto;
-        width: 28px;
-        height: 28px;
+        width: 30px;
+        height: 30px;
         padding: 0;
         margin: 0;
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: rgba(255, 255, 255, 0.85);
+        color: var(--white);
         cursor: pointer;
         font-size: 16px;
         line-height: 1;
@@ -99,95 +119,135 @@
 
       .brandbar .gear:hover,
       .brandbar .gear[aria-expanded="true"] {
-        background: rgba(255, 255, 255, 0.16);
-        color: #fff;
+        background: rgba(255, 255, 255, 0.18);
       }
 
+      /* The blush wave -- the one decorative element, carrying the header into
+         the white body. Kept to 18px so it reads as a detail rather than a
+         graphic competing with the content. */
+      .wave {
+        display: block;
+        height: 18px;
+        background: var(--rose-deep);
+        line-height: 0;
+      }
+
+      .wave svg {
+        display: block;
+        width: 100%;
+        height: 18px;
+      }
+
+      /* Filled from CSS rather than with fill="" attributes on the paths, so a
+         palette edit actually reaches the wave instead of leaving two hexes
+         frozen in the markup. */
+      .wave .wave-blush {
+        fill: var(--soft-blush);
+      }
+
+      .wave .wave-white {
+        fill: var(--white);
+      }
+
+      /* ---- Body ---- */
       main {
-        padding: 12px 14px 14px;
+        padding: 16px var(--pad) var(--pad);
+      }
+
+      .action + .action {
+        margin-top: 14px;
       }
 
       /* ---- Buttons ---- */
       button {
         width: 100%;
-        padding: 9px 10px;
+        padding: 10px;
         font-size: 13px;
         font-family: inherit;
-        border-radius: 6px;
-        border: 1px solid var(--thc-tint-edge);
-        background: var(--thc-tint);
-        color: var(--thc-maroon-deep);
+        font-weight: 500;
+        border-radius: var(--radius);
+        border: 1px solid var(--hairline);
+        background: var(--white);
+        color: var(--ink);
         cursor: pointer;
-        margin-bottom: 6px;
+        margin: 0;
       }
 
       button:hover:not(:disabled) {
-        background: #f0e0e3;
+        border-color: var(--soft-blush);
+        background: var(--blush-tint);
       }
 
       button:disabled {
         cursor: not-allowed;
-        opacity: 0.5;
+        opacity: 0.45;
       }
 
+      /* The CTA: bold and visually distinct. 14px/700 on Dusty Rose clears the
+         contrast bar for bold text at this size, which 13px regular would not. */
       button.primary {
-        background: var(--thc-maroon);
-        border-color: var(--thc-maroon);
-        color: #fff;
-        font-weight: 600;
+        background: var(--dusty-rose);
+        border-color: var(--dusty-rose);
+        color: var(--white);
+        font-size: 14px;
+        font-weight: 700;
+        padding: 12px 10px;
       }
 
       button.primary:hover:not(:disabled) {
-        background: var(--thc-maroon-dark);
-        border-color: var(--thc-maroon-dark);
+        background: var(--muted-mauve);
+        border-color: var(--muted-mauve);
       }
 
       /* Keyboard focus stays visible -- the panel is fully operable without a
          mouse, and the brand colours alone don't show focus. */
       button:focus-visible,
       input:focus-visible {
-        outline: 2px solid var(--thc-rose);
+        outline: 2px solid var(--dusty-rose);
         outline-offset: 2px;
       }
 
+      /* Supporting information: smaller, still highly readable. */
       .phase-tag {
-        font-size: 10px;
-        color: var(--ink-faint);
         display: block;
-        margin: -2px 0 10px;
-        line-height: 1.35;
+        font-size: 10.5px;
+        line-height: 1.4;
+        color: var(--ink-support);
+        margin: 5px 2px 0;
       }
 
       /* ---- Status + log ---- */
+      /* An open left rule rather than a filled box: not everything needs a
+         container, and a tinted panel here would push the pink share up. */
       #status {
         font-size: 12px;
+        line-height: 1.45;
         color: var(--ink);
         min-height: 16px;
-        margin: 10px 0 0;
-        padding: 8px 10px;
-        border-left: 3px solid var(--thc-rose);
-        background: var(--thc-tint);
-        border-radius: 0 4px 4px 0;
+        margin: 18px 0 0;
+        padding: 2px 0 2px 10px;
+        border-left: 3px solid var(--dusty-rose);
         word-break: break-word;
       }
 
       #log {
-        border-top: 1px solid var(--rule);
-        margin-top: 10px;
+        border-top: 1px solid var(--hairline);
+        margin-top: 14px;
         padding-top: 8px;
         /* A side panel is full browser height, so the log gets to use it -- the
            old 160px cap was sized for a small dropdown and made a scan's
            diagnostics need constant scrolling. */
-        max-height: 55vh;
-        min-height: 120px;
+        max-height: 52vh;
+        min-height: 110px;
         overflow-y: auto;
       }
 
       .log-entry {
         font-size: 11px;
-        color: var(--ink-soft);
-        padding: 4px 0;
-        border-bottom: 1px dashed var(--rule);
+        line-height: 1.45;
+        color: var(--ink-support);
+        padding: 5px 0;
+        border-bottom: 1px solid var(--hairline);
         word-break: break-word;
       }
 
@@ -196,40 +256,47 @@
       }
 
       /* ---- Settings ---- */
-      details#settings {
-        margin-top: 10px;
-        font-size: 11px;
-        border-top: 1px solid var(--rule);
-        padding-top: 10px;
+      /* This one IS a container: it is a distinct section that appears and
+         disappears, so it gets the shared radius and padding. */
+      details#settings[open] {
+        display: block;
+        margin-top: 14px;
+        padding: 12px;
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius);
+        background: var(--blush-tint);
       }
 
-      /* Opened by the header gear instead, matching the reference panel. The
-         summary stays in the markup so the section is still a real <details>
-         and keeps working if the gear ever fails to bind. */
+      /* Opened by the header gear instead. The summary stays in the markup so
+         the section is still a real <details> and remains reachable if the gear
+         ever fails to bind. */
       details#settings > summary {
         display: none;
       }
 
       details label {
         display: block;
-        margin-bottom: 3px;
-        color: var(--ink-soft);
+        font-size: 11px;
         font-weight: 600;
+        color: var(--ink);
+        margin-bottom: 4px;
       }
 
       details input {
         width: 100%;
-        padding: 6px;
+        padding: 7px 8px;
         font-size: 11px;
         font-family: inherit;
-        border: 1px solid var(--thc-tint-edge);
-        border-radius: 4px;
-        margin-bottom: 6px;
         color: var(--ink);
+        border: 1px solid var(--hairline);
+        border-radius: 6px;
+        background: var(--white);
+        margin-bottom: 8px;
       }
 
-      details button {
-        margin-bottom: 0;
+      #closeBtn {
+        margin-top: 18px;
+        color: var(--ink-support);
       }
     </style>
   </head>
@@ -250,15 +317,28 @@
       >⚙</button>
     </header>
 
+    <div class="wave" aria-hidden="true">
+      <svg viewBox="0 0 400 18" preserveAspectRatio="none" focusable="false">
+        <path class="wave-blush" d="M0,0 C110,17 290,1 400,11 L400,18 L0,18 Z" />
+        <path class="wave-white" d="M0,5 C130,19 270,3 400,13 L400,18 L0,18 Z" />
+      </svg>
+    </div>
+
     <main>
-      <button id="scanBtn" class="primary">Scan Schedule</button>
-      <span class="phase-tag">Reads every visible past shift and, for completed ones, clicks through to read the real clock times.</span>
+      <div class="action">
+        <button id="scanBtn" class="primary">Scan Schedule</button>
+        <span class="phase-tag">Reads every visible past shift and, for completed ones, clicks through to read the real clock times.</span>
+      </div>
 
-      <button id="exportBtn">Export Care Log HTML</button>
-      <span class="phase-tag">DOM discovery tool — open a shift's Edit Care Log popup first, then click this to capture its real markup.</span>
+      <div class="action">
+        <button id="exportBtn">Export Care Log HTML</button>
+        <span class="phase-tag">DOM discovery tool — open a shift's Edit Care Log popup first, then click this to capture its real markup.</span>
+      </div>
 
-      <button id="inspectClickBtn">Debug: Inspect Shift Click</button>
-      <span class="phase-tag">Diagnostic only — tries a few click targets on one completed shift and reports what each one actually does. Reload the WellSky tab afterward regardless of the result.</span>
+      <div class="action">
+        <button id="inspectClickBtn">Debug: Inspect Shift Click</button>
+        <span class="phase-tag">Diagnostic only — tries a few click targets on one completed shift and reports what each one actually does. Reload the WellSky tab afterward regardless of the result.</span>
+      </div>
 
       <div id="status">Ready.</div>
       <div id="log"></div>
