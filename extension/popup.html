@@ -70,10 +70,18 @@
         width: 40px;
         height: 40px;
         flex: 0 0 40px;
+        /* box-sizing: border-box above means the padding insets the content box
+           to 30x30, which is where the logo is drawn. */
+        padding: 5px;
         border-radius: var(--radius);
         background-color: var(--white);
         background-image: url("icons/logo.png");
-        background-size: 30px 30px;
+        /* `contain` rather than a fixed 30x30: a fixed square stretches any
+           logo that isn't itself square, which is exactly what squashed the real
+           one. This fits the logo inside the tile at its own proportions,
+           whatever shape it is. */
+        background-size: contain;
+        background-origin: content-box;
         background-position: center;
         background-repeat: no-repeat;
       }
