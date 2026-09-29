@@ -15,6 +15,8 @@ const saveWebhookBtn = document.getElementById('saveWebhookBtn');
 const settingsEl = document.getElementById('settings');
 const settingsBtn = document.getElementById('settingsBtn');
 const brandLogo = document.getElementById('brandLogo');
+const scanDayInput = document.getElementById('scanDayInput');
+const scanDayBtn = document.getElementById('scanDayBtn');
 
 // Hide the white plate when the logo file isn't there, rather than leaving an
 // empty white box in the header -- that reads as something broken instead of
@@ -50,6 +52,16 @@ function addLogEntry(text) {
 // and bury the lines that matter.
 function startNewRunLog() {
   logEl.textContent = '';
+}
+
+// Today in the BROWSER's timezone. toISOString() would give UTC, which for
+// Pacific time reads as tomorrow all evening -- so "is this date in the past?"
+// would answer wrongly for several hours a day.
+function todayIsoLocal() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 const WELLSKY_URL_MATCH = 'https://*.clearcareonline.com/*';
@@ -275,10 +287,15 @@ async function exportCareLogHtml() {
 
 // ---- Scan Schedule (the real feature) ----
 
-async function scanSchedule() {
+// `targetDate` (yyyy-mm-dd) limits the scan to one day; null scans the whole
+// visible week. One function for both so the two paths cannot drift -- every
+// failure message, diagnostic and Sheet write is identical either way, and only
+// the set of rows differs.
+async function scanSchedule(targetDate) {
   scanBtn.disabled = true;
+  scanDayBtn.disabled = true;
   startNewRunLog();
-  setStatus('Scanning visible schedule...');
+  setStatus(targetDate ? `Scanning ${targetDate}...` : 'Scanning visible schedule...');
 
   try {
     const tab = await findWellSkyTab();
@@ -294,6 +311,16 @@ async function scanSchedule() {
       return;
     }
 
+    // executeScript can't pass arguments to a FILE, so the date is parked on
+    // the window first. Both injections default to the same isolated world, so
+    // the file sees it. Sent every time, null included, so a leftover value from
+    // an earlier one-day scan can't silently narrow a full one.
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (date) => { window.__thcScanTargetDate = date; },
+      args: [targetDate || null],
+    });
+
     const injectionResults = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: ['scan-script.js'],
@@ -304,6 +331,25 @@ async function scanSchedule() {
       setStatus(
         `Scanned ${describeTab(tab)} but got no result back at all. ` +
           'If that is not the weekly schedule page, switch that tab to it and re-scan.'
+      );
+      return;
+    }
+
+    if (result.targetDateMissing) {
+      const visible = (result.columnDates || []).join(', ') || 'none it could identify';
+      setStatus(`${result.targetDate} isn't on screen in WellSky. Showing: ${visible}.`);
+      addLogEntry(
+        'Move WellSky to the week containing that date and scan again. Nothing was ' +
+          'written — a day that was never read must not look like a day with no shifts.'
+      );
+      return;
+    }
+
+    if (result.targetDateNotPast) {
+      setStatus(`${result.targetDate} is today or later — only finished days get scanned.`);
+      addLogEntry(
+        "An unfinished day's shifts have no final clock times yet, so scanning one " +
+          'would record hours that are still going to change.'
       );
       return;
     }
@@ -419,6 +465,7 @@ async function scanSchedule() {
     setStatus(`Error: ${err.message}`);
   } finally {
     scanBtn.disabled = false;
+    scanDayBtn.disabled = false;
   }
 }
 
@@ -549,7 +596,29 @@ async function saveWebhookUrl() {
 }
 
 exportBtn.addEventListener('click', exportCareLogHtml);
-scanBtn.addEventListener('click', scanSchedule);
+scanBtn.addEventListener('click', () => scanSchedule(null));
+
+// Validated here as well as in the scanner: catching it before injecting saves
+// touching the WellSky page at all for an answer already known.
+scanDayBtn.addEventListener('click', () => {
+  const chosen = scanDayInput.value;
+  if (!chosen) {
+    setStatus('Pick a date first, then press Scan Day.');
+    scanDayInput.focus();
+    return;
+  }
+  if (chosen >= todayIsoLocal()) {
+    setStatus(`${chosen} is today or later — only finished days get scanned.`);
+    return;
+  }
+  scanSchedule(chosen);
+});
+
+// Enter in the date field runs the day scan, so it works without reaching for
+// the mouse.
+scanDayInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') scanDayBtn.click();
+});
 inspectClickBtn.addEventListener('click', inspectShiftClick);
 closeBtn.addEventListener('click', () => window.close());
 saveWebhookBtn.addEventListener('click', saveWebhookUrl);

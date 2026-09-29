@@ -72,6 +72,19 @@ What's working now:
   visibility comes from a CSS `:hover` rule, which follows the real pointer and is never triggered
   by dispatched events. A marker with an empty response just means that shift has no note; only a
   real fetch failure is reported.
+- **"Scan Day"** does the same thing for a single date instead of the whole visible week — far quicker
+  when you only need to fix up one day. Pick the date, press the button. The day has to be on screen in
+  WellSky; if it isn't, the scan **refuses and says which days are showing** rather than writing
+  nothing, because the Sheet treats a scan as authoritative for the days it covers and "never read"
+  would otherwise be indistinguishable from "nobody worked". Today and later are refused for the same
+  reason a full scan skips them. Everything else is identical to a full scan — same click-throughs,
+  same `-` rows for idle caregivers, same Sheet behaviour — only the set of days differs.
+
+  Which date each column holds is worked out from the shift data (`data-start`), not by parsing the
+  column headers, whose markup has never been confirmed. One shift anywhere on screen anchors the
+  whole row of columns and the rest follow by offset, so a day where *nobody* worked still knows its
+  own date. The one case this can't cover is a visible week with no shifts at all, where there's
+  nothing to anchor to.
 - Records come out sorted **by date, then caregiver name alphabetically** (all of 7/27 A–Z, then all
   of 7/28 A–Z, …), so that's the order they land in the sheet.
 

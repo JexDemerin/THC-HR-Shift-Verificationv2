@@ -51,7 +51,8 @@ function loadPopup({ tabs = [] } = {}) {
   dom.window.chrome = chrome;
   const sandboxSource = `${POPUP_SOURCE}\n;window.__findWellSkyTab = findWellSkyTab;` +
     `\nwindow.__NO_WELLSKY_TAB = NO_WELLSKY_TAB;` +
-    `\nwindow.__versionMismatchReport = versionMismatchReport;`;
+    `\nwindow.__versionMismatchReport = versionMismatchReport;` +
+    `\nwindow.__todayIsoLocal = todayIsoLocal;`;
   dom.window.eval(sandboxSource);
   return { dom, window: dom.window, queries };
 }
@@ -192,7 +193,7 @@ test('every element popup.js grabs exists in popup.html', () => {
   const required = [
     'status', 'log', 'exportBtn', 'scanBtn', 'inspectClickBtn',
     'closeBtn', 'webhookUrl', 'saveWebhookBtn', 'closeHint',
-    'settings', 'settingsBtn', 'brandLogo',
+    'settings', 'settingsBtn', 'brandLogo', 'scanDayInput', 'scanDayBtn',
   ];
 
   for (const id of required) {
@@ -322,4 +323,50 @@ test('the logo is sized by its own proportions, not forced into a square', () =>
   const plate = html.slice(html.indexOf('.brandbar .logo-plate img'));
 
   assert.match(plate.slice(0, 200), /width:\s*auto/);
+});
+
+// ---- Scan Day ----
+
+test('"today" is computed in the browser timezone, not UTC', () => {
+  // toISOString() is UTC, which reads as tomorrow from Pacific time all evening
+  // -- so "is this date in the past?" would answer wrongly for several hours a
+  // day, refusing yesterday or accepting today depending on the clock.
+  const { window } = loadPopup();
+  const now = new Date();
+  const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  assert.equal(window.__todayIsoLocal(), expected);
+});
+
+test('Scan Day with no date picked says so instead of scanning everything', async () => {
+  // An empty value must not fall through to a full scan -- that would be a very
+  // long operation nobody asked for.
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/a', lastAccessed: 1 }],
+  });
+  window.document.getElementById('scanDayInput').value = '';
+  window.document.getElementById('scanDayBtn')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+  assert.match(window.document.getElementById('status').textContent, /Pick a date/i);
+});
+
+test('Scan Day refuses today and later before touching WellSky', async () => {
+  const { window, queries } = loadPopup({
+    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/a', lastAccessed: 1 }],
+  });
+  const before = queries.length;
+  window.document.getElementById('scanDayInput').value = window.__todayIsoLocal();
+  window.document.getElementById('scanDayBtn')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+  assert.match(window.document.getElementById('status').textContent, /today or later/i);
+  assert.equal(queries.length, before, 'no tab lookup, so the page is never touched');
+});
+
+test('the date field is a real date input', () => {
+  // A free-text field would let "7/28" or "July 28" through, and shift_date is
+  // matched exactly -- a near-miss format would silently find nothing.
+  const { window } = loadPopup();
+  assert.equal(window.document.getElementById('scanDayInput').type, 'date');
 });

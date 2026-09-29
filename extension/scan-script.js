@@ -715,10 +715,60 @@
 
     const { records: allRecords, rowCount, eventElsByEventId, columnDates } = scan();
     const today = todayIso();
+
+    // A one-day scan is requested by setting this on the window just before the
+    // file is injected -- chrome.scripting.executeScript can't pass arguments to
+    // a file, and both injections land in the same isolated world, so a global
+    // is the handoff. Read once and cleared immediately: a leftover value would
+    // silently turn the next FULL scan into a one-day one, and the only symptom
+    // would be a sheet quietly missing six days.
+    const targetDate = window.__thcScanTargetDate || null;
+    try {
+      delete window.__thcScanTargetDate;
+    } catch (err) {
+      window.__thcScanTargetDate = null;
+    }
+
+    if (targetDate) {
+      // Past-first, and deliberately so: today is normally ON screen in the
+      // weekly view, so checking visibility first would answer "that day isn't
+      // showing" about a column sitting right there. The real reason is that
+      // the day hasn't finished.
+      if (targetDate >= today) {
+        return {
+          targetDate,
+          targetDateNotPast: true,
+          columnDates,
+          rowCount,
+          pageUrl: window.location.href,
+        };
+      }
+      // The requested day has to actually be on screen. Writing nothing and
+      // calling it success would look identical to "that day had no shifts",
+      // which is the one reading that must never be guessed at.
+      if (columnDates.indexOf(targetDate) === -1) {
+        return {
+          targetDate,
+          targetDateMissing: true,
+          columnDates,
+          rowCount,
+          pageUrl: window.location.href,
+        };
+      }
+    }
+
     // Keep anything without a parseable date too (rather than silently dropping
-    // it) -- it's already flagged as "unparsed" and needs a human look either way.
-    const records = sortRecords(allRecords.filter((r) => !r.shift_date || r.shift_date < today));
-    const skippedTodayOrFuture = allRecords.length - records.length;
+    // it) -- it's already flagged as "unparsed" and needs a human look either
+    // way. A targeted scan can't place an undated row on the day asked for, so
+    // there it is excluded instead.
+    const records = sortRecords(
+      allRecords.filter((r) =>
+        targetDate ? r.shift_date === targetDate : !r.shift_date || r.shift_date < today
+      )
+    );
+    const skippedTodayOrFuture = targetDate
+      ? 0
+      : allRecords.length - records.length;
 
     let stoppedEarlyReason = null;
     const enrichmentDiagnostics = [];
@@ -806,6 +856,7 @@
       enrichmentDiagnostics,
       pageUrl: window.location.href,
       scannedAt: new Date().toISOString(),
+      targetDate: targetDate,
     };
   } catch (err) {
     return {

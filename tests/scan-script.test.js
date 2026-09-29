@@ -27,7 +27,7 @@ function buildFixture({ status, dataStart, dataEnd, clientName, caregiverName, e
   `;
 }
 
-async function runScanScript(bodyHtml, { runScripts = false, fetchImpl, breakDocument = false } = {}) {
+async function runScanScript(bodyHtml, { runScripts = false, fetchImpl, breakDocument = false, targetDate } = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${bodyHtml}</body></html>`, {
     url: 'https://togetherhomecare.clearcareonline.com/dashboard/live/weekly/caregivers/',
     pretendToBeVisual: true,
@@ -42,6 +42,9 @@ async function runScanScript(bodyHtml, { runScripts = false, fetchImpl, breakDoc
   global.window = dom.window;
   global.MouseEvent = dom.window.MouseEvent;
   global.KeyboardEvent = dom.window.KeyboardEvent;
+  // How popup.js hands a one-day scan its date: parked on the window by a
+  // separate injection, since executeScript cannot pass args to a file.
+  if (targetDate !== undefined) dom.window.__thcScanTargetDate = targetDate;
   if (breakDocument) {
     // Make a call the run section relies on throw, standing in for whatever
     // real breakage (markup change, browser quirk) would take it down.
@@ -1137,3 +1140,112 @@ test('a real schedule is never mistaken for a login page', async () => {
   assert.notEqual(result.loggedOut, true);
   assert.equal(result.records.length, 1);
 });
+
+// ---- Scanning a single day ----
+
+function threeDayGrid() {
+  const d1 = isoDateOffsetFromToday(-3);
+  const d2 = isoDateOffsetFromToday(-2);
+  const d3 = isoDateOffsetFromToday(-1);
+  const html = buildGrid(
+    [
+      { name: 'Aa, Ann', shifts: [
+        { date: d1, start: '09:00:00.000000', end: '12:00:00.000000', client: 'Client One', eventId: 'e1' },
+        { date: d3, start: '13:00:00.000000', end: '16:00:00.000000', client: 'Client Three', eventId: 'e3' },
+      ] },
+      { name: 'Bb, Bob', shifts: [
+        { date: d2, start: '09:00:00.000000', end: '11:00:00.000000', client: 'Client Two', eventId: 'e2' },
+      ] },
+    ],
+    [d1, d2, d3]
+  );
+  return { html, d1, d2, d3 };
+}
+
+test('a one-day scan returns only that day', async () => {
+  const { html, d1, d2, d3 } = threeDayGrid();
+
+  const result = await runScanScript(html, { targetDate: d2 });
+
+  assert.equal(result.targetDate, d2);
+  const dates = [...new Set(result.records.map((r) => r.shift_date))];
+  assert.deepEqual(dates, [d2], 'no other day leaks in');
+  assert.ok(result.records.some((r) => r.event_id === 'e2'), "the day's shift is there");
+  assert.ok(!result.records.some((r) => r.event_id === 'e1' || r.event_id === 'e3'));
+  // Every caregiver still gets a row for that day, so an idle one reads "-"
+  // rather than vanishing -- same rule as a full scan.
+  assert.equal(result.records.length, 2);
+  assert.ok(result.records.some((r) => r.caregiver_name === 'Aa, Ann' && r.status === 'no_shift'));
+  assert.ok(!dates.includes(d1) && !dates.includes(d3));
+});
+
+test('a full scan still covers every past day', async () => {
+  // The default path must be untouched by the new one.
+  const { html, d1, d2, d3 } = threeDayGrid();
+
+  const result = await runScanScript(html);
+
+  assert.equal(result.targetDate, null);
+  const dates = [...new Set(result.records.map((r) => r.shift_date))].sort();
+  assert.deepEqual(dates, [d1, d2, d3].sort());
+});
+
+test('asking for a day that is not on screen refuses rather than writing nothing', async () => {
+  // Silently succeeding with zero rows is the dangerous outcome: the Sheet treats
+  // a scan as authoritative for the days it covers, so "not read" would be
+  // indistinguishable from "nobody worked".
+  const { html } = threeDayGrid();
+  const offScreen = isoDateOffsetFromToday(-30);
+
+  const result = await runScanScript(html, { targetDate: offScreen });
+
+  assert.equal(result.targetDateMissing, true);
+  assert.equal(result.targetDate, offScreen);
+  assert.equal(result.records, undefined, 'nothing is offered up to be written');
+  assert.ok(result.columnDates.length, 'and it says which days ARE on screen');
+});
+
+test('a one-day scan refuses today and the future', async () => {
+  const { html } = threeDayGrid();
+
+  for (const date of [isoDateOffsetFromToday(0), isoDateOffsetFromToday(1)]) {
+    const result = await runScanScript(html, { targetDate: date });
+    assert.equal(result.targetDateNotPast, true, `${date} should be refused`);
+    assert.equal(result.records, undefined);
+  }
+});
+
+test('the target date is cleared so the next full scan is not narrowed', async () => {
+  // The date rides in on a window global. Left behind, the next FULL scan would
+  // quietly return one day and the sheet would just be missing six -- a silent
+  // wrong answer, which is worse than an error.
+  const { html, d2 } = threeDayGrid();
+  const dom = await runScanScriptKeepingWindow(html, d2);
+
+  assert.ok(!dom.window.__thcScanTargetDate, 'the flag does not survive the run');
+});
+
+// Same as runScanScript but hands back the window so the test can inspect what
+// the script left behind on it.
+async function runScanScriptKeepingWindow(bodyHtml, targetDate) {
+  const dom = new JSDOM(`<!doctype html><html><body>${bodyHtml}</body></html>`, {
+    url: 'https://togetherhomecare.clearcareonline.com/dashboard/live/weekly/caregivers/',
+    pretendToBeVisual: true,
+  });
+  dom.window.fetch = () => Promise.reject(new Error('fetch not stubbed in this test'));
+  dom.window.__thcScanTargetDate = targetDate;
+  global.document = dom.window.document;
+  global.window = dom.window;
+  global.MouseEvent = dom.window.MouseEvent;
+  global.KeyboardEvent = dom.window.KeyboardEvent;
+  try {
+    // eslint-disable-next-line no-eval
+    await eval(SCAN_SCRIPT_SOURCE);
+    return dom;
+  } finally {
+    delete global.document;
+    delete global.window;
+    delete global.MouseEvent;
+    delete global.KeyboardEvent;
+  }
+}

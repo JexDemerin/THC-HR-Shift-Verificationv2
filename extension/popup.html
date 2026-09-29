@@ -240,6 +240,34 @@
         margin: 5px 2px 0;
       }
 
+      /* ---- One-day scan ---- */
+      /* Secondary to the full scan: same container rules, but a plain row rather
+         than another full-width primary button, so there is still one obvious
+         main action. */
+      .day-scan {
+        display: flex;
+        gap: 6px;
+        align-items: stretch;
+      }
+
+      .day-scan input[type="date"] {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 9px 8px;
+        font-size: 13px;
+        font-family: inherit;
+        color: var(--ink);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius);
+        background: var(--white);
+      }
+
+      .day-scan button {
+        flex: 0 0 auto;
+        width: auto;
+        padding: 9px 14px;
+      }
+
       /* ---- Status + log ---- */
       /* An open left rule rather than a filled box: not everything needs a
          container, and a tinted panel here would push the pink share up. */
@@ -354,6 +382,14 @@
       <div class="action">
         <button id="scanBtn" class="primary">Scan Schedule</button>
         <span class="phase-tag">Reads every visible past shift and, for completed ones, clicks through to read the real clock times.</span>
+      </div>
+
+      <div class="action">
+        <div class="day-scan">
+          <input type="date" id="scanDayInput" aria-label="Day to scan" />
+          <button id="scanDayBtn">Scan Day</button>
+        </div>
+        <span class="phase-tag">Scans one day instead of the whole visible week — much faster when you only need to fix up a single date. The day has to be on screen in WellSky.</span>
       </div>
 
       <div class="action">
