@@ -1010,6 +1010,7 @@ function makeFakeSpreadsheet() {
   function makeSheet(name) {
     const cells = [];
     const backgrounds = {};
+    const notes = {};
     const alignments = {};
     const columnWidths = {};
     let maxColumns = 40;
@@ -1022,7 +1023,7 @@ function makeFakeSpreadsheet() {
       setFrozenRows: () => {},
       clear: () => { cells.length = 0; },
       clearContents: () => { cells.length = 0; },
-      clearNotes: () => {},
+      clearNotes: () => { Object.keys(notes).forEach((k) => delete notes[k]); },
       setName: (n) => { name = n; },
       getRange: (row, col, numRows, numCols) => ({
         getValues: () => {
@@ -1031,6 +1032,26 @@ function makeFakeSpreadsheet() {
             const src = cells[row - 1 + r] || [];
             const line = [];
             for (let c = 0; c < numCols; c++) line.push(src[col - 1 + c] ?? '');
+            out.push(line);
+          }
+          return out;
+        },
+        // Sheets hands these back as grids alongside the values; the grid
+        // rebuild reads them to carry unscanned days over untouched.
+        getNotes: () => {
+          const out = [];
+          for (let r = 0; r < numRows; r++) {
+            const line = [];
+            for (let c = 0; c < numCols; c++) line.push(notes[`${row + r},${col + c}`] ?? '');
+            out.push(line);
+          }
+          return out;
+        },
+        getBackgrounds: () => {
+          const out = [];
+          for (let r = 0; r < numRows; r++) {
+            const line = [];
+            for (let c = 0; c < numCols; c++) line.push(backgrounds[`${row + r},${col + c}`] ?? '#ffffff');
             out.push(line);
           }
           return out;
@@ -1044,7 +1065,12 @@ function makeFakeSpreadsheet() {
           return { setFontWeight: () => ({}) };
         },
         setNumberFormat: () => ({}),
-        setNotes: () => ({}),
+        setNotes: (rows) => {
+          rows.forEach((line, r) => {
+            line.forEach((note, c) => { notes[`${row + r},${col + c}`] = note; });
+          });
+          return {};
+        },
         // Recorded per cell rather than discarded, so the payroll tab's
         // formatting is testable at all -- backgrounds and alignment ARE the
         // deliverable there (the legend colors are how a reader tells a missed
@@ -1066,6 +1092,9 @@ function makeFakeSpreadsheet() {
       setColumnWidth: (column, width) => { columnWidths[column] = width; },
       setFrozenColumns: () => {},
       _backgroundAt: (r, c) => backgrounds[`${r},${c}`],
+      _noteAt: (r, c) => notes[`${r},${c}`],
+      _setCell: (r, c, value) => { while (cells.length < r) cells.push([]); cells[r - 1][c - 1] = value; },
+      _setNote: (r, c, note) => { notes[`${r},${c}`] = note; },
       _alignmentAt: (r, c) => alignments[`${r},${c}`],
       _widthOf: (c) => columnWidths[c],
     };
@@ -1624,4 +1653,111 @@ test('an unresolved shift still colors a day that also has real hours', () => {
   assert.equal(status, 'incomplete', 'the day still needs following up');
   assert.equal(code.STATUS_COLORS[status], '#f4c7c3', 'still red');
   assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 3);
+});
+
+// ---- A scan must not disturb days it did not read ----
+
+function scanDay(dateIso, eventId) {
+  return logRecord({
+    caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+    shift_date: dateIso, official_time_in: '9:00am', official_time_out: '4:00pm',
+    duration_minutes: 420, label_duration_minutes: 420,
+    event_id: eventId, row_key: eventId,
+  });
+}
+
+function postScan(records) {
+  code.doPost({ postData: { contents: JSON.stringify(records) } });
+}
+
+test("a one-day scan leaves the rest of the month's grid completely alone", () => {
+  // The reported incident, reproduced: a full week is scanned, Angelica corrects
+  // the 22nd by hand in the Payroll grid and leaves a note, then a ONE-DAY scan
+  // of the 28th is run. Her work is on a day that scan never touched and must
+  // still be there afterwards. Before this, the grid was redrawn for the whole
+  // month on every scan and a week of corrections went with it.
+  const ss = makeFakeSpreadsheet();
+  postScan(['21', '22', '23', '24', '25', '26', '27'].map((d) => scanDay(`2026-09-${d}`, `evt-${d}`)));
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  const col22 = local(pay._cells[0]).indexOf('9/22') + 1; // 1-based
+  assert.ok(col22 > 1, 'found the 9/22 column');
+  assert.equal(pay._cells[2][col22 - 1], 7, 'the scan wrote its own value first');
+
+  pay._setCell(3, col22, 8.5);
+  pay._setNote(3, col22, 'Angelica: confirmed with parent, 9-6:30');
+
+  postScan([scanDay('2026-09-28', 'evt-28')]);
+
+  const col22After = local(pay._cells[0]).indexOf('9/22') + 1;
+  assert.equal(pay._cells[2][col22After - 1], 8.5, 'her hours survived');
+  assert.equal(pay._noteAt(3, col22After), 'Angelica: confirmed with parent, 9-6:30', 'her note survived');
+});
+
+test('the scanned day itself is still refreshed', () => {
+  // Preservation must not become "never update anything" -- the day actually
+  // scanned has to take the new value, or a re-scan would be pointless.
+  const ss = makeFakeSpreadsheet();
+  postScan([scanDay('2026-09-22', 'evt-22')]);
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  const col22 = local(pay._cells[0]).indexOf('9/22') + 1;
+  pay._setCell(3, col22, 99);
+
+  // Same day scanned again -- WellSky is authoritative for a day it just read.
+  postScan([scanDay('2026-09-22', 'evt-22')]);
+
+  assert.equal(pay._cells[2][local(pay._cells[0]).indexOf('9/22')], 7, 'the scanned day is rewritten');
+});
+
+test('the Client Hours grid is protected the same way', () => {
+  const ss = makeFakeSpreadsheet();
+  postScan([scanDay('2026-09-22', 'evt-22')]);
+
+  const hours = ss.sheetNamed(code.clientHoursSheetName_('2026-09'));
+  const col22 = local(hours._cells[0]).indexOf('9/22') + 1;
+  hours._setCell(3, col22, 8.5);
+
+  postScan([scanDay('2026-09-28', 'evt-28')]);
+
+  assert.equal(hours._cells[2][local(hours._cells[0]).indexOf('9/22')], 8.5);
+});
+
+test('a brand new month still builds its whole grid', () => {
+  // Nothing to preserve on a first scan; the rest of the month must still lay
+  // out, or an untouched date would have no column.
+  const ss = makeFakeSpreadsheet();
+  postScan([scanDay('2026-09-22', 'evt-22')]);
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  assert.ok(local(pay._cells[0]).indexOf('9/1') > 0, 'the 1st has a column');
+  assert.ok(local(pay._cells[0]).indexOf('9/30') > 0, 'so does the 30th');
+});
+
+test('a new caregiver shifts the rows without mispairing anyone else', () => {
+  // Preserved cells are keyed by NAME and date, not by row position -- a new
+  // hire sorting in above someone would otherwise hand that person's row their
+  // neighbour's numbers.
+  const ss = makeFakeSpreadsheet();
+  postScan([scanDay('2026-09-22', 'evt-22')]);
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  const col22 = local(pay._cells[0]).indexOf('9/22') + 1;
+  pay._setCell(3, col22, 8.5); // Barberi, Miku is the only row
+
+  // "Aaa, Amy" sorts first, pushing Barberi down a row.
+  postScan([
+    logRecord({
+      caregiver_name: 'Aaa, Amy', client_name: 'New Client', shift_date: '2026-09-28',
+      official_time_in: '9:00am', official_time_out: '11:00am',
+      duration_minutes: 120, label_duration_minutes: 120,
+      event_id: 'evt-new', row_key: 'evt-new',
+    }),
+  ]);
+
+  const names = pay._cells.slice(2).map((r) => r[0]);
+  assert.deepEqual(names, ['Aaa, Amy', 'Barberi, Miku'], 'the new hire sorted in above');
+  const c = local(pay._cells[0]).indexOf('9/22');
+  assert.equal(pay._cells[3][c], 8.5, "Barberi's edit followed her down the sheet");
+  assert.notEqual(pay._cells[2][c], 8.5, "and was not left on Amy's row");
 });

@@ -220,6 +220,18 @@ Scanning a shift with a click-through takes a few seconds each (open, read, clos
 with many completed shifts visible at once will take a while to finish — that's expected. Since each
 scan only sees one visible week, a full month's grid tabs fill in over several scans.
 
+**A scan only touches the days it read.** The Payroll and Client Hours grids are rebuilt from the
+Log, but only the columns for the dates in that scan — every other day's cells, notes and colours are
+put back exactly as they were found. That matters because those tabs get corrected by hand: before
+this, the grids were redrawn for the whole month on every scan, so a one-day scan of the 28th erased
+a week of corrections on the 21st–27th. Nothing is lost by preserving them, since an unscanned day's
+Log rows haven't changed and recomputing that column would produce what's already there — the only
+thing preservation can save is a human edit. Preserved cells are keyed by row label and date, not
+position, so a new caregiver sorting in above someone can't hand that row its neighbour's numbers.
+
+A day the scan **did** read is still rewritten in full — WellSky is authoritative for a day it just
+looked at, and a hand edit on a re-scanned day will still be replaced.
+
 ### Re-scanning: what changes and what doesn't
 
 WellSky shows one week at a time, so building up a month means scanning several weeks, and

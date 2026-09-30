@@ -39,7 +39,7 @@ var SCRIPT_VERSION = 12;
 // purpose (bumping it would force an extension update for nothing), which left
 // no way to tell a deployed fix from a forgotten one. Open the Web App URL in a
 // browser and read `build`.
-var CODE_GS_BUILD = 'mixed-day-hours-1';
+var CODE_GS_BUILD = 'preserve-unscanned-days-1';
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -785,30 +785,93 @@ function cellValueFor_(status, totalMinutes, hasRealShift) {
 
 // Caregivers down the left. Hours are what the caregiver worked, so sibling
 // care counts once.
-function rebuildPayrollSheet_(monthKey) {
+function rebuildPayrollSheet_(monthKey, scannedDates) {
   var records = readLogRecords_(monthKey);
   return rebuildGridSheet_(
     payrollSheetName_(monthKey),
     monthKey,
     'Caregiver',
-    aggregateByCaregiverAndDate_(records)
+    aggregateByCaregiverAndDate_(records),
+    scannedDates
   );
 }
 
 // The same grid pivoted onto clients. Hours are what the client received, so
 // two siblings each show the full span rather than sharing it.
-function rebuildClientHoursSheet_(monthKey) {
+function rebuildClientHoursSheet_(monthKey, scannedDates) {
   var records = readLogRecords_(monthKey);
   return rebuildGridSheet_(
     clientHoursSheetName_(monthKey),
     monthKey,
     'Client',
-    aggregateByClientAndDate_(records)
+    aggregateByClientAndDate_(records),
+    scannedDates
   );
 }
 
-function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver) {
+// Snapshots the grid as it stands, keyed by row label + date rather than by
+// position, so a caregiver appearing or leaving shifts rows without mispairing
+// anything. Value, note AND background are captured: a day the scan didn't cover
+// has to come back byte-identical, and a hand-picked colour is as much someone's
+// work as a hand-typed number.
+function readGridCells_(sheet, columns) {
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  if (lastRow < 3 || lastColumn < 2) return {};
+
+  var dateRow = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  // The header shows "9/22", not an ISO date, so map the labels back.
+  var dateByColumnIndex = {};
+  columns.forEach(function (column) {
+    if (column.spacer) return;
+    var label = shortDateLabel_(column.date);
+    for (var i = 1; i < dateRow.length; i++) {
+      if (String(dateRow[i]) === label) {
+        dateByColumnIndex[i] = column.date;
+        break;
+      }
+    }
+  });
+
+  var body = sheet.getRange(3, 1, lastRow - 2, lastColumn);
+  var values = body.getValues();
+  var notes = body.getNotes();
+  var backgrounds = body.getBackgrounds();
+
+  var previous = {};
+  values.forEach(function (row, r) {
+    var name = String(row[0] || '');
+    if (!name) return;
+    Object.keys(dateByColumnIndex).forEach(function (index) {
+      var i = Number(index);
+      previous[name + '|' + dateByColumnIndex[i]] = {
+        value: row[i],
+        note: (notes[r] && notes[r][i]) || '',
+        background: (backgrounds[r] && backgrounds[r][i]) || null
+      };
+    });
+  });
+  return previous;
+}
+
+// `scannedDates` is the set of dates this scan actually read, as {iso: true}.
+// Only those columns are recomputed; every other day is restored exactly as it
+// was found.
+//
+// This grid used to be cleared and redrawn for the WHOLE MONTH on every scan,
+// however few days were scanned -- so a one-day scan of the 28th erased a week
+// of hand corrections and notes on the 21st-27th. Nothing is lost by keeping
+// them: an unscanned day's Log rows did not change, so recomputing that column
+// would produce exactly what is already there. The only thing preservation can
+// possibly save is a human edit.
+//
+// Omitting scannedDates rebuilds everything, which is the right default for a
+// deliberate full refresh.
+function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver, scannedDates) {
   var sheet = getOrCreateSheet_(sheetName, null);
+  var columns = buildPayrollColumns_(monthKey);
+  // Taken BEFORE the clear below, which is what destroys it.
+  var previous = scannedDates ? readGridCells_(sheet, columns) : {};
   // clear() drops values and formatting but leaves cell notes behind, which
   // would strand an old hours breakdown on a cell whose data has since
   // changed -- so notes are cleared explicitly. The whole tab is rebuilt from
@@ -817,7 +880,6 @@ function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver) {
   sheet.clear();
   sheet.clearNotes();
 
-  var columns = buildPayrollColumns_(monthKey);
   var caregivers = Object.keys(byCaregiver).sort(function (a, b) {
     return a.toLowerCase() < b.toLowerCase() ? -1 : 1;
   });
@@ -870,6 +932,17 @@ function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver) {
         rowValues.push('');
         rowNotes.push('');
         rowColors.push(SPACER_COLOR); // visible divider between weeks
+        return;
+      }
+
+      // A day this scan did not read is put back exactly as it was found.
+      var kept = scannedDates && !scannedDates[column.date]
+        ? previous[caregiver + '|' + column.date]
+        : null;
+      if (kept) {
+        rowValues.push(kept.value);
+        rowNotes.push(kept.note);
+        rowColors.push(kept.background);
         return;
       }
 
@@ -970,8 +1043,15 @@ function doPost(e) {
     // being stranded in an orphaned tab next to a newly-created one.
     migrateLegacyTabNames_(monthKey);
     written += upsertLogRows_(monthKey, byMonth[monthKey]);
-    rebuildPayrollSheet_(monthKey);
-    rebuildClientHoursSheet_(monthKey);
+    // Exactly the days this scan read. Every other day's grid cells are left
+    // alone, so a one-day scan cannot disturb the rest of the month.
+    var scannedDates = {};
+    byMonth[monthKey].forEach(function (record) {
+      var date = normalizeDateValue_(record.shift_date);
+      if (date) scannedDates[date] = true;
+    });
+    rebuildPayrollSheet_(monthKey, scannedDates);
+    rebuildClientHoursSheet_(monthKey, scannedDates);
     monthsTouched.push(monthLabelOf_(monthKey));
   });
 
