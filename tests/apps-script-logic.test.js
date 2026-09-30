@@ -1011,6 +1011,21 @@ function makeFakeSpreadsheet() {
     const cells = [];
     const backgrounds = {};
     const notes = {};
+    const textFormatted = {};
+
+    // Sheets coerces on write: "9/22" in a default-formatted cell becomes a DATE
+    // value and reads back as a Date, not the string that went in. Modelling
+    // that is the point -- a double storing strings verbatim let a real bug
+    // straight through, where the grid's date header was matched by its text
+    // and so never matched, and nothing was ever preserved.
+    const coerce = (value, key) => {
+      if (textFormatted[key]) return value;
+      if (typeof value === 'string' && /^\d{1,2}\/\d{1,2}$/.test(value)) {
+        const [m, d] = value.split('/').map(Number);
+        return new Date(2026, m - 1, d);
+      }
+      return value;
+    };
     const alignments = {};
     const columnWidths = {};
     let maxColumns = 40;
@@ -1060,11 +1075,20 @@ function makeFakeSpreadsheet() {
           values.forEach((line, r) => {
             const target = row - 1 + r;
             while (cells.length <= target) cells.push([]);
-            line.forEach((v, c) => { cells[target][col - 1 + c] = v; });
+            line.forEach((v, c) => {
+              cells[target][col - 1 + c] = coerce(v, `${row + r},${col + c}`);
+            });
           });
           return { setFontWeight: () => ({}) };
         },
-        setNumberFormat: () => ({}),
+        setNumberFormat: (format) => {
+          if (format === '@') {
+            for (let r = 0; r < numRows; r++) {
+              for (let c = 0; c < numCols; c++) textFormatted[`${row + r},${col + c}`] = true;
+            }
+          }
+          return {};
+        },
         setNotes: (rows) => {
           rows.forEach((line, r) => {
             line.forEach((note, c) => { notes[`${row + r},${col + c}`] = note; });
@@ -1760,4 +1784,41 @@ test('a new caregiver shifts the rows without mispairing anyone else', () => {
   const c = local(pay._cells[0]).indexOf('9/22');
   assert.equal(pay._cells[3][c], 8.5, "Barberi's edit followed her down the sheet");
   assert.notEqual(pay._cells[2][c], 8.5, "and was not left on Amy's row");
+});
+
+test('preservation works on a sheet whose header is already stored as dates', () => {
+  // The state every existing sheet is in right now: written by a build that let
+  // Sheets coerce "9/22" into a date value. Those headers stay dates until the
+  // tab is rewritten, so the very first scan after deploying has to cope with
+  // them -- otherwise the fix does nothing on exactly the sheets that need it.
+  const ss = makeFakeSpreadsheet();
+  postScan([scanDay('2026-09-22', 'evt-22')]);
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  const col22 = local(pay._cells[0]).indexOf('9/22') + 1;
+  pay._setCell(3, col22, 8.5);
+
+  // Put the header back the way an older build left it: real Date objects.
+  pay._cells[0].forEach((label, i) => {
+    if (typeof label === 'string' && /^\d{1,2}\/\d{1,2}$/.test(label)) {
+      const [m, d] = label.split('/').map(Number);
+      pay._cells[0][i] = new Date(2026, m - 1, d);
+    }
+  });
+
+  postScan([scanDay('2026-09-28', 'evt-28')]);
+
+  const col22After = local(pay._cells[0]).indexOf('9/22') + 1;
+  assert.ok(col22After > 1, 'the header is rewritten as text on the way out');
+  assert.equal(pay._cells[2][col22After - 1], 8.5, 'the edit survived a date-typed header');
+});
+
+test('the date header is written as text so it cannot become a date value', () => {
+  // The root cause, pinned at the source rather than only patched on read.
+  const ss = makeFakeSpreadsheet();
+  postScan([scanDay('2026-09-22', 'evt-22')]);
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  assert.equal(typeof pay._cells[0][1], 'string', 'header cell stayed a string');
+  assert.equal(pay._cells[0][1], '9/1');
 });

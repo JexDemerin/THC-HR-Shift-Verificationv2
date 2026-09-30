@@ -39,7 +39,7 @@ var SCRIPT_VERSION = 12;
 // purpose (bumping it would force an extension update for nothing), which left
 // no way to tell a deployed fix from a forgotten one. Open the Web App URL in a
 // browser and read `build`.
-var CODE_GS_BUILD = 'preserve-unscanned-days-1';
+var CODE_GS_BUILD = 'preserve-unscanned-days-2';
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -814,6 +814,23 @@ function rebuildClientHoursSheet_(monthKey, scannedDates) {
 // anything. Value, note AND background are captured: a day the scan didn't cover
 // has to come back byte-identical, and a hand-picked colour is as much someone's
 // work as a hand-typed number.
+// What a date-header cell says, whichever form it comes back in.
+//
+// Sheets reads "9/22" as a DATE and stores it as one, so getValues() hands back
+// a Date and a plain String() comparison against "9/22" never matches. That is
+// exactly what broke preservation in the field: no header matched, so the map of
+// which column holds which day came back empty, nothing was recognised as
+// preservable, and the whole month was redrawn -- silently, because an empty map
+// looks identical to a first-ever scan. New sheets avoid the coercion entirely
+// (the header row is written as plain text below); this covers the ones already
+// out there holding dates.
+function headerLabelOf_(value) {
+  if (isDateLike_(value)) {
+    return (value.getMonth() + 1) + '/' + value.getDate();
+  }
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
 function readGridCells_(sheet, columns) {
   var lastRow = sheet.getLastRow();
   var lastColumn = sheet.getLastColumn();
@@ -826,7 +843,7 @@ function readGridCells_(sheet, columns) {
     if (column.spacer) return;
     var label = shortDateLabel_(column.date);
     for (var i = 1; i < dateRow.length; i++) {
-      if (String(dateRow[i]) === label) {
+      if (headerLabelOf_(dateRow[i]) === label) {
         dateByColumnIndex[i] = column.date;
         break;
       }
@@ -893,6 +910,9 @@ function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver, scanned
     dateRow.push(column.spacer ? '' : shortDateLabel_(column.date));
     weekdayRow.push(column.spacer ? '' : column.weekday);
   });
+  // Plain text BEFORE the write, not after: "9/22" left in a default-formatted
+  // cell is parsed as a date on the way in, and by then the string is gone.
+  sheet.getRange(1, 1, 1, width).setNumberFormat('@');
   sheet.getRange(1, 1, 1, width).setValues([dateRow]).setFontWeight('bold');
   sheet.getRange(2, 1, 1, width).setValues([weekdayRow]).setFontWeight('bold');
 
