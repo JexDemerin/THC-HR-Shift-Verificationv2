@@ -39,7 +39,7 @@ var SCRIPT_VERSION = 12;
 // purpose (bumping it would force an extension update for nothing), which left
 // no way to tell a deployed fix from a forgotten one. Open the Web App URL in a
 // browser and read `build`.
-var CODE_GS_BUILD = 'preserve-unscanned-days-2';
+var CODE_GS_BUILD = 'projected-hours-1';
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -108,15 +108,21 @@ var STATUS_COLORS = {
 // Cancelled used to sit above completed, which turned any day mixing a
 // cancellation with a worked shift blue: two cancelled 6-8am sibling visits plus
 // a completed 1-4pm one showed as cancelled, and the three real hours vanished.
+//
+// Upcoming and in-progress now outrank completed, for the opposite reason. Their
+// scheduled hours are counted in the cell, so a day with a finished morning and
+// a planned afternoon shows a total that is part projection. The colour is the
+// ONLY thing saying so -- green on that cell would read as seven hours worked
+// when three of them have not been.
 var STATUS_URGENCY = [
   'unparsed',
   'incomplete',
   'ongoing',
+  'upcoming',
   'completed',
   'cancelled_by_client',
   'cancelled_by_office',
   'cancelled_by_caregiver',
-  'upcoming',
   'no_shift'
 ];
 
@@ -127,11 +133,16 @@ var STATUS_URGENCY = [
 // still comes from the most urgent status across the day.
 function contributesHours_(status) {
   if (status === 'no_shift') return false;
-  if (status === 'incomplete') return false;
-  if (status === 'upcoming') return false;
-  if (status === 'ongoing') return false;
+  // Nothing was earned and nothing is coming: the visit is not happening.
   if (String(status).indexOf('cancelled_') === 0) return false;
-  return true; // completed, and unparsed (its label hours are real; purple flags it)
+  // A missed clock-in DID happen -- we just cannot say for how long until
+  // someone verifies it. Counting the scheduled span would assert hours nobody
+  // has confirmed, which is the one thing this tool exists to catch.
+  if (status === 'incomplete') return false;
+  // Everything else counts, INCLUDING upcoming and in-progress shifts, whose
+  // scheduled span is the projection. The cell's colour is what separates
+  // projected hours from worked ones -- see STATUS_URGENCY.
+  return true;
 }
 
 // Payroll tab layout. A date column only ever holds "7/27", "Mon" or a number
@@ -777,10 +788,12 @@ function toMinutes_(value) {
 // shared the day with it.
 function cellValueFor_(status, totalMinutes, hasRealShift) {
   if (!hasRealShift) return '-';
-  if (totalMinutes > 0) return roundedDecimalHours_(totalMinutes);
-  if (status === 'ongoing') return 'ongoing';
-  if (status === 'upcoming') return '';
-  return 0;
+  // Every status now resolves to a number of hours: contributesHours_ has
+  // already decided what counts, so a cancelled or unverified day arrives here
+  // as zero rather than needing a special case. Upcoming and in-progress days
+  // arrive as their scheduled span -- the projected hours -- and the colour is
+  // what says those are not yet earned.
+  return roundedDecimalHours_(totalMinutes);
 }
 
 // Caregivers down the left. Hours are what the caregiver worked, so sibling

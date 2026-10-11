@@ -23,9 +23,10 @@ What's working now:
   sheet could never show the schedule ahead. The reason for the old rule still holds — an unfinished
   shift has no final clock times — but it's enforced where it belongs instead: only **completed**
   shifts are clicked through for real times, and neither an upcoming nor an in-progress shift puts
-  hours in a Payroll or Client Hours cell. A scheduled shift shows as a blue cell with its planned
-  span in the hover note; an in-progress one reads `ongoing`. A shift with no parseable date is kept
-  as `unparsed` rather than silently dropped.
+  **clock times** in a Payroll or Client Hours row — a future shift's `actual_*`/`scheduled_*` columns
+  stay blank rather than being filled with its plan. Its *hours* do show, as a projection coloured
+  blue (scheduled) or yellow (in progress). A shift with no parseable date is kept as `unparsed`
+  rather than silently dropped.
 - For every **completed (green)** shift, it also clicks the shift's `a.name` link open — the
   client-name/time link nested two levels inside `.title` (`.title` also contains a "send email"
   link that comes first, and clicking the wrapper or `.title` itself both land on WellSky's generic
@@ -151,17 +152,26 @@ quarter-hour rounding applied to the day's total (0–7 leftover minutes → `.0
 
 | Status | Cell | Color |
 |---|---|---|
-| completed | rounded decimal hours | green |
+| completed | rounded decimal hours **worked** | green |
 | incomplete (missed clock in/out) | `0` | red |
-| ongoing | `ongoing` | yellow |
-| upcoming/scheduled | *(blank)* | dark blue |
+| ongoing | **projected** hours | yellow |
+| upcoming/scheduled | **projected** hours | dark blue |
 | cancelled by caregiver | `0` | orange |
 | cancelled by office | `0` | darker orange |
 | cancelled by client | `0` | sky blue |
 | no shift that day | `-` | none |
 
+**Worked hours and projected hours are both numbers, and the colour is what separates them.** A
+scheduled or in-progress shift shows the hours it is expected to consume, so the grid can be read as
+a forecast — but those hours have not been earned. Green means worked; blue and yellow mean projected.
+
+The consequence worth knowing: **summing a caregiver's row blends the two.** A total across a month
+that is partly in the future is worked + projected, not hours owed. If you need "consumed so far",
+stop at the last green column.
+
 If a caregiver had more than one shift that day, the **most urgent status wins** the color, so an
-incomplete log can never hide behind a completed one. Hover any cell for a per-shift breakdown —
+incomplete log can never hide behind a completed one — and a day that mixes a finished morning with a
+planned afternoon reads as **projected**, never as finished, since its total is part forecast. Hover any cell for a per-shift breakdown —
 hours first, then the activity note if there is one, with a blank line between shifts:
 
 ```

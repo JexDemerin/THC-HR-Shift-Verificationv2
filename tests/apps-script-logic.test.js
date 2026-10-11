@@ -161,10 +161,11 @@ test('real hours show even when a more urgent status won the color', () => {
   assert.equal(code.cellValueFor_('incomplete', 180, true), 3);
 });
 
-test('cell says "ongoing" for a shift still in progress', () => {
-  // An in-progress shift earns no hours yet, so its total arrives as 0 and the
-  // status is what the cell has to say.
-  assert.equal(code.cellValueFor_('ongoing', 0, true), 'ongoing');
+test('an in-progress shift shows its projected hours, not a word', () => {
+  // The cell is a number whatever the status now -- the colour says whether
+  // those hours are earned or projected.
+  assert.equal(code.cellValueFor_('ongoing', 180, true), 3);
+  assert.equal(code.cellValueFor_('upcoming', 420, true), 7);
 });
 
 // ---- Aggregation across clients ----
@@ -1825,10 +1826,9 @@ test('the date header is written as text so it cannot become a date value', () =
 
 // ---- Unfinished shifts reach the sheet without claiming hours ----
 
-test('an upcoming shift is recorded but puts no hours in the cell', () => {
-  // Scanning the schedule ahead is only safe because the hours rule moved
-  // rather than went away: a shift that has not happened yet is logged and
-  // coloured, but its scheduled span must never count as worked.
+test('an upcoming shift shows its scheduled hours as a projection', () => {
+  // Scanning ahead is only worth doing if the planned hours actually appear.
+  // They do -- coloured as scheduled, so the number reads as a forecast.
   const records = [
     {
       caregiver_name: 'Future, Fay', client_name: 'Client F', shift_date: '2026-12-01',
@@ -1840,15 +1840,13 @@ test('an upcoming shift is recorded but puts no hours in the cell', () => {
   const cell = code.aggregateByCaregiverAndDate_(records)['Future, Fay']['2026-12-01'];
   const status = code.mostUrgentStatus_(local(cell.statuses));
 
-  assert.equal(cell.totalMinutes, 0, 'scheduled hours are not worked hours');
-  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), '');
-  assert.equal(code.STATUS_COLORS[status], '#4a86c8', 'still shows as scheduled');
-  // The planned span is in the hover note, so the shift is visible rather than
-  // being an unexplained blank blue cell.
+  assert.equal(cell.totalMinutes, 420);
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 7);
+  assert.equal(code.STATUS_COLORS[status], '#4a86c8', 'blue says these are not worked yet');
   assert.match(local(cell.noteLines)[0], /9:00am - 4:00pm = 7h/);
 });
 
-test('an in-progress shift does not bank its hours early', () => {
+test('an in-progress shift projects its full scheduled span', () => {
   const records = [
     {
       caregiver_name: 'Now, Nia', client_name: 'Client N', shift_date: '2026-12-01',
@@ -1860,13 +1858,28 @@ test('an in-progress shift does not bank its hours early', () => {
   const cell = code.aggregateByCaregiverAndDate_(records)['Now, Nia']['2026-12-01'];
   const status = code.mostUrgentStatus_(local(cell.statuses));
 
-  assert.equal(cell.totalMinutes, 0);
-  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 'ongoing');
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 7);
+  assert.equal(code.STATUS_COLORS[status], '#fce8b2', 'yellow: happening now');
 });
 
-test('a day mixing finished and upcoming work counts only what was worked', () => {
-  // The case that makes scanning ahead useful AND safe: a completed morning and
-  // a scheduled afternoon on the same day total three hours, not six.
+test('an unverified or cancelled day still contributes nothing', () => {
+  // The two statuses that must NOT be projected. A missed clock-in happened but
+  // nobody has said for how long, and a cancelled visit is not happening at all
+  // -- counting either would assert hours no one has confirmed.
+  assert.equal(code.contributesHours_('incomplete'), false);
+  assert.equal(code.contributesHours_('cancelled_by_client'), false);
+  assert.equal(code.contributesHours_('cancelled_by_office'), false);
+  assert.equal(code.contributesHours_('cancelled_by_caregiver'), false);
+  assert.equal(code.contributesHours_('no_shift'), false);
+  // And the two that now are.
+  assert.equal(code.contributesHours_('upcoming'), true);
+  assert.equal(code.contributesHours_('ongoing'), true);
+});
+
+test('a day mixing finished and planned work totals both, coloured as projected', () => {
+  // A completed morning plus a scheduled afternoon is seven hours of expected
+  // consumption. It must NOT read green: three of those hours are worked and
+  // four are a forecast, and the colour is the only thing that can say so.
   const records = [
     {
       caregiver_name: 'Mix, Mo', client_name: 'Client A', shift_date: '2026-12-01',
@@ -1881,7 +1894,10 @@ test('a day mixing finished and upcoming work counts only what was worked', () =
   ];
 
   const cell = code.aggregateByCaregiverAndDate_(records)['Mix, Mo']['2026-12-01'];
+  const status = code.mostUrgentStatus_(local(cell.statuses));
 
-  assert.equal(cell.totalMinutes, 180, 'only the finished shift counts');
-  assert.equal(local(cell.noteLines).length, 2, 'both still show in the note');
+  assert.equal(cell.totalMinutes, 360, 'both halves count toward the projection');
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 6);
+  assert.equal(status, 'upcoming', 'a part-projected day must not read as finished');
+  assert.notEqual(code.STATUS_COLORS[status], code.STATUS_COLORS.completed);
 });
