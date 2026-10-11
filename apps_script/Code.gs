@@ -39,7 +39,7 @@ var SCRIPT_VERSION = 12;
 // purpose (bumping it would force an extension update for nothing), which left
 // no way to tell a deployed fix from a forgotten one. Open the Web App URL in a
 // browser and read `build`.
-var CODE_GS_BUILD = 'projected-hours-1';
+var CODE_GS_BUILD = 'mixed-day-stripe-1';
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -352,6 +352,43 @@ function formatHoursMinutes_(totalMinutes) {
   if (hours > 0 && minutes > 0) return hours + 'h' + minutes + 'm';
   if (hours > 0) return hours + 'h';
   return minutes + 'm';
+}
+
+// The colour for the stripe along the bottom of a mixed day: the next most
+// urgent status after the one that won the fill.
+//
+// A cell background in Sheets is a single colour -- no gradients, no splitting
+// it in half -- so a day that is part worked and part projected can only say so
+// with a second channel. A thick bottom border is that channel: green fill with
+// a blue band under it reads as "some of these hours are a forecast" at a
+// glance, which the number alone cannot.
+//
+// Returns null for a day with only one status, which is almost every day.
+function secondaryStatusColor_(statuses) {
+  var seen = {};
+  var ordered = [];
+  STATUS_URGENCY.forEach(function (status) {
+    if (statuses.indexOf(status) !== -1 && !seen[status]) {
+      seen[status] = true;
+      ordered.push(status);
+    }
+  });
+  for (var i = 1; i < ordered.length; i++) {
+    if (STATUS_COLORS[ordered[i]]) return STATUS_COLORS[ordered[i]];
+  }
+  return null;
+}
+
+// 1 -> "A", 27 -> "AA". Needed because borders are applied through a RangeList,
+// which takes A1 notation.
+function columnLetter_(index) {
+  var letters = '';
+  while (index > 0) {
+    var remainder = (index - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    index = Math.floor((index - 1) / 26);
+  }
+  return letters;
 }
 
 function mostUrgentStatus_(statuses) {
@@ -954,6 +991,9 @@ function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver, scanned
   var grid = [];
   var notes = [];
   var colors = [];
+  // A1 references grouped by stripe colour, so every cell sharing one is set in
+  // a single call rather than one API round trip per cell.
+  var stripesByColor = {};
 
   caregivers.forEach(function (caregiver) {
     var rowValues = [caregiver];
@@ -968,6 +1008,20 @@ function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver, scanned
         return;
       }
 
+      var cell = byCaregiver[caregiver][column.date];
+
+      // Worked out for every cell, preserved ones included. Sheets offers no way
+      // to READ a border back, so a stripe cannot be snapshotted and restored
+      // like the value and background are -- but it is derived from the Log,
+      // which has not changed for an unscanned day, so recomputing it gives
+      // exactly what was there before.
+      var stripe = cell ? secondaryStatusColor_(cell.statuses) : null;
+      if (stripe) {
+        var a1 = columnLetter_(rowValues.length + 1) + (grid.length + 3);
+        if (!stripesByColor[stripe]) stripesByColor[stripe] = [];
+        stripesByColor[stripe].push(a1);
+      }
+
       // A day this scan did not read is put back exactly as it was found.
       var kept = scannedDates && !scannedDates[column.date]
         ? previous[caregiver + '|' + column.date]
@@ -979,7 +1033,6 @@ function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver, scanned
         return;
       }
 
-      var cell = byCaregiver[caregiver][column.date];
       if (!cell) {
         // No record at all for this caregiver/date -- e.g. a date that hasn't
         // been scanned yet, or one still in the future. Left blank rather than
@@ -1008,6 +1061,14 @@ function rebuildGridSheet_(sheetName, monthKey, axisHeader, byCaregiver, scanned
   body.setNotes(notes);
   body.setBackgrounds(colors);
   sheet.getRange(3, 2, grid.length, columns.length).setHorizontalAlignment('center');
+
+  // One call per distinct colour rather than one per cell. sheet.clear() above
+  // already removed any previous borders, so only the bottom edge is set here
+  // and the other three are left alone.
+  Object.keys(stripesByColor).forEach(function (color) {
+    sheet.getRangeList(stripesByColor[color]).setBorder(
+      null, null, true, null, null, null, color, SpreadsheetApp.BorderStyle.SOLID_THICK);
+  });
 
   sheet.setFrozenRows(2);
   sheet.setFrozenColumns(1);

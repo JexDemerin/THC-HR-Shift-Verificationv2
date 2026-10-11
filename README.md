@@ -169,6 +169,16 @@ The consequence worth knowing: **summing a caregiver's row blends the two.** A t
 that is partly in the future is worked + projected, not hours owed. If you need "consumed so far",
 stop at the last green column.
 
+**A day with two different statuses gets a stripe.** A Sheets cell background is a single colour —
+no gradients, no splitting it in half — so a day that is part worked and part projected says so with
+a thick coloured border along the bottom, in the colour of the day's *second* status. A blue cell
+with a green band is "mostly forecast, some of it already worked". A single-status day has no stripe,
+so the stripe always means something.
+
+One limitation worth recording: Sheets has **no way to read a border back**, so unlike the value and
+background a stripe can't be snapshotted and restored for an unscanned day. It's recomputed from the
+Log instead — which gives the same answer, since an unscanned day's Log rows haven't changed.
+
 If a caregiver had more than one shift that day, the **most urgent status wins** the color, so an
 incomplete log can never hide behind a completed one — and a day that mixes a finished morning with a
 planned afternoon reads as **projected**, never as finished, since its total is part forecast. Hover any cell for a per-shift breakdown —

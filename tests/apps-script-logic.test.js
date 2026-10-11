@@ -10,7 +10,7 @@ const vm = require('node:vm');
 function loadCodeGs() {
   const source = fs.readFileSync(path.join(__dirname, '..', 'apps_script', 'Code.gs'), 'utf8');
   const sandbox = {
-    SpreadsheetApp: {},
+    SpreadsheetApp: { BorderStyle: { SOLID_THICK: 'SOLID_THICK' } },
     ContentService: { MimeType: { JSON: 'JSON' } },
     Utilities: {},
     Session: { getScriptTimeZone: () => 'UTC' },
@@ -1029,6 +1029,7 @@ function makeFakeSpreadsheet() {
     };
     const alignments = {};
     const columnWidths = {};
+    const stripes = {};
     let maxColumns = 40;
     return {
       _cells: cells,
@@ -1037,7 +1038,14 @@ function makeFakeSpreadsheet() {
       getMaxColumns: () => maxColumns,
       insertColumnsAfter: (_after, count) => { maxColumns += count; },
       setFrozenRows: () => {},
-      clear: () => { cells.length = 0; },
+      // Real clear() drops borders along with everything else. The double not
+      // doing so made the preserved-stripe test pass against code that had
+      // stopped recomputing them -- the stripe left over from the previous scan
+      // was still sitting in the map.
+      clear: () => {
+        cells.length = 0;
+        Object.keys(stripes).forEach((k) => delete stripes[k]);
+      },
       clearContents: () => { cells.length = 0; },
       clearNotes: () => { Object.keys(notes).forEach((k) => delete notes[k]); },
       setName: (n) => { name = n; },
@@ -1115,6 +1123,16 @@ function makeFakeSpreadsheet() {
         sort: () => ({}),
       }),
       setColumnWidth: (column, width) => { columnWidths[column] = width; },
+      // Borders are applied through a RangeList of A1 refs. Sheets gives no way
+      // to read a border back, so the double records them for the tests to see.
+      getRangeList: (a1List) => ({
+        setBorder: (top, left, bottom, right, vertical, horizontal, color) => {
+          a1List.forEach((ref) => { stripes[ref] = { bottom: Boolean(bottom), color }; });
+          return {};
+        },
+      }),
+      _stripeAt: (a1) => stripes[a1],
+      _stripeCount: () => Object.keys(stripes).length,
       setFrozenColumns: () => {},
       _backgroundAt: (r, c) => backgrounds[`${r},${c}`],
       _noteAt: (r, c) => notes[`${r},${c}`],
@@ -1900,4 +1918,125 @@ test('a day mixing finished and planned work totals both, coloured as projected'
   assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 6);
   assert.equal(status, 'upcoming', 'a part-projected day must not read as finished');
   assert.notEqual(code.STATUS_COLORS[status], code.STATUS_COLORS.completed);
+});
+
+// ---- Mixed days get a second colour as a stripe ----
+
+test('the second colour on a mixed day is the next most urgent status', () => {
+  // A cell background in Sheets is one colour, so a day that is part worked and
+  // part projected needs a second channel to say so.
+  assert.equal(
+    code.secondaryStatusColor_(['completed', 'upcoming']),
+    code.STATUS_COLORS.completed,
+    'upcoming wins the fill, so completed is the stripe'
+  );
+  assert.equal(
+    code.secondaryStatusColor_(['completed', 'cancelled_by_client']),
+    code.STATUS_COLORS.cancelled_by_client,
+    'completed wins the fill, cancelled is the stripe'
+  );
+  // An ordinary single-status day gets no stripe at all.
+  assert.equal(code.secondaryStatusColor_(['completed']), null);
+  assert.equal(code.secondaryStatusColor_(['completed', 'completed']), null);
+  // A status with no colour of its own is skipped rather than striping blank.
+  assert.equal(code.secondaryStatusColor_(['no_shift']), null);
+});
+
+test('a worked-plus-projected day is striped on the sheet', () => {
+  const ss = makeFakeSpreadsheet();
+  code.doPost({ postData: { contents: JSON.stringify([
+    logRecord({
+      caregiver_name: 'Mix, Mo', client_name: 'Client A', shift_date: '2026-09-22',
+      official_time_in: '9:00am', official_time_out: '12:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+      event_id: 'm1', row_key: 'm1',
+    }),
+    logRecord({
+      caregiver_name: 'Mix, Mo', client_name: 'Client B', shift_date: '2026-09-22',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'upcoming',
+      event_id: 'm2', row_key: 'm2',
+    }),
+  ]) } });
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  const col = local(pay._cells[0]).indexOf('9/22') + 1;
+  const a1 = code.columnLetter_(col) + '3';
+
+  assert.equal(pay._cells[2][col - 1], 6, 'both halves still total in the cell');
+  assert.equal(pay._backgroundAt(3, col), code.STATUS_COLORS.upcoming, 'fill says projected');
+  const stripe = pay._stripeAt(a1);
+  assert.ok(stripe, 'the cell carries a stripe');
+  assert.equal(stripe.bottom, true, 'along the bottom edge');
+  assert.equal(stripe.color, code.STATUS_COLORS.completed, 'in the worked colour');
+});
+
+test('an ordinary single-status day is left unstriped', () => {
+  // The stripe has to mean something. If every cell had one it would just be
+  // another gridline.
+  const ss = makeFakeSpreadsheet();
+  code.doPost({ postData: { contents: JSON.stringify([
+    logRecord({
+      caregiver_name: 'Plain, Pat', client_name: 'Client P', shift_date: '2026-09-22',
+      official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'completed',
+      event_id: 'p1', row_key: 'p1',
+    }),
+  ]) } });
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  assert.equal(pay._stripeCount(), 0);
+});
+
+test('column letters survive past column Z', () => {
+  // A 31-day month plus spacers runs well past Z, and a wrong letter would put
+  // the stripe on an unrelated caregiver's cell.
+  assert.equal(code.columnLetter_(1), 'A');
+  assert.equal(code.columnLetter_(26), 'Z');
+  assert.equal(code.columnLetter_(27), 'AA');
+  assert.equal(code.columnLetter_(28), 'AB');
+  assert.equal(code.columnLetter_(52), 'AZ');
+  assert.equal(code.columnLetter_(53), 'BA');
+});
+
+test('a preserved day keeps its stripe even though borders cannot be read back', () => {
+  // Sheets offers no getBorder(), so a stripe cannot be snapshotted and restored
+  // the way the value and background are. It is recomputed from the Log instead,
+  // which has not changed for an unscanned day.
+  const ss = makeFakeSpreadsheet();
+  const mixedDay = [
+    logRecord({
+      caregiver_name: 'Mix, Mo', client_name: 'Client A', shift_date: '2026-09-22',
+      official_time_in: '9:00am', official_time_out: '12:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+      event_id: 'm1', row_key: 'm1',
+    }),
+    logRecord({
+      caregiver_name: 'Mix, Mo', client_name: 'Client B', shift_date: '2026-09-22',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'upcoming',
+      event_id: 'm2', row_key: 'm2',
+    }),
+  ];
+  code.doPost({ postData: { contents: JSON.stringify(mixedDay) } });
+
+  const pay = ss.sheetNamed(code.payrollSheetName_('2026-09'));
+  const col = local(pay._cells[0]).indexOf('9/22') + 1;
+  pay._setCell(3, col, 99); // a hand correction on that day
+
+  // A one-day scan of a DIFFERENT date.
+  code.doPost({ postData: { contents: JSON.stringify([
+    logRecord({
+      caregiver_name: 'Mix, Mo', client_name: 'Client C', shift_date: '2026-09-28',
+      official_time_in: '9:00am', official_time_out: '10:00am',
+      duration_minutes: 60, label_duration_minutes: 60, status: 'completed',
+      event_id: 'm3', row_key: 'm3',
+    }),
+  ]) } });
+
+  const colAfter = local(pay._cells[0]).indexOf('9/22') + 1;
+  assert.equal(pay._cells[2][colAfter - 1], 99, 'the hand edit survived');
+  const stripe = pay._stripeAt(code.columnLetter_(colAfter) + '3');
+  assert.ok(stripe, 'and the stripe came back with it');
+  assert.equal(stripe.color, code.STATUS_COLORS.completed);
 });
