@@ -343,18 +343,6 @@
     });
   }
 
-  // Today/future days are still in progress or haven't happened -- only
-  // fully-elapsed days get scanned. Each shift already carries its own date
-  // (from data-start/data-end), so this is a straight per-record filter, no
-  // day-column boundaries need to be found.
-  function todayIso() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
   // ---- Reading a completed shift's Edit Care Log times ----
 
   const CONTAINER_TAGS = new Set(['DIV', 'SECTION', 'FORM', 'ARTICLE']);
@@ -714,7 +702,6 @@
     }
 
     const { records: allRecords, rowCount, eventElsByEventId, columnDates } = scan();
-    const today = todayIso();
 
     // A one-day scan is requested by setting this on the window just before the
     // file is injected -- chrome.scripting.executeScript can't pass arguments to
@@ -730,19 +717,6 @@
     }
 
     if (targetDate) {
-      // Past-first, and deliberately so: today is normally ON screen in the
-      // weekly view, so checking visibility first would answer "that day isn't
-      // showing" about a column sitting right there. The real reason is that
-      // the day hasn't finished.
-      if (targetDate >= today) {
-        return {
-          targetDate,
-          targetDateNotPast: true,
-          columnDates,
-          rowCount,
-          pageUrl: window.location.href,
-        };
-      }
       // The requested day has to actually be on screen. Writing nothing and
       // calling it success would look identical to "that day had no shifts",
       // which is the one reading that must never be guessed at.
@@ -761,14 +735,16 @@
     // it) -- it's already flagged as "unparsed" and needs a human look either
     // way. A targeted scan can't place an undated row on the day asked for, so
     // there it is excluded instead.
+    // Every visible day, today and the future included. This used to stop at
+    // yesterday, on the grounds that an unfinished shift has no final clock
+    // times -- which is still true, and is handled where it belongs instead:
+    // only COMPLETED shifts are clicked through for real times, and neither an
+    // upcoming nor an in-progress shift contributes hours to a grid cell. What
+    // the sheet gains is the schedule ahead, which it simply could not show
+    // before.
     const records = sortRecords(
-      allRecords.filter((r) =>
-        targetDate ? r.shift_date === targetDate : !r.shift_date || r.shift_date < today
-      )
+      targetDate ? allRecords.filter((r) => r.shift_date === targetDate) : allRecords
     );
-    const skippedTodayOrFuture = targetDate
-      ? 0
-      : allRecords.length - records.length;
 
     let stoppedEarlyReason = null;
     const enrichmentDiagnostics = [];
@@ -851,7 +827,6 @@
       summary,
       rowCount,
       columnDates,
-      skippedTodayOrFuture,
       stoppedEarlyReason,
       enrichmentDiagnostics,
       pageUrl: window.location.href,

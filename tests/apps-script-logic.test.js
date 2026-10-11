@@ -1822,3 +1822,66 @@ test('the date header is written as text so it cannot become a date value', () =
   assert.equal(typeof pay._cells[0][1], 'string', 'header cell stayed a string');
   assert.equal(pay._cells[0][1], '9/1');
 });
+
+// ---- Unfinished shifts reach the sheet without claiming hours ----
+
+test('an upcoming shift is recorded but puts no hours in the cell', () => {
+  // Scanning the schedule ahead is only safe because the hours rule moved
+  // rather than went away: a shift that has not happened yet is logged and
+  // coloured, but its scheduled span must never count as worked.
+  const records = [
+    {
+      caregiver_name: 'Future, Fay', client_name: 'Client F', shift_date: '2026-12-01',
+      official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'upcoming',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Future, Fay']['2026-12-01'];
+  const status = code.mostUrgentStatus_(local(cell.statuses));
+
+  assert.equal(cell.totalMinutes, 0, 'scheduled hours are not worked hours');
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), '');
+  assert.equal(code.STATUS_COLORS[status], '#4a86c8', 'still shows as scheduled');
+  // The planned span is in the hover note, so the shift is visible rather than
+  // being an unexplained blank blue cell.
+  assert.match(local(cell.noteLines)[0], /9:00am - 4:00pm = 7h/);
+});
+
+test('an in-progress shift does not bank its hours early', () => {
+  const records = [
+    {
+      caregiver_name: 'Now, Nia', client_name: 'Client N', shift_date: '2026-12-01',
+      official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420, status: 'ongoing',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Now, Nia']['2026-12-01'];
+  const status = code.mostUrgentStatus_(local(cell.statuses));
+
+  assert.equal(cell.totalMinutes, 0);
+  assert.equal(code.cellValueFor_(status, cell.totalMinutes, cell.hasRealShift), 'ongoing');
+});
+
+test('a day mixing finished and upcoming work counts only what was worked', () => {
+  // The case that makes scanning ahead useful AND safe: a completed morning and
+  // a scheduled afternoon on the same day total three hours, not six.
+  const records = [
+    {
+      caregiver_name: 'Mix, Mo', client_name: 'Client A', shift_date: '2026-12-01',
+      official_time_in: '9:00am', official_time_out: '12:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'completed',
+    },
+    {
+      caregiver_name: 'Mix, Mo', client_name: 'Client B', shift_date: '2026-12-01',
+      official_time_in: '1:00pm', official_time_out: '4:00pm',
+      duration_minutes: 180, label_duration_minutes: 180, status: 'upcoming',
+    },
+  ];
+
+  const cell = code.aggregateByCaregiverAndDate_(records)['Mix, Mo']['2026-12-01'];
+
+  assert.equal(cell.totalMinutes, 180, 'only the finished shift counts');
+  assert.equal(local(cell.noteLines).length, 2, 'both still show in the note');
+});

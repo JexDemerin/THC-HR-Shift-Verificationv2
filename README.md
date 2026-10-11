@@ -19,9 +19,13 @@ What's working now:
   the markup already confirmed in the original WellSky Shift Scanner project: one
   `<tr class="sched_row">` per caregiver, one `<div class="_event STATUS" data-event-id
   data-start data-end>` per shift).
-- Skips any shift dated today or later — only fully-elapsed days get scanned (a shift with no
-  parseable date is kept as `unparsed` rather than silently dropped, since it can't be judged
-  past/future either way).
+- Reads **every shift on screen** — past, today and upcoming. This used to stop at yesterday, so the
+  sheet could never show the schedule ahead. The reason for the old rule still holds — an unfinished
+  shift has no final clock times — but it's enforced where it belongs instead: only **completed**
+  shifts are clicked through for real times, and neither an upcoming nor an in-progress shift puts
+  hours in a Payroll or Client Hours cell. A scheduled shift shows as a blue cell with its planned
+  span in the hover note; an in-progress one reads `ongoing`. A shift with no parseable date is kept
+  as `unparsed` rather than silently dropped.
 - For every **completed (green)** shift, it also clicks the shift's `a.name` link open — the
   client-name/time link nested two levels inside `.title` (`.title` also contains a "send email"
   link that comes first, and clicking the wrapper or `.title` itself both land on WellSky's generic

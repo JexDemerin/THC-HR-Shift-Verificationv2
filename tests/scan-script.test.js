@@ -146,7 +146,11 @@ function isoDateOffsetFromToday(dayOffset) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-test('today and future shifts are skipped -- only past days get scanned', async () => {
+test("today's and future shifts are scanned too, not skipped", async () => {
+  // This used to stop at yesterday, so the sheet could never show the schedule
+  // ahead. An unfinished shift still has no final clock times -- that is handled
+  // where it belongs now: only COMPLETED shifts are clicked through, and neither
+  // an upcoming nor an in-progress shift puts hours in a grid cell.
   const yesterday = isoDateOffsetFromToday(-1);
   const today = isoDateOffsetFromToday(0);
   const tomorrow = isoDateOffsetFromToday(1);
@@ -169,26 +173,29 @@ test('today and future shifts are skipped -- only past days get scanned', async 
   const result = await runScanScript(html);
 
   assert.equal(result.rowCount, 3, 'all three caregiver rows were on screen');
-  assert.equal(result.skippedTodayOrFuture, 2, 'the today and future shifts are dropped');
 
-  // The past-dated shift survives as a real record...
+  // All three come through, each keeping the status WellSky gave it.
   const realShifts = result.records.filter((r) => r.status !== 'no_shift');
-  assert.equal(realShifts.length, 1);
-  assert.equal(realShifts[0].event_id, 'evt-past');
-
-  // ...and the other two caregivers, who had nothing on that past date, each
-  // get a "-" row rather than being left out of the log entirely.
-  const noShiftRows = result.records.filter((r) => r.status === 'no_shift');
-  assert.equal(noShiftRows.length, 2);
   assert.deepEqual(
-    noShiftRows.map((r) => r.caregiver_name).sort(),
-    ['Future Caregiver', 'Today Caregiver']
+    realShifts.map((r) => r.event_id).sort(),
+    ['evt-future', 'evt-past', 'evt-today']
   );
+  const statusByEvent = {};
+  realShifts.forEach((r) => { statusByEvent[r.event_id] = r.status; });
+  assert.equal(statusByEvent['evt-past'], 'completed');
+  assert.equal(statusByEvent['evt-today'], 'ongoing');
+  assert.equal(statusByEvent['evt-future'], 'upcoming');
+
+  // An unfinished shift must still not claim hours in a grid cell -- that rule
+  // moved rather than went away, and it is what makes scanning them safe.
+  assert.equal(statusByEvent['evt-future'], 'upcoming');
+  const future = realShifts.find((r) => r.event_id === 'evt-future');
+  assert.equal(future.actual_time_in, null, 'no clock punch invented for a future shift');
 });
 
 test('an unparsed shift with no discoverable date is kept, not silently dropped', async () => {
-  // No data-start/data-end at all -> shift_date stays null -> must not be
-  // swept away by the today/future filter just because it has no date.
+  // No data-start/data-end at all -> shift_date stays null. It still has to come
+  // through: it is already flagged "unparsed" and needs a human look.
   const html = `
     <table>
       <tr class="sched_row">
@@ -1205,13 +1212,19 @@ test('asking for a day that is not on screen refuses rather than writing nothing
   assert.ok(result.columnDates.length, 'and it says which days ARE on screen');
 });
 
-test('a one-day scan refuses today and the future', async () => {
-  const { html } = threeDayGrid();
+test('a one-day scan accepts today and future days', async () => {
+  // Deliberately allowed now: the schedule ahead is the point. Only the
+  // "is that day even on screen" guard remains.
+  const { html, d2 } = threeDayGrid();
+  assert.ok(d2);
 
-  for (const date of [isoDateOffsetFromToday(0), isoDateOffsetFromToday(1)]) {
+  for (const offset of [0, 1]) {
+    const date = isoDateOffsetFromToday(offset);
     const result = await runScanScript(html, { targetDate: date });
-    assert.equal(result.targetDateNotPast, true, `${date} should be refused`);
-    assert.equal(result.records, undefined);
+    // Not on this fixture's grid, so it refuses for THAT reason -- never for
+    // being unfinished.
+    assert.equal(result.targetDateNotPast, undefined, `${date} must not be refused as unfinished`);
+    assert.equal(result.targetDateMissing, true, 'only the on-screen check applies');
   }
 });
 

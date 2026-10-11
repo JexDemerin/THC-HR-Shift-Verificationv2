@@ -54,16 +54,6 @@ function startNewRunLog() {
   logEl.textContent = '';
 }
 
-// Today in the BROWSER's timezone. toISOString() would give UTC, which for
-// Pacific time reads as tomorrow all evening -- so "is this date in the past?"
-// would answer wrongly for several hours a day.
-function todayIsoLocal() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
 const WELLSKY_URL_MATCH = 'https://*.clearcareonline.com/*';
 
 // Finds the WellSky tab wherever it is -- deliberately NOT "the active tab".
@@ -345,15 +335,6 @@ async function scanSchedule(targetDate) {
       return;
     }
 
-    if (result.targetDateNotPast) {
-      setStatus(`${result.targetDate} is today or later — only finished days get scanned.`);
-      addLogEntry(
-        "An unfinished day's shifts have no final clock times yet, so scanning one " +
-          'would record hours that are still going to change.'
-      );
-      return;
-    }
-
     if (result.loggedOut) {
       setStatus(
         'WellSky is logged out — that tab is showing the login page. It signs you ' +
@@ -394,7 +375,6 @@ async function scanSchedule(targetDate) {
     const realShifts = summary.total - summary.no_shift;
     const parts = [`${realShifts} shifts, ${summary.no_shift} idle caregiver-days`];
     if (summary.unparsed > 0) parts.push(`${summary.unparsed} unparsed`);
-    if (result.skippedTodayOrFuture > 0) parts.push(`${result.skippedTodayOrFuture} skipped (today/future)`);
     if (result.stoppedEarlyReason) parts.push('stopped early, see log');
     setStatus(parts.join(' — '));
     addLogEntry(
@@ -402,7 +382,7 @@ async function scanSchedule(targetDate) {
         `${(result.columnDates || []).length} day(s), ${result.rowCount} caregiver row(s): ` +
         `${summary.completed} completed, ${summary.incomplete} incomplete, ${summary.upcoming} upcoming, ` +
         `${summary.ongoing} ongoing, ${summary.cancelled} cancelled, ${summary.unparsed} unparsed, ` +
-        `${summary.no_shift} idle, ${result.skippedTodayOrFuture} skipped (today/future)`
+        `${summary.no_shift} idle`
     );
     if (result.stoppedEarlyReason) {
       addLogEntry(`STOPPED EARLY: ${result.stoppedEarlyReason}`);
@@ -605,10 +585,6 @@ scanDayBtn.addEventListener('click', () => {
   if (!chosen) {
     setStatus('Pick a date first, then press Scan Day.');
     scanDayInput.focus();
-    return;
-  }
-  if (chosen >= todayIsoLocal()) {
-    setStatus(`${chosen} is today or later — only finished days get scanned.`);
     return;
   }
   scanSchedule(chosen);
