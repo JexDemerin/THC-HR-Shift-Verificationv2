@@ -539,18 +539,27 @@ test('a sheet holding both the old and new column name keeps the new one', () =>
   assert.equal(migratedReversed.official_time_in, '9:00am');
 });
 
-test('drops a column that no longer exists rather than shifting everything', () => {
-  const oldHeaders = ['caregiver_name', 'a_retired_column', 'client_name'];
-  const sheet = makeFakeSheet([oldHeaders, ['Barberi, Miku', 'stale', 'Kozuka-Ssenyan, Mia']]);
+test('a column this script does not own is kept, not dropped', () => {
+  // This used to drop any column it did not recognise. That is wrong now the
+  // Shift Verification app keeps its own columns in this sheet -- an unknown
+  // column may hold verifications, appeals or admin sign-off, and the two are
+  // indistinguishable from here. Keeping a genuinely retired column leaves a
+  // stale column sitting there; dropping a live one destroys someone's work, so
+  // the asymmetry decides it.
+  const oldHeaders = ['caregiver_name', 'verified_by', 'client_name'];
+  const sheet = makeFakeSheet([oldHeaders, ['Barberi, Miku', 'Angelica', 'Kozuka-Ssenyan, Mia']]);
 
   code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
 
+  const header = local(sheet._cells[0]);
   const migrated = {};
-  code.LOG_HEADERS.forEach((header, index) => { migrated[header] = sheet._cells[1][index]; });
+  header.forEach((name, index) => { migrated[name] = sheet._cells[1][index]; });
 
   assert.equal(migrated.caregiver_name, 'Barberi, Miku');
   assert.equal(migrated.client_name, 'Kozuka-Ssenyan, Mia');
-  assert.equal(local(sheet._cells[1]).indexOf('stale'), -1, 'the retired value is gone, not moved');
+  assert.equal(migrated.verified_by, 'Angelica', 'the foreign column survived');
+  assert.ok(header.indexOf('verified_by') >= code.LOG_HEADERS.length,
+    'and was appended after the columns this script owns');
 });
 
 // ---- Tab naming ----
@@ -2039,4 +2048,143 @@ test('a preserved day keeps its stripe even though borders cannot be read back',
   const stripe = pay._stripeAt(code.columnLetter_(colAfter) + '3');
   assert.ok(stripe, 'and the stripe came back with it');
   assert.equal(stripe.color, code.STATUS_COLORS.completed);
+});
+
+// ---- Verification columns: kept, retired, and never written ----
+
+test('the retired columns are dropped and the kept ones survive', () => {
+  // The cleanup, end to end. The 15 retired columns belong to features that are
+  // gone; the 9 kept ones are live and empty, and emptiness must not be read as
+  // "safe to delete" -- the verification app writes into them.
+  const existing = ['caregiver_name', 'client_name']
+    .concat(local(code.RETIRED_COLUMNS))
+    .concat(local(code.PRESERVED_COLUMNS));
+  const row = existing.map((name) => 'v:' + name);
+  const sheet = makeFakeSheet([existing, row]);
+
+  code.ensureHeaderRow_(sheet, code.LOG_HEADERS);
+
+  const header = local(sheet._cells[0]);
+  local(code.RETIRED_COLUMNS).forEach((name) => {
+    assert.equal(header.indexOf(name), -1, `${name} should be gone`);
+  });
+  const migrated = {};
+  header.forEach((name, i) => { migrated[name] = sheet._cells[1][i]; });
+  local(code.PRESERVED_COLUMNS).forEach((name) => {
+    assert.equal(migrated[name], 'v:' + name, `${name} should have kept its value`);
+  });
+});
+
+test('the retired and kept lists do not overlap, or collide with our own', () => {
+  // A name in two lists would make the outcome depend on which check ran first.
+  const retired = local(code.RETIRED_COLUMNS);
+  const kept = local(code.PRESERVED_COLUMNS);
+  const ours = local(code.LOG_HEADERS);
+
+  retired.forEach((name) => {
+    assert.equal(kept.indexOf(name), -1, `${name} is in both lists`);
+    assert.equal(ours.indexOf(name), -1, `${name} is a column we own`);
+  });
+  kept.forEach((name) => {
+    assert.equal(ours.indexOf(name), -1, `${name} is a column we own`);
+  });
+  assert.equal(retired.length, 15);
+  assert.equal(kept.length, 9);
+});
+
+test("a scan never writes into a column it does not own", () => {
+  // The whole point: the scan may rewrite its own 17 columns on a row, and must
+  // leave the verification app's values on that same row exactly as they were.
+  const ss = makeFakeSpreadsheet();
+  const shift = logRecord({
+    caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+    shift_date: '2026-09-22', official_time_in: '9:00am', official_time_out: '4:00pm',
+    duration_minutes: 420, label_duration_minutes: 420,
+    event_id: '900', row_key: '900',
+  });
+  code.doPost({ postData: { contents: JSON.stringify([shift]) } });
+
+  const log = ss.sheetNamed(code.logSheetName_('2026-09'));
+  // The verification app adds its column and signs the row off.
+  log._cells[0].push('client_verified_at');
+  log._cells[1].push('2026-09-23T10:00:00Z');
+
+  code.doPost({ postData: { contents: JSON.stringify([shift]) } });
+
+  const header = local(log._cells[0]);
+  const verifiedAt = log._cells[1][header.indexOf('client_verified_at')];
+  assert.equal(verifiedAt, '2026-09-23T10:00:00Z', 'the sign-off survived the re-scan');
+});
+
+test('a row the office added by hand is never deleted by a scan', () => {
+  // upsertLogRows_ treats a scan as authoritative for the caregiver/date pairs
+  // it read, and drops its own rows that no longer appear. A row with no
+  // WellSky event behind it was not the scan's to begin with -- deleting it
+  // would quietly throw away a shift the office entered deliberately.
+  const ss = makeFakeSpreadsheet();
+  code.doPost({ postData: { contents: JSON.stringify([
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+      shift_date: '2026-09-22', official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420,
+      event_id: '901', row_key: '901',
+    }),
+  ]) } });
+
+  const log = ss.sheetNamed(code.logSheetName_('2026-09'));
+  const headers = local(code.LOG_HEADERS);
+  // Same caregiver, same date -- squarely inside what the next scan covers.
+  const officeRow = headers.map((h) => {
+    if (h === 'caregiver_name') return 'Barberi, Miku';
+    if (h === 'client_name') return 'Walk-in Client';
+    if (h === 'shift_date') return '2026-09-22';
+    if (h === 'row_key') return 'manual-abc123';
+    if (h === 'status') return 'completed';
+    return '';
+  });
+  log._cells.push(officeRow);
+
+  code.doPost({ postData: { contents: JSON.stringify([
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Kozuka-Ssenyan, Mia',
+      shift_date: '2026-09-22', official_time_in: '9:00am', official_time_out: '4:00pm',
+      duration_minutes: 420, label_duration_minutes: 420,
+      event_id: '901', row_key: '901',
+    }),
+  ]) } });
+
+  const keys = log._cells.slice(1).map((r) => r[headers.indexOf('row_key')]);
+  assert.ok(keys.indexOf('manual-abc123') !== -1, 'the office row is still there');
+  assert.ok(keys.indexOf('901') !== -1, 'and so is the scanned one');
+});
+
+test("a scanned shift that vanished from WellSky is still cleaned up", () => {
+  // The protection above must not become "never delete anything": a row with a
+  // real event id behind it IS the scan's, and a shift deleted in WellSky has
+  // to stop appearing.
+  const ss = makeFakeSpreadsheet();
+  const headers = local(code.LOG_HEADERS);
+  code.doPost({ postData: { contents: JSON.stringify([
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Gone Client', shift_date: '2026-09-22',
+      duration_minutes: 60, label_duration_minutes: 60, event_id: '902', row_key: '902',
+    }),
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Still There', shift_date: '2026-09-22',
+      duration_minutes: 60, label_duration_minutes: 60, event_id: '903', row_key: '903',
+    }),
+  ]) } });
+
+  // Re-scan the same day; 902 no longer exists in WellSky.
+  code.doPost({ postData: { contents: JSON.stringify([
+    logRecord({
+      caregiver_name: 'Barberi, Miku', client_name: 'Still There', shift_date: '2026-09-22',
+      duration_minutes: 60, label_duration_minutes: 60, event_id: '903', row_key: '903',
+    }),
+  ]) } });
+
+  const log = ss.sheetNamed(code.logSheetName_('2026-09'));
+  const keys = log._cells.slice(1).map((r) => r[headers.indexOf('row_key')]);
+  assert.equal(keys.indexOf('902'), -1, 'the deleted shift is gone');
+  assert.ok(keys.indexOf('903') !== -1);
 });

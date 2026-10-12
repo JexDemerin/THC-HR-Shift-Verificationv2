@@ -39,7 +39,7 @@ var SCRIPT_VERSION = 12;
 // purpose (bumping it would force an extension update for nothing), which left
 // no way to tell a deployed fix from a forgotten one. Open the Web App URL in a
 // browser and read `build`.
-var CODE_GS_BUILD = 'mixed-day-stripe-1';
+var CODE_GS_BUILD = 'verification-columns-1';
 
 // official_* is the time on the calendar label -- what WellSky's own Edit Care
 // Log dialog labels "Official", i.e. the agreed hours the shift is paid on.
@@ -66,6 +66,30 @@ var COLUMN_RENAMES = {
   time_in: 'official_time_in',
   time_out: 'official_time_out'
 };
+
+// Columns the Shift Verification app owns. Documentation rather than
+// machinery: fullHeaderRow_ keeps EVERY foreign column, listed or not, so the
+// next one the app invents is safe without anyone editing this file. They are
+// deliberately not pre-created on a fresh tab -- a column nobody has written to
+// yet is just clutter in the view this cleanup was meant to tidy.
+var PRESERVED_COLUMNS = [
+  'client_verified_at', 'client_verified_snapshot', 'client_verified_how',
+  'admin_verified_at', 'admin_verified_by', 'admin_verified_snapshot',
+  'manual_entry', 'manual_entered_by', 'manual_entered_at'
+];
+
+// Retired features, removed from the Log on the next scan. Listed explicitly
+// rather than handled by "keep only what I know about": a strict allowlist would
+// clean these up but would also drop the next column the verification app adds,
+// which is the bug that nearly cost a month of verifications. Naming the dead
+// ones keeps the cleanup narrow and leaves everything unknown safe.
+var RETIRED_COLUMNS = [
+  'caregiver_verified_at', 'caregiver_verified_snapshot', 'caregiver_verified_how',
+  'cg_appeal_status', 'cg_appeal_time_in', 'cg_appeal_time_out',
+  'cg_appeal_note', 'cg_appeal_resolved_at', 'cg_appeal_resolution',
+  'cl_appeal_status', 'cl_appeal_time_in', 'cl_appeal_time_out',
+  'cl_appeal_note', 'cl_appeal_resolved_at', 'cl_appeal_resolution'
+];
 
 // The four columns holding a clock punch read out of the Edit Care Log dialog.
 // Grouped because they share a format ("07:11:25 PM") distinct from the label
@@ -285,6 +309,10 @@ function headersMatch_(current, headers) {
 }
 
 function ensureHeaderRow_(sheet, headers) {
+  // Widen to whatever the sheet already has, so a column this script does not
+  // know about is never remapped away. Without this the remap below treats a
+  // verification column exactly like a retired one and drops it.
+  headers = fullHeaderRow_(sheet).length >= headers.length ? fullHeaderRow_(sheet) : headers;
   var width = headers.length;
   var lastColumn = sheet.getLastColumn();
   var lastRow = sheet.getLastRow();
@@ -416,12 +444,50 @@ function weekdayIndexOf_(isoDate) {
 
 // ---- Log tab ----
 
-function rowValuesFor_(record) {
-  return LOG_HEADERS.map(function (key) {
+function rowValuesFor_(record, headers) {
+  return (headers || LOG_HEADERS).map(function (key) {
     var value = record[key];
     if (value === null || value === undefined) return '';
     return value;
   });
+}
+
+// The columns this script owns are exactly LOG_HEADERS. Anything else in the
+// sheet belongs to someone else -- the Shift Verification app adds its own for
+// verifications, appeals, admin sign-off and office edits -- and must survive a
+// scan untouched. Returning LOG_HEADERS first keeps their order stable, with
+// foreign columns appended in the order the sheet already had them.
+function fullHeaderRow_(sheet) {
+  var lastColumn = sheet.getLastColumn();
+  var present = lastColumn > 0
+    ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
+    : [];
+
+  var headers = LOG_HEADERS.slice();
+  present.forEach(function (name) {
+    var key = String(name === null || name === undefined ? '' : name).trim();
+    if (!key) return;
+    if (headers.indexOf(key) !== -1) return;
+    if (COLUMN_RENAMES[key]) return;                 // an old name of a column we own
+    if (RETIRED_COLUMNS.indexOf(key) !== -1) return; // a dead feature, cleaned up
+    headers.push(key);
+  });
+  return headers;
+}
+
+// Rows this script created, and therefore may delete. The scanner only ever
+// mints a row_key from WellSky's own event id or its "no-shift:" placeholder
+// form, so anything else is a row the office added by hand and is never ours to
+// remove -- even on a date this scan covered.
+function isScannerRow_(record) {
+  // An event id means WellSky has a shift behind this row, so the scan is
+  // entitled to say it has gone. Deliberately NOT a test on the id's shape: a
+  // row_key that merely looks numeric is a formatting accident, and keying
+  // deletion off one would quietly stop cleaning up removed shifts the day
+  // WellSky changed its id format.
+  if (!isBlank_(record.event_id)) return true;
+  var key = String(record.row_key === null || record.row_key === undefined ? '' : record.row_key);
+  return key.indexOf('no-shift:') === 0;
 }
 
 function isBlank_(value) {
@@ -447,7 +513,13 @@ function mergeRecord_(existing, incoming) {
     unread[field] = true;
   });
 
+  // Start from what is already in the row, so columns this script does not own
+  // -- the verification app's, the office's -- come through untouched. Only
+  // LOG_HEADERS are then overwritten from the scan.
   var merged = {};
+  Object.keys(existing).forEach(function (key) {
+    merged[key] = existing[key];
+  });
   LOG_HEADERS.forEach(function (key) {
     var keepPrevious = unread[key] && isBlank_(incoming[key]) && !isBlank_(existing[key]);
     merged[key] = keepPrevious ? existing[key] : incoming[key];
@@ -499,6 +571,10 @@ function upsertLogRows_(monthKey, records) {
   var kept = existing.filter(function (record) {
     // Anything this scan is about to write is handled by the merge below.
     if (record.row_key && incomingKeys[String(record.row_key)]) return false;
+    // Not a row this script created -- the office added it, so it is not ours
+    // to delete even on a date the scan covered. Coverage says "WellSky is
+    // authoritative for the shifts I read", not "nothing else may exist here".
+    if (!isScannerRow_(record)) return true;
     // Outside this scan's coverage -- not ours to judge, leave it alone.
     return !covered[caregiverDateKey_(record)];
   });
@@ -510,8 +586,10 @@ function upsertLogRows_(monthKey, records) {
 
   var finalRows = sortRecordsForLog_(kept.concat(mergedIncoming));
 
+  var headers = fullHeaderRow_(sheet);
+
   sheet.clearContents();
-  sheet.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]).setFontWeight('bold');
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
   if (finalRows.length) {
     // Force the text-ish columns to plain text BEFORE writing, so Sheets stops
     // helpfully reinterpreting them: "2:13pm" was being stored as a time value
@@ -519,13 +597,15 @@ function upsertLogRows_(monthKey, records) {
     // string likewise became a Date. Keeping them as text means what goes in is
     // exactly what comes back out.
     TEXT_COLUMNS.forEach(function (name) {
-      var index = LOG_HEADERS.indexOf(name);
+      var index = headers.indexOf(name);
       if (index >= 0) {
         sheet.getRange(2, index + 1, finalRows.length, 1).setNumberFormat('@');
       }
     });
-    sheet.getRange(2, 1, finalRows.length, LOG_HEADERS.length)
-      .setValues(finalRows.map(rowValuesFor_));
+    sheet.getRange(2, 1, finalRows.length, headers.length)
+      .setValues(finalRows.map(function (record) {
+        return rowValuesFor_(record, headers);
+      }));
   }
   sheet.setFrozenRows(1);
 
