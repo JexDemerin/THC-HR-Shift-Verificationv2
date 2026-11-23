@@ -37,6 +37,26 @@
   const HOVER_SETTLE_MS = 400; // confirmed to be enough in Phase 0 discovery
   const CLOSE_SETTLE_MS = 500;
 
+  // Progress is parked on the page for the panel to poll, because the scan's
+  // RESULT can be lost entirely -- a run that dies, or is interrupted after
+  // twenty minutes of click-throughs, hands chrome.scripting.executeScript
+  // nothing and the panel could only say "got no result back at all". A beacon
+  // updated as work completes survives that, so a failure says how far it got
+  // instead of leaving everyone guessing.
+  function reportProgress(phase, done, total, label) {
+    try {
+      window.__thcScanProgress = {
+        phase: phase,
+        done: done,
+        total: total,
+        label: label || '',
+        at: Date.now(),
+      };
+    } catch (err) {
+      // Best effort only -- never let bookkeeping break the scan itself.
+    }
+  }
+
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -694,6 +714,8 @@
   // wrong page from a crash. Returning the error instead makes it readable.
   // Only the run section needs this: everything above is declarations.
   try {
+    reportProgress('starting', 0, 0, '');
+
     if (looksLoggedOut()) {
       return {
         loggedOut: true,
@@ -751,11 +773,15 @@
 
     // Activity notes first: reading one only needs hovers, no dialogs, so doing
     // this pass separately keeps it clear of the click-through's popup state.
+    const notePassTotal = records.filter(function (r) { return r.event_id; }).length;
+    let notePassDone = 0;
     for (const record of records) {
       if (!record.event_id) continue;
       const eventEl = eventElsByEventId.get(record.event_id);
       if (!eventEl) continue;
 
+      reportProgress('activity notes', notePassDone++, notePassTotal,
+        `${record.caregiver_name}/${record.client_name}`);
       const note = await readActivityNote(eventEl);
       if (note.value) {
         record.note = note.value;
@@ -771,11 +797,19 @@
       }
     }
 
+    // The slow pass, and the one that has died mid-run: several seconds per
+    // shift, so a full week can take twenty minutes.
+    const clickTotal = records.filter(function (r) {
+      return r.status === 'completed' && r.event_id;
+    }).length;
+    let clickDone = 0;
     for (const record of records) {
       if (record.status !== 'completed' || !record.event_id) continue;
       const eventEl = eventElsByEventId.get(record.event_id);
       if (!eventEl) continue;
 
+      reportProgress('reading clock times', clickDone++, clickTotal,
+        `${record.caregiver_name}/${record.client_name} (${record.shift_date})`);
       const { times, closedOk, diagnostic, unreadable } = await enrichCompletedShift(eventEl);
       if (times) {
         for (const field of TIME_FIELDS) {
@@ -821,6 +855,8 @@
       unparsed: records.filter((r) => r.status === 'unparsed').length,
       no_shift: records.filter((r) => r.status === 'no_shift').length,
     };
+
+    reportProgress('done', clickTotal, clickTotal, '');
 
     return {
       records,

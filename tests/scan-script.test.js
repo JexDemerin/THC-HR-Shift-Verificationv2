@@ -27,7 +27,7 @@ function buildFixture({ status, dataStart, dataEnd, clientName, caregiverName, e
   `;
 }
 
-async function runScanScript(bodyHtml, { runScripts = false, fetchImpl, breakDocument = false, targetDate } = {}) {
+async function runScanScript(bodyHtml, { runScripts = false, fetchImpl, breakDocument = false, targetDate, windowRef } = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${bodyHtml}</body></html>`, {
     url: 'https://togetherhomecare.clearcareonline.com/dashboard/live/weekly/caregivers/',
     pretendToBeVisual: true,
@@ -40,6 +40,9 @@ async function runScanScript(bodyHtml, { runScripts = false, fetchImpl, breakDoc
     fetchImpl || (() => Promise.reject(new Error('fetch not stubbed in this test')));
   global.document = dom.window.document;
   global.window = dom.window;
+  // Hands the test the page itself, so the progress beacon can be read during
+  // and after the run -- it outlives the result, which is the whole point of it.
+  if (windowRef) windowRef.window = dom.window;
   global.MouseEvent = dom.window.MouseEvent;
   global.KeyboardEvent = dom.window.KeyboardEvent;
   // How popup.js hands a one-day scan its date: parked on the window by a
@@ -1262,3 +1265,54 @@ async function runScanScriptKeepingWindow(bodyHtml, targetDate) {
     delete global.KeyboardEvent;
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// The progress beacon.
+//
+// A scan's RESULT can be lost entirely: a run that throws outside the handler,
+// or one interrupted part-way through twenty minutes of click-throughs, hands
+// chrome.scripting.executeScript nothing. The panel could then only say "got no
+// result back at all" -- identical whether it died on the first shift or the
+// three hundredth. The beacon lives on the page instead of in the result, so it
+// survives that and says how far the scan got.
+// ---------------------------------------------------------------------------
+
+test('the beacon is set before any parsing, so even an instant death reports something', async () => {
+  const windowRef = {};
+
+  await runScanScript('<div></div>', { breakDocument: true, windowRef });
+
+  assert.equal(windowRef.window.__thcScanProgress.phase, 'starting');
+});
+
+test('the beacon names the shift being worked on while the scan is still running', async () => {
+  // Read from inside the fetch the note pass makes -- i.e. genuinely mid-run,
+  // not reconstructed afterwards.
+  const windowRef = {};
+  let seen = null;
+  const fetchImpl = () => {
+    seen = windowRef.window.__thcScanProgress;
+    return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+  };
+
+  await runScanScript(noteFixture('Progress, Pat', 'p1', { note: true }), {
+    fetchImpl,
+    windowRef,
+  });
+
+  assert.equal(seen.phase, 'activity notes');
+  assert.equal(seen.total, 1);
+  assert.match(seen.label, /Progress, Pat/);
+  assert.match(seen.label, /Pallapati, Samson/);
+});
+
+test('a finished scan leaves the beacon reading done, not stuck mid-run', async () => {
+  // Otherwise a scan that completed normally but whose result was lost on the
+  // way back would be reported as having died where it last reported.
+  const windowRef = {};
+
+  await runScanScript(noteFixture('Finished, Fay', 'f1'), { windowRef });
+
+  assert.equal(windowRef.window.__thcScanProgress.phase, 'done');
+});

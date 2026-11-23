@@ -54,6 +54,9 @@ function startNewRunLog() {
   logEl.textContent = '';
 }
 
+// How often the panel asks the page how far the scan has got.
+const PROGRESS_POLL_MS = 3000;
+
 const WELLSKY_URL_MATCH = 'https://*.clearcareonline.com/*';
 
 // Finds the WellSky tab wherever it is -- deliberately NOT "the active tab".
@@ -70,14 +73,51 @@ const WELLSKY_URL_MATCH = 'https://*.clearcareonline.com/*';
 // another window. Returning null when there genuinely isn't one is the other
 // half of the fix: injecting into some unrelated page can only produce a
 // confusing failure, so it's better to name the tab that's missing.
-async function findWellSkyTab() {
-  const tabs = await chrome.tabs.query({ url: WELLSKY_URL_MATCH });
-  if (!tabs.length) return null;
-  // With several WellSky tabs open, prefer the one being worked in: front-most
-  // in its window, else the most recently looked at.
+// The weekly CAREGIVER schedule, and nothing else. Every WellSky page matches
+// the host pattern -- care-log endpoints, settings, the client-grouped view --
+// and the scanner reads whatever it is given as if it were this one page. Three
+// different failures all came from that:
+//
+//   client-grouped view  -> caregivers and clients written to each other's
+//                           columns, silently, on every row of the scan
+//   care-log endpoint    -> "got no result back at all"
+//   weekly caregivers    -> works
+//
+// Checking the path turns all of them into one refusal that names what the tab
+// is actually showing.
+function isSchedulePath(url) {
+  try {
+    return new URL(url).pathname.indexOf('/weekly/caregivers') !== -1;
+  } catch (err) {
+    return false; // a URL that won't parse is not the page we want
+  }
+}
+
+// Returns the schedule tab plus every WellSky tab found, so a refusal can say
+// what IS open rather than just that the right thing isn't.
+async function findScheduleTab() {
+  const wellSkyTabs = await chrome.tabs.query({ url: WELLSKY_URL_MATCH });
+  const schedule = wellSkyTabs.filter((t) => isSchedulePath(t.url));
+  // With several open, prefer the one being worked in: front-most in its
+  // window, else the most recently looked at.
+  const tab =
+    schedule.find((t) => t.active) ||
+    schedule.slice().sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0] ||
+    null;
+  return { tab, wellSkyTabs };
+}
+
+// What to say when no schedule tab was found. Naming the page that IS open is
+// the whole point -- "no WellSky tab" sent someone hunting for a tab sitting
+// right in front of them, showing the wrong WellSky page.
+function noScheduleTabMessage(wellSkyTabs) {
+  if (!wellSkyTabs.length) return NO_WELLSKY_TAB;
+  const showing = wellSkyTabs.map(describeTab).join(', ');
   return (
-    tabs.find((t) => t.active) ||
-    tabs.slice().sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0]
+    `WellSky is open but no tab is on the weekly caregiver schedule — showing: ${showing}. ` +
+    'Switch to the caregiver view of the weekly schedule and scan again. ' +
+    'The client view is not scannable: its left column is clients, so every row ' +
+    'would be written with the caregiver and client the wrong way round.'
   );
 }
 
@@ -235,9 +275,9 @@ async function exportCareLogHtml() {
   setStatus('Reading the WellSky tab...');
 
   try {
-    const tab = await findWellSkyTab();
+    const { tab, wellSkyTabs } = await findScheduleTab();
     if (!tab || !tab.id) {
-      setStatus(NO_WELLSKY_TAB);
+      setStatus(noScheduleTabMessage(wellSkyTabs));
       return;
     }
 
@@ -281,6 +321,30 @@ async function exportCareLogHtml() {
 // visible week. One function for both so the two paths cannot drift -- every
 // failure message, diagnostic and Sheet write is identical either way, and only
 // the set of rows differs.
+// Reads the beacon scan-script.js keeps on the page. Separate injection, so it
+// works WHILE the scan is still running -- that is the whole point: a scan that
+// dies or is interrupted hands executeScript nothing, and without this the
+// panel can only say "got no result back at all".
+async function readScanProgress(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => window.__thcScanProgress || null,
+    });
+    return (results && results[0] && results[0].result) || null;
+  } catch (err) {
+    return null; // tab closed, navigated, or discarded mid-scan
+  }
+}
+
+function describeProgress(progress) {
+  if (!progress) return '';
+  if (progress.phase === 'starting') return 'reading the page';
+  const of = progress.total ? ` of ${progress.total}` : '';
+  const label = progress.label ? ` — ${progress.label}` : '';
+  return `${progress.phase}: ${progress.done}${of}${label}`;
+}
+
 async function scanSchedule(targetDate) {
   scanBtn.disabled = true;
   scanDayBtn.disabled = true;
@@ -288,9 +352,9 @@ async function scanSchedule(targetDate) {
   setStatus(targetDate ? `Scanning ${targetDate}...` : 'Scanning visible schedule...');
 
   try {
-    const tab = await findWellSkyTab();
+    const { tab, wellSkyTabs } = await findScheduleTab();
     if (!tab || !tab.id) {
-      setStatus(NO_WELLSKY_TAB);
+      setStatus(noScheduleTabMessage(wellSkyTabs));
       return;
     }
 
@@ -311,17 +375,43 @@ async function scanSchedule(targetDate) {
       args: [targetDate || null],
     });
 
-    const injectionResults = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['scan-script.js'],
-    });
+    // Poll the beacon while the scan runs. A full week is several hundred
+    // click-throughs and can take twenty minutes, during which the panel
+    // otherwise sits on one unchanging line.
+    let lastProgress = null;
+    const progressTimer = setInterval(async () => {
+      const progress = await readScanProgress(tab.id);
+      if (!progress || progress.phase === 'done') return;
+      lastProgress = progress;
+      const prefix = targetDate ? `Scanning ${targetDate}` : 'Scanning visible schedule';
+      setStatus(`${prefix}... ${describeProgress(progress)}`);
+    }, PROGRESS_POLL_MS);
+
+    let injectionResults;
+    try {
+      injectionResults = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['scan-script.js'],
+      });
+    } finally {
+      clearInterval(progressTimer);
+    }
 
     const result = injectionResults && injectionResults[0] && injectionResults[0].result;
     if (!result) {
+      // Nothing came back. Say how far it got, which is the one piece of
+      // evidence that narrows this down -- "died on shift 37 of 164, on
+      // Portillo/Kaliya" is diagnosable; "got no result back" never was.
+      const progress = (await readScanProgress(tab.id)) || lastProgress;
+      const reached = progress
+        ? ` It got as far as ${describeProgress(progress)}.`
+        : ' It did not get far enough to report any progress, so it most likely never started.';
       setStatus(
-        `Scanned ${describeTab(tab)} but got no result back at all. ` +
-          'If that is not the weekly schedule page, switch that tab to it and re-scan.'
+        `Scanned ${describeTab(tab)} but got no result back at all.${reached} ` +
+          'Nothing was written to the Sheet. Re-scan that day; if it stops in the ' +
+          'same place twice, that shift is the one to look at.'
       );
+      if (progress) addLogEntry(`Last progress: ${JSON.stringify(progress)}`);
       return;
     }
 
@@ -503,9 +593,9 @@ async function inspectShiftClick() {
   setStatus('Trying a few click targets on one completed shift...');
 
   try {
-    const tab = await findWellSkyTab();
+    const { tab, wellSkyTabs } = await findScheduleTab();
     if (!tab || !tab.id) {
-      setStatus(NO_WELLSKY_TAB);
+      setStatus(noScheduleTabMessage(wellSkyTabs));
       return;
     }
 

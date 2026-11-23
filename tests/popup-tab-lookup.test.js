@@ -12,7 +12,7 @@ const POPUP_SOURCE = fs.readFileSync(path.join(EXTENSION_DIR, 'popup.js'), 'utf8
 // so it can only be exercised against the real popup.html and a stubbed
 // `chrome`. Worth the setup: which tab the panel injects into is the difference
 // between a scan working and a scan reporting a failure about the wrong page.
-function loadPopup({ tabs = [] } = {}) {
+function loadPopup({ tabs = [], scanResult = null, pageGlobals = {} } = {}) {
   // 'outside-only' gives window.eval the window's own globals (document, etc.)
   // without letting popup.html's own <script src> tag fetch and run a second
   // copy of popup.js.
@@ -21,6 +21,7 @@ function loadPopup({ tabs = [] } = {}) {
     runScripts: 'outside-only',
   });
   const queries = [];
+  const injections = [];
 
   const chrome = {
     tabs: {
@@ -44,16 +45,30 @@ function loadPopup({ tabs = [] } = {}) {
       },
     },
     storage: { local: { get: async () => ({}), set: async () => {} } },
-    scripting: { executeScript: async () => [{ result: null }] },
+    scripting: {
+      // Faithful enough to matter: a `func` injection really runs against this
+      // window, so the progress beacon the panel reads is the one the page
+      // holds. A `files` injection returns whatever the test says the scan
+      // produced -- including nothing, which is the failure being pinned.
+      executeScript: async (info) => {
+        injections.push(info);
+        if (info.files) return scanResult;
+        return [{ result: info.func.apply(null, info.args || []) }];
+      },
+    },
     runtime: { sendMessage: async () => ({ ok: true }) },
   };
 
   dom.window.chrome = chrome;
-  const sandboxSource = `${POPUP_SOURCE}\n;window.__findWellSkyTab = findWellSkyTab;` +
+  Object.assign(dom.window, pageGlobals);
+  const sandboxSource = `${POPUP_SOURCE}\n;window.__findScheduleTab = findScheduleTab;` +
+    `\nwindow.__isSchedulePath = isSchedulePath;` +
+    `\nwindow.__noScheduleTabMessage = noScheduleTabMessage;` +
+    `\nwindow.__describeProgress = describeProgress;` +
     `\nwindow.__NO_WELLSKY_TAB = NO_WELLSKY_TAB;` +
     `\nwindow.__versionMismatchReport = versionMismatchReport;`;
   dom.window.eval(sandboxSource);
-  return { dom, window: dom.window, queries };
+  return { dom, window: dom.window, queries, injections };
 }
 
 test('finds the WellSky tab even when it is not the tab in front', async () => {
@@ -74,7 +89,7 @@ test('finds the WellSky tab even when it is not the tab in front', async () => {
     ],
   });
 
-  const tab = await window.__findWellSkyTab();
+  const { tab } = await window.__findScheduleTab();
 
   assert.equal(tab.id, 2, 'the backgrounded WellSky tab is the one to inject into');
 });
@@ -87,30 +102,30 @@ test('never falls back to an unrelated tab when no WellSky tab is open', async (
     tabs: [{ id: 1, active: true, url: 'https://mail.google.com/', lastAccessed: 200 }],
   });
 
-  assert.equal(await window.__findWellSkyTab(), null);
+  assert.equal((await window.__findScheduleTab()).tab, null);
   assert.match(window.__NO_WELLSKY_TAB, /No WellSky tab found/);
 });
 
 test('prefers the focused WellSky tab when several are open', async () => {
   const { window } = loadPopup({
     tabs: [
-      { id: 1, active: false, url: 'https://x.clearcareonline.com/a', lastAccessed: 300 },
-      { id: 2, active: true, url: 'https://x.clearcareonline.com/b', lastAccessed: 100 },
+      { id: 1, active: false, url: 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/?a', lastAccessed: 300 },
+      { id: 2, active: true, url: 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/?b', lastAccessed: 100 },
     ],
   });
 
-  assert.equal((await window.__findWellSkyTab()).id, 2);
+  assert.equal((await window.__findScheduleTab()).tab.id, 2);
 });
 
 test('falls back to the most recently used WellSky tab when none is focused', async () => {
   const { window } = loadPopup({
     tabs: [
-      { id: 1, active: false, url: 'https://x.clearcareonline.com/a', lastAccessed: 100 },
-      { id: 2, active: false, url: 'https://x.clearcareonline.com/b', lastAccessed: 300 },
+      { id: 1, active: false, url: 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/?a', lastAccessed: 100 },
+      { id: 2, active: false, url: 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/?b', lastAccessed: 300 },
     ],
   });
 
-  assert.equal((await window.__findWellSkyTab()).id, 2);
+  assert.equal((await window.__findScheduleTab()).tab.id, 2);
 });
 
 test('the tab query is filtered by URL, not by which tab is active', async () => {
@@ -118,9 +133,9 @@ test('the tab query is filtered by URL, not by which tab is active', async () =>
   // active tab cannot see a backgrounded one, however the results are filtered
   // afterwards.
   const { window, queries } = loadPopup({
-    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/a', lastAccessed: 1 }],
+    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/?a', lastAccessed: 1 }],
   });
-  await window.__findWellSkyTab();
+  await window.__findScheduleTab();
 
   assert.equal(queries.length, 1);
   assert.equal(queries[0].url, 'https://*.clearcareonline.com/*');
@@ -130,12 +145,12 @@ test('the tab query is filtered by URL, not by which tab is active', async () =>
 test('only matches clearcareonline over https, not a lookalike host', async () => {
   const { window } = loadPopup({
     tabs: [
-      { id: 1, active: true, url: 'https://clearcareonline.com.evil.test/x', lastAccessed: 300 },
-      { id: 2, active: false, url: 'http://x.clearcareonline.com/insecure', lastAccessed: 200 },
+      { id: 1, active: true, url: 'https://clearcareonline.com.evil.test/dashboard/live/weekly/caregivers/', lastAccessed: 300 },
+      { id: 2, active: false, url: 'http://x.clearcareonline.com/dashboard/live/weekly/caregivers/', lastAccessed: 200 },
     ],
   });
 
-  assert.equal(await window.__findWellSkyTab(), null);
+  assert.equal((await window.__findScheduleTab()).tab, null);
 });
 
 test('a stale Sheet is told to re-deploy Code.gs', async () => {
@@ -331,7 +346,7 @@ test('Scan Day with no date picked says so instead of scanning everything', asyn
   // An empty value must not fall through to a full scan -- that would be a very
   // long operation nobody asked for.
   const { window } = loadPopup({
-    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/a', lastAccessed: 1 }],
+    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/?a', lastAccessed: 1 }],
   });
   window.document.getElementById('scanDayInput').value = '';
   window.document.getElementById('scanDayBtn')
@@ -345,7 +360,7 @@ test('Scan Day accepts today, rather than refusing it up front', async () => {
   // the schedule ahead is now the point, so the only thing it still rejects
   // before touching WellSky is an empty date box.
   const { window } = loadPopup({
-    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/a', lastAccessed: 1 }],
+    tabs: [{ id: 1, active: true, url: 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/?a', lastAccessed: 1 }],
   });
   const today = new Date();
   const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -364,4 +379,148 @@ test('the date field is a real date input', () => {
   // matched exactly -- a near-miss format would silently find nothing.
   const { window } = loadPopup();
   assert.equal(window.document.getElementById('scanDayInput').type, 'date');
+});
+
+
+// ---------------------------------------------------------------------------
+// Fix 1: only the weekly CAREGIVER schedule is scannable.
+//
+// Every WellSky page matches the host pattern, and the scanner read whatever it
+// was handed as if it were the schedule. Three separate failures came out of
+// that, and all three are refusals now.
+// ---------------------------------------------------------------------------
+
+const CLIENT_VIEW = 'https://x.clearcareonline.com/dashboard/live/weekly/clients/';
+const CARE_LOG = 'https://x.clearcareonline.com/care_log/edit/12345';
+const SCHEDULE = 'https://x.clearcareonline.com/dashboard/live/weekly/caregivers/';
+
+test('the client-grouped view is refused instead of scanned', async () => {
+  // This one silently corrupted a whole week: the client view puts clients in
+  // the left column, so every row was written with caregiver and client the
+  // wrong way round, and nothing in the result looked wrong.
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: CLIENT_VIEW, lastAccessed: 300 }],
+  });
+
+  const { tab, wellSkyTabs } = await window.__findScheduleTab();
+
+  assert.equal(tab, null, 'the client view must never be injected into');
+  assert.equal(wellSkyTabs.length, 1, 'but it is still reported as open');
+});
+
+test('the refusal explains the swap rather than just saying no', async () => {
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: CLIENT_VIEW, lastAccessed: 300 }],
+  });
+  const { wellSkyTabs } = await window.__findScheduleTab();
+
+  const message = window.__noScheduleTabMessage(wellSkyTabs);
+
+  assert.match(message, /weekly caregiver schedule/i);
+  assert.match(message, /wrong way round/i, 'name the damage, not just the rule');
+});
+
+test('a care-log endpoint is not mistaken for the schedule', async () => {
+  // The care-log page has no sched_row at all, so the scanner threw and the
+  // panel could only report "got no result back at all".
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: CARE_LOG, lastAccessed: 300 }],
+  });
+
+  assert.equal((await window.__findScheduleTab()).tab, null);
+});
+
+test('the caregiver schedule is still accepted', async () => {
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: SCHEDULE + '?week=2026-10-12', lastAccessed: 300 }],
+  });
+
+  assert.equal((await window.__findScheduleTab()).tab.id, 1);
+});
+
+test('the schedule tab is found even when the client view is in front', async () => {
+  // Both are WellSky, both match the host pattern. Only the path separates
+  // them, and the one in front is the wrong one.
+  const { window } = loadPopup({
+    tabs: [
+      { id: 1, active: true, url: CLIENT_VIEW, lastAccessed: 300 },
+      { id: 2, active: false, url: SCHEDULE, lastAccessed: 100 },
+    ],
+  });
+
+  assert.equal((await window.__findScheduleTab()).tab.id, 2);
+});
+
+test('with no WellSky tab at all the message says exactly that', async () => {
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: 'https://mail.google.com/', lastAccessed: 1 }],
+  });
+  const { wellSkyTabs } = await window.__findScheduleTab();
+
+  assert.match(window.__noScheduleTabMessage(wellSkyTabs), /No WellSky tab found/);
+});
+
+test('a URL that will not parse is not treated as the schedule', () => {
+  const { window } = loadPopup();
+  assert.equal(window.__isSchedulePath(undefined), false);
+  assert.equal(window.__isSchedulePath('not a url'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Fix 2: a scan that returns nothing still reports how far it got.
+// ---------------------------------------------------------------------------
+
+test('a lost scan reports where it stopped instead of only that it was lost', async () => {
+  // The whole point. A scan that dies hands executeScript nothing, and the old
+  // message -- "got no result back at all" -- was the same whether it failed on
+  // the first shift or the three hundredth.
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: SCHEDULE, lastAccessed: 1 }],
+    scanResult: [{ result: null }],
+    pageGlobals: {
+      __thcScanProgress: {
+        phase: 'reading clock times',
+        done: 37,
+        total: 164,
+        label: 'Portillo, Amy/Kaliya M (10/13/2026)',
+        at: 1,
+      },
+    },
+  });
+
+  window.document.getElementById('scanBtn')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const status = window.document.getElementById('status').textContent;
+  assert.match(status, /no result back/, 'still says the scan was lost');
+  assert.match(status, /37 of 164/, 'and now says how far it got');
+  assert.match(status, /Kaliya/, 'naming the shift it stopped on');
+  assert.match(status, /Nothing was written/, 'and that the Sheet is untouched');
+});
+
+test('a scan lost before it started says so, rather than inventing progress', async () => {
+  const { window } = loadPopup({
+    tabs: [{ id: 1, active: true, url: SCHEDULE, lastAccessed: 1 }],
+    scanResult: [{ result: null }],
+  });
+
+  window.document.getElementById('scanBtn')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const status = window.document.getElementById('status').textContent;
+  assert.match(status, /never started/i);
+  assert.doesNotMatch(status, /\bof \d/, 'no counts invented out of nothing');
+});
+
+test('progress reads as a sentence, not a dump of fields', () => {
+  const { window } = loadPopup();
+
+  assert.equal(window.__describeProgress(null), '');
+  assert.equal(window.__describeProgress({ phase: 'starting' }), 'reading the page');
+  assert.equal(
+    window.__describeProgress({ phase: 'activity notes', done: 3, total: 9, label: 'A/B' }),
+    'activity notes: 3 of 9 — A/B'
+  );
 });
