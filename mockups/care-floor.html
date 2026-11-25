@@ -63,7 +63,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .bub::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;width:12px;height:12px;background:inherit;transform:rotate(45deg);border-radius:2px}
 .bub.on{opacity:1}.bub.err{background:#fff0f2}.bub.good{background:#eef9f2}.bub b{font-weight:600;color:#793c55}
 /* status colours */
-.s-desk{--c:#a3aab8}.s-working{--c:var(--ok)}.s-meeting{--c:var(--purple)}.s-break{--c:var(--blue)}.s-printer{--c:var(--teal)}.s-helping{--c:var(--mauve)}.s-alert{--c:var(--bad)}.s-walking{--c:#c3c8d2}
+.s-offline{--c:#c3c8d2}.s-lunch{--c:#d7a04b}.s-desk{--c:#a3aab8}.s-working{--c:var(--ok)}.s-meeting{--c:var(--purple)}.s-break{--c:var(--blue)}.s-printer{--c:var(--teal)}.s-helping{--c:var(--mauve)}.s-alert{--c:var(--bad)}.s-walking{--c:#c3c8d2}
 .tag[class*="s-"] i,.st .dot{background:var(--c)}
 .tag.s-alert{border-color:#f0b3bf}
 .tag small{font:500 10px/1 Inter,sans-serif;color:#6b7280}
@@ -116,7 +116,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 <div class="band"><div class="wrap">
   <span class="mock">Mockup · simulated CRM activity</span>
   <h1>The care floor</h1>
-  <p class="lede">The Together Homecare office team, each as their own dog. Each cubicle is decorated for where its owner is from: Bataan, Cavite, Quezon Province and Pampanga in the Philippines, and a different California landmark for everyone in California. When someone updates the CRM, their dog gets to work in their cubicle and the update shows up in a bubble and in the activity log. Between updates the team grabs food at the canteen, eats in the cafeteria, meets on the lounge sofa, rests in the nap corner and visits the printer. The people and breeds are real; the updates in this mockup are made up so you can see how it would look.</p>
+  <p class="lede">The Together Homecare office team, each as their own dog. Each cubicle is decorated for where its owner is from: Bataan, Cavite, Quezon Province and Pampanga in the Philippines, and a different California landmark for everyone in California. When someone updates the CRM, their dog gets to work in their cubicle and the update shows up in a bubble and in the activity log. Each dog also follows Time Doctor: it walks in through the door when its owner starts tracking and leaves when they stop. A paid break sends the dog to the sofa, the cafeteria or the lounge; lunch is an unpaid break in the cafeteria. The people and breeds are real; the updates in this mockup are made up so you can see how it would look.</p>
 
   <div class="grid">
     <div>
@@ -128,7 +128,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
           <div class="layer" id="bubbles"></div>
           <div class="clock" aria-hidden="true"><small>Sample workday</small><span id="clock">8:00 AM</span></div>
         </div>
-        <div class="livebar" role="status"><span class="pulse"></span><span>Mockup: CRM updates are simulated, nothing is read from the real sheet yet.</span></div>
+        <div class="livebar" role="status"><span class="pulse"></span><span>Mockup: Time Doctor status and CRM updates are simulated. Nothing is read from Time Doctor or the CRM yet.</span></div>
         <div class="bar">
           <button class="btn go" id="restart" type="button">Restart day</button>
           <button class="btn" id="pause" type="button" aria-pressed="false">Pause</button>
@@ -281,17 +281,21 @@ const DESKS=[];for(let r=0;r<4;r++)for(let c=0;c<4;c++){if(r===3&&c===3)continue
 const PRINT_CELL={x0:G0+3*PITCH,y0:G0+3*PITCH};const PRINTER=[PRINT_CELL.x0+38,PRINT_CELL.y0+50];
 const TABLES=[[170,672],[316,716],[460,676],[220,800],[390,812],[530,770]];
 const CAFE=TABLES.flatMap(([x,y])=>[[x-24,y-16],[x+22,y+8]]);
-const LOUNGE=[[796,124],[796,176],[796,228],[796,280],[706,150],[706,236]];
+const SOFA=[[796,124],[796,176],[796,228],[796,280]];          // paid breaks on the sofa
+const LOUNGE=[[663,150],[690,96],[620,200],[640,262]];          // paid breaks in the lounge (armchair, rug)
+const MEETING=[[712,170],[712,232],[756,146],[756,268],[700,200]]; // meetings around the coffee table
+const DOOR=[14,90];
 const NAP=[[676,436],[776,466],[716,526]];
 const exitOf=pl=>{
   if(pl.k==='desk'){const dk=DESKS[pl.i];return [[dk.door,dk.spot[1]],[dk.door,dk.aisle],[HALL,dk.aisle]]}
   if(pl.k==='help'){const dk=DESKS[pl.i];return [[dk.door,dk.aisle],[HALL,dk.aisle]]}
   if(pl.k==='break')return [[pl.spot[0],CAFE_WAY],[HALL,CAFE_WAY]];
   if(pl.k==='printer')return [[PRINTER[0],PRINT_CELL.y0+CELL+18],[HALL,PRINT_CELL.y0+CELL+18]];
-  if(pl.k==='meet'||pl.k==='nap')return [[HALL,pl.spot[1]]];
+  if(pl.k==='meet'||pl.k==='nap'||pl.k==='sofa'||pl.k==='lounge')return [[HALL,pl.spot[1]]];
+  if(pl.k==='door')return [[DOOR[0],24],[HALL,24]];
   return [];
 };
-const MEET=LOUNGE, BREAK=CAFE;
+const MEET=MEETING, BREAK=CAFE;
 
 /* ---------- where people are from: cubicle themes ---------- */
 // Posters are drawn flat (48 x 28 for the side wall, 22 x 14 for the flag) and mapped onto the wall planes.
@@ -450,7 +454,7 @@ function walkTo(d,pl,onArrive){
 }
 
 /* ---------- clock & log ---------- */
-const START=480,END=1035; // 8:00 AM to 5:15 PM
+const START=465,END=1050; // 7:45 AM to 5:30 PM
 let simT=START,speed=1,paused=false,scenario='normal',events=[],evI=0,total=0;
 const fmt=m=>{m=Math.round(m);let h=Math.floor(m/60),mm=m%60,ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${String(mm).padStart(2,'0')} ${ap}`};
 const logEl=document.getElementById('log');
@@ -480,11 +484,29 @@ function doUpdate(d){
   d.busyTxt=txt;d.nextAt=simT+dur;d.finish=()=>{d.updates++;total++;log(`<em>${d.name}</em> ${txt}.`);setStatus(d,'desk','Saved: '+cap(txt));d.savedUntil=performance.now()+1800;updateStats()};
 }
 function goPrinter(d){setStatus(d,'walking','Walking to the printer');walkTo(d,{k:'printer',spot:PRINTER},()=>{const t=pick(['Printing the payroll summary','Picking up signed forms','Scanning documents into the CRM']);setStatus(d,'printer',t);say(d,t);d.nextAt=simT+rnd(5,9);d.back=true})}
-function goBreak(d,mins,why='Coffee break'){const free=BREAK.find(b=>!Object.values(dogs).some(o=>o.place.spot===b));if(!free){d.nextAt=simT+8;return}
-  setStatus(d,'walking','Heading to the cafeteria');walkTo(d,{k:'break',spot:free},()=>{setStatus(d,'break',why==='Lunch'?'Lunch in the cafeteria':'Coffee in the cafeteria');say(d,why==='Lunch'?'Lunch time':pick(['Grabbing a coffee from the canteen','Snack break','Refilling my water']));d.nextAt=simT+mins;d.back=true})}
-function goNap(d){const free=NAP.find(b=>!Object.values(dogs).some(o=>o.place.spot===b));if(!free){d.nextAt=simT+6;return}
-  setStatus(d,'walking','Heading to the nap corner');walkTo(d,{k:'nap',spot:free},()=>{setStatus(d,'break','Resting in the nap corner');say(d,'Five-minute rest');d.nextAt=simT+rnd(8,14);d.back=true})}
-function backToDesk(d){d.back=false;setStatus(d,'walking','Walking back to the desk');walkTo(d,d.desk,()=>{setStatus(d,'desk','At desk');d.nextAt=simT+rnd(2,6)})}
+const TDLABEL={off:'Time Doctor: not tracking',tracking:'Time Doctor: tracking',paid:'Time Doctor: paid break',unpaid:'Time Doctor: unpaid break'};
+function signIn(d){d.td='tracking';d.tdSince=simT;setStatus(d,'walking','Started tracking, walking to the cubicle');log(`<em>${d.name}</em> started tracking in Time Doctor.`);
+  walkTo(d,d.desk,()=>{d.locked=false;setStatus(d,'desk','At desk');say(d,'Good morning!');d.nextAt=simT+rnd(2,8)})}
+function signOut(d){if(d.td==='off')return;d.locked=true;if(d.finish){const f=d.finish;d.finish=null;f()}d.back=false;
+  const go=()=>{d.td='off';setStatus(d,'walking','Stopped tracking, heading home');log(`<em>${d.name}</em> stopped tracking in Time Doctor.`);say(d,'See you tomorrow!');
+    walkTo(d,{k:'door',spot:DOOR},()=>{d.tdSince=null;setStatus(d,'offline','Not signed in to Time Doctor')})};
+  if(d.path.length)d.queue.push(go);else go()}
+const freeSpot=list=>list.find(b=>!Object.values(dogs).some(o=>o.place.spot===b));
+const BREAK_PLACES={cafeteria:{k:'break',list:CAFE,where:'in the cafeteria',say:['Coffee from the canteen','Snack break','Refilling my water']},
+  sofa:{k:'sofa',list:SOFA,where:'on the sofa',say:['Feet up on the sofa','Quick sit on the sofa']},
+  lounge:{k:'lounge',list:LOUNGE.concat(NAP),where:'in the lounge',say:['Stretching in the lounge','Five-minute rest']}};
+// a paid break started in Time Doctor sends the dog to the sofa, the cafeteria or the lounge
+function paidBreak(d,mins){const keys=Object.keys(BREAK_PLACES).sort(()=>Math.random()-.5);let pl,spot;
+  for(const k of keys){spot=freeSpot(BREAK_PLACES[k].list);if(spot){pl=BREAK_PLACES[k];break}}
+  if(!pl){d.nextAt=simT+6;return}
+  d.td='paid';d.tdSince=simT;log(`<em>${d.name}</em> started a <em>paid break</em> in Time Doctor.`);
+  setStatus(d,'walking','Paid break: heading '+pl.where.replace('in the','to the').replace('on the','to the'));
+  walkTo(d,{k:pl.k,spot},()=>{setStatus(d,'break','Paid break '+pl.where);say(d,`<b>Paid break</b> · ${pick(pl.say)}`);d.nextAt=simT+mins;d.back=true})}
+function goBreak(d,mins,why){ // lunch is an unpaid break
+  const spot=freeSpot(CAFE);if(!spot){d.nextAt=simT+8;return}
+  d.td='unpaid';d.tdSince=simT;setStatus(d,'walking','Heading to the cafeteria for lunch');
+  walkTo(d,{k:'break',spot},()=>{setStatus(d,'lunch','Lunch in the cafeteria');say(d,'Lunch time');d.nextAt=simT+mins;d.back=true})}
+function backToDesk(d){if(d.td==='paid'||d.td==='unpaid'){log(`<em>${d.name}</em> ended the ${d.td==='paid'?'paid':'unpaid'} break and is tracking again (${Math.round(simT-d.tdSince)} min).`);d.td='tracking'}d.back=false;setStatus(d,'walking','Walking back to the desk');walkTo(d,d.desk,()=>{setStatus(d,'desk','At desk');d.nextAt=simT+rnd(2,6)})}
 function decide(d){
   if(d.locked||d.path.length)return;
   if(d.finish){const f=d.finish;d.finish=null;f();d.nextAt=simT+rnd(3,10);return}
@@ -492,8 +514,7 @@ function decide(d){
   const r=Math.random(),busy=scenario==='deadline';
   if(r<(busy?.74:.55))doUpdate(d);
   else if(r<(busy?.8:.67))goPrinter(d);
-  else if(r<(busy?.86:.77))goBreak(d,rnd(10,18));
-  else if(!busy&&r<.82)goNap(d);
+  else if(r<(busy?.85:.8))paidBreak(d,rnd(10,18));
   else{const t=pick(['Reading email','On a phone call','Reviewing yesterday\'s rows','Planning the week']);setStatus(d,'desk',t);d.nextAt=simT+rnd(8,18)}
 }
 function meeting(t0,t1,title,ids){
@@ -503,7 +524,7 @@ function meeting(t0,t1,title,ids){
   events.push({t:t1,fn:()=>{log(`<em>${title}</em> wrapped up.`);ids.forEach(id=>{const d=dogs[id];d.locked=false;backToDesk(d)})}});
 }
 function lunch(t0,t1,ids){events.push({t:t0,fn:()=>ids.forEach(id=>{const d=dogs[id];if(d.locked)return;d.locked=true;if(d.finish){const f=d.finish;d.finish=null;f()}d.back=false;goBreak(d,0,'Lunch')})});
-  events.push({t:t1,fn:()=>ids.forEach(id=>{const d=dogs[id];if(d.status==='break'||d.place.k==='break'){d.locked=false;backToDesk(d)}else d.locked=false})})}
+  events.push({t:t1,fn:()=>ids.forEach(id=>{const d=dogs[id];if(d.status==='lunch'||d.place.k==='break'){d.locked=false;backToDesk(d)}else d.locked=false})})}
 function snag(t0,t1,who,helper,problem,fix){
   events.push({t:t0,fn:()=>{const d=dogs[who];d.locked=true;if(d.finish)d.finish=null;
     const go=()=>{setStatus(d,'alert',problem);say(d,`<b>Stuck:</b> ${problem}`,'err',4000,true);log(`<em>${d.name}</em> hit a snag: ${problem}.`,'alert');updateStats()};
@@ -530,12 +551,12 @@ function buildEvents(){
 }
 
 /* ---------- team list & stats ---------- */
-const LABEL={desk:'At desk',working:'Updating CRM',meeting:'In a meeting',break:'On break',printer:'At the printer',helping:'Helping',alert:'Needs help',walking:'Walking'};
+const LABEL={offline:'Not tracking',lunch:'Unpaid break',desk:'At desk',working:'Updating CRM',meeting:'In a meeting',break:'Paid break',printer:'At the printer',helping:'Helping',alert:'Needs help',walking:'Walking'};
 const roster=document.getElementById('roster');
 function buildRoster(){
   roster.innerHTML='';
   TEAM.forEach(p=>{const row=document.createElement('div');row.className='st';row.tabIndex=0;row.dataset.id=p.id;
-    row.innerHTML=`<div class="av">${avatarSVG(p)}<span class="dot"></span></div><div><b>${p.name}</b>${p.nick?` <small style="display:inline">(${p.nick})</small>`:''}<small>${BREEDS[p.breed].n} · ${MOTIFS[ORIGIN[p.id]].place}</small><small class="what"></small></div><div class="right"><span class="chip"></span><small class="cnt"></small></div>`;
+    row.innerHTML=`<div class="av">${avatarSVG(p)}<span class="dot"></span></div><div><b>${p.name}</b>${p.nick?` <small style="display:inline">(${p.nick})</small>`:''}<small>${BREEDS[p.breed].n} · ${MOTIFS[ORIGIN[p.id]].place}</small><small class="what"></small></div><div class="right"><span class="chip"></span><small class="cnt"></small><small class="td"></small></div>`;
     const find=()=>{const d=dogs[p.id];d.hlUntil=performance.now()+2600;say(d,`Hi, I'm <b>${d.name}</b> from ${MOTIFS[ORIGIN[d.id]].place}. ${d.what}.`,'',2600,true)};
     row.addEventListener('click',find);row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();find()}});
     roster.appendChild(row)});
@@ -545,11 +566,11 @@ function updateRoster(){
   if(!roster.children.length)return;
   [...roster.children].forEach(row=>{const d=dogs[row.dataset.id];row.className='st s-'+d.status;
     row.querySelector('.what').textContent=d.what;row.querySelector('.chip').textContent=LABEL[d.status];
-    row.querySelector('.cnt').textContent=`${d.updates} update${d.updates===1?'':'s'}`});
+    row.querySelector('.cnt').textContent=`${d.updates} update${d.updates===1?'':'s'}`;row.querySelector('.td').textContent=TDLABEL[d.td]+(d.td!=='off'&&d.tdSince!=null?` since ${fmt(d.tdSince)}`:'')});
 }
 const statsEl=document.getElementById('stats');
 function updateStats(){const all=Object.values(dogs),c=k=>all.filter(d=>d.status===k).length;
-  statsEl.innerHTML=[['CRM updates today',total,'var(--mauve)'],['Updating now',c('working'),'var(--ok)'],['In meetings',c('meeting'),'var(--purple)'],['On break',c('break'),'var(--blue)'],['Needs help',c('alert'),'var(--bad)']]
+  statsEl.innerHTML=[['CRM updates today',total,'var(--mauve)'],['Updating now',c('working'),'var(--ok)'],['In meetings',c('meeting'),'var(--purple)'],['Tracking in Time Doctor',all.filter(d=>d.td!=='off').length,'var(--teal)'],['On paid break',c('break'),'var(--blue)'],['Needs help',c('alert'),'var(--bad)']]
    .map(([l,n,col])=>`<span class="stat"><i style="background:${col}"></i><b>${n}</b>${l}</span>`).join('')}
 
 /* ---------- loop ---------- */
@@ -578,7 +599,7 @@ function frame(now){
     d.tail.setAttribute('transform',`rotate(${wag.toFixed(1)})`);
     d.g.classList.toggle('happy',['break','helping'].includes(d.status)||now<d.bubUntil&&d.bub.classList.contains('good'));
     d.g.classList.toggle('hl',now<d.hlUntil);const sv=now<(d.savedUntil||0);if(sv!==d.tag.classList.contains('saved'))d.tag.classList.toggle('saved',sv);
-    const[tl,tt]=toPct(X,Y+12);d.tag.style.left=tl+'%';d.tag.style.top=tt+'%';
+    const away=d.status==='offline';if(away!==d.g.hidden){d.g.style.display=away?'none':'';d.tag.style.visibility=away?'hidden':'';d.g.hidden=away}const[tl,tt]=toPct(X,Y+12);d.tag.style.left=tl+'%';d.tag.style.top=tt+'%';
     const[bl,bt]=toPct(X,Y+d.top-4);d.bub.style.left=bl+'%';d.bub.style.top=bt+'%';
     if(now>d.bubUntil&&d.bub.classList.contains('on'))d.bub.classList.remove('on');
     d.g.depth=Y;
@@ -591,10 +612,12 @@ function frame(now){
 /* ---------- setup ---------- */
 function restart(){
   simT=START;evI=0;total=0;logEl.innerHTML='';
-  Object.values(dogs).forEach((d,i)=>{d.x=d.desk.spot[0];d.y=d.desk.spot[1];d.place=d.desk;d.path=[];d.queue=[];d.onArrive=null;d.locked=false;d.back=false;d.finish=null;d.updates=0;d.bubUntil=0;d.bub.classList.remove('on');
-    d.nextAt=START+1+i*1.6;setStatus(d,'desk','At desk')});
-  buildEvents();updateStats();
-  log(scenario==='deadline'?'Workday started. <em>Payroll is due at 4:30 PM</em>, so the team is busier than usual.':'Workday started. Everyone is at their desk.');
+  Object.values(dogs).forEach((d,i)=>{d.x=DOOR[0];d.y=DOOR[1];d.place={k:'door',spot:DOOR};d.path=[];d.queue=[];d.onArrive=null;d.locked=true;d.back=false;d.finish=null;d.updates=0;d.bubUntil=0;d.bub.classList.remove('on');
+    d.td='off';d.tdSince=null;d.nextAt=Infinity;setStatus(d,'offline','Not signed in to Time Doctor')});
+  buildEvents();
+  TEAM.forEach((p,i)=>{const t=START+5+((i*7)%33);events.push({t,fn:()=>signIn(dogs[p.id])});events.push({t:1005+((i*5)%26),fn:()=>signOut(dogs[p.id])})});
+  events.sort((a,b)=>a.t-b.t);updateStats();
+  log(scenario==='deadline'?'Workday started. <em>Payroll is due at 4:30 PM</em>, so the team is busier than usual.':'Workday started. The team signs in to Time Doctor as they arrive.');
 }
 buildScene();
 TEAM.forEach((p,i)=>makeDog(p,i));
