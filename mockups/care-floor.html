@@ -4,27 +4,24 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* Layout: same shape as the Social Post Office. Isometric scene on top, staff roster + activity log beside it. */
+/* Layout: same shape as the Social Post Office. Isometric office on top, team list + activity log beside it. */
 :root{
   --bg:#f4f6f9;--ink:#191c22;--muted:#5b6170;--card:#ffffff;--line:#e3e7ee;--stage:#ffffff;
-  --mauve:#ac6b75;--plum:#793c55;--pink:#efb1d6;--ok:#3f9a6e;--bad:#c84a61;--warn:#e9962f;--blue:#4f86c6;--sent:#9a7fc4;
-  --grass:#e3ecd6;--grass-line:#d3e0c3;--road:#dfe2e8;--road-dash:#ffffff;--wall:#fbf8f3;--wall-side:#ebe3d8;
-  --door:#8a5a3c;--win:#cfe1ef;--win-lit:#ffd36b;--rug:#f6dce8;--bed:#ffffff;--bed-rim:#e7c9d6;--office:#eef0f5;--office-edge:#d9dde6;
-  --desk:#c09065;--desk-side:#a77a52;--screen:#2a2f3a;--trunk:#8a6a4a;--leaf:#9cc68a;--leaf-2:#86b574;
-  --roof1:#ac6b75;--roof2:#5f8fb3;--roof3:#d7a04b;--roof4:#6f9e7d;--roof5:#8d6fae;
+  --mauve:#ac6b75;--plum:#793c55;--pink:#efb1d6;--ok:#3f9a6e;--bad:#c84a61;--blue:#4f86c6;--purple:#8a6bbf;--teal:#3c9aa5;
+  --floor:#eceff4;--floor-line:#e0e4eb;--carpet:#e4e9f2;--meet:#efe6ee;--break:#f3ebdf;--wall:#fbf8f3;--wall-side:#e9e2d8;
+  --desk:#c9a27c;--desk-side:#b08661;--desk-front:#9d7552;--screen:#2a2f3a;--table:#8f6a4c;--table-side:#77563c;
+  --glass:#9fb7d3;--sofa:#7f93b5;--sofa-side:#6a7ea0;--leaf:#9cc68a;--leaf-2:#86b574;--pot:#c98b62;
   --chip-bg:#eef0f4;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#14161b;--ink:#eceef2;--muted:#a9afbb;--card:#1d2027;--line:#2c313b;--stage:#1b1e25;
-  --grass:#25322b;--grass-line:#2d3c33;--road:#3a3f4a;--road-dash:#5f6673;--wall:#d8d2c8;--wall-side:#b3aa9d;
-  --win:#4b5c6e;--rug:#47323f;--bed:#5a4552;--bed-rim:#6d5563;--office:#2a2e37;--office-edge:#363b46;
-  --leaf:#5f8a55;--leaf-2:#527a49;--chip-bg:#2a2f38;color-scheme:dark}}
+  --floor:#2a2e37;--floor-line:#323743;--carpet:#2d3442;--meet:#372d38;--break:#3a3329;--wall:#d8d2c8;--wall-side:#b3aa9d;
+  --glass:#56708f;--leaf:#5f8a55;--leaf-2:#527a49;--chip-bg:#2a2f38;color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#14161b;--ink:#eceef2;--muted:#a9afbb;--card:#1d2027;--line:#2c313b;--stage:#1b1e25;
-  --grass:#25322b;--grass-line:#2d3c33;--road:#3a3f4a;--road-dash:#5f6673;--wall:#d8d2c8;--wall-side:#b3aa9d;
-  --win:#4b5c6e;--rug:#47323f;--bed:#5a4552;--bed-rim:#6d5563;--office:#2a2e37;--office-edge:#363b46;
-  --leaf:#5f8a55;--leaf-2:#527a49;--chip-bg:#2a2f38;color-scheme:dark}
+  --floor:#2a2e37;--floor-line:#323743;--carpet:#2d3442;--meet:#372d38;--break:#3a3329;--wall:#d8d2c8;--wall-side:#b3aa9d;
+  --glass:#56708f;--leaf:#5f8a55;--leaf-2:#527a49;--chip-bg:#2a2f38;color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
 .band{padding-block:clamp(20px,3.5vw,44px);padding-left:max(16px,4vw,env(safe-area-inset-left,0px));padding-right:max(16px,4vw,env(safe-area-inset-right,0px))}
@@ -38,40 +35,38 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .stat b{font:700 16px/1 'Plus Jakarta Sans',Inter,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums}
 .stat i{width:9px;height:9px;border-radius:50%;display:block}
 .stage{position:relative;background:var(--stage);border:1px solid var(--line);border-radius:20px;padding:12px 12px 14px;box-shadow:0 20px 50px -30px rgba(25,28,34,.35)}
-.screen{position:relative;width:100%;max-width:100%;aspect-ratio:1280/820;overflow:hidden;border-radius:12px}
+.screen{position:relative;width:100%;max-width:100%;aspect-ratio:1280/830;overflow:hidden;border-radius:12px}
 .screen svg{position:absolute;inset:0;width:100%;height:100%}
 .layer{position:absolute;inset:0;pointer-events:none}
 .clock{position:absolute;right:12px;top:10px;font:800 clamp(16px,2.2vw,26px)/1 'Plus Jakarta Sans',Inter,sans-serif;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-variant-numeric:tabular-nums;box-shadow:0 6px 16px -10px rgba(20,24,32,.4)}
 .clock small{display:block;font:600 10.5px/1.2 Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
 /* scene materials */
-.g-grass{fill:var(--grass)}.g-gl{stroke:var(--grass-line);stroke-width:1;fill:none}
-.g-road{fill:var(--road)}.g-dash{stroke:var(--road-dash);stroke-width:3;stroke-dasharray:14 12;fill:none}
-.g-wall{fill:var(--wall)}.g-wall2{fill:var(--wall-side)}.g-door{fill:var(--door)}
-.g-win{fill:var(--win);transition:fill .4s}.g-win.lit{fill:var(--win-lit)}
-.g-rug{fill:var(--rug)}.g-bed{fill:var(--bed);stroke:var(--bed-rim);stroke-width:3}
-.g-office{fill:var(--office);stroke:var(--office-edge);stroke-width:2}
-.g-desk{fill:var(--desk)}.g-desk2{fill:var(--desk-side)}.g-screen{fill:var(--screen)}
-.g-trunk{fill:var(--trunk)}.g-leaf{fill:var(--leaf)}.g-leaf2{fill:var(--leaf-2)}
-.g-shadow{fill:rgba(20,28,24,.16)}
-.zz{font:700 13px/1 'Plus Jakarta Sans',sans-serif;fill:var(--muted);opacity:0}
-.dog.sleep .zz{animation:zz 2.4s infinite}
-.dog.sleep .zz.b{animation-delay:1.2s}
-@keyframes zz{0%{opacity:0;transform:translate(0,0)}30%{opacity:.9}100%{opacity:0;transform:translate(8px,-18px)}}
-.dog .ec,.dog .tongue{display:none}.dog.sleep .ec{display:inline}.dog.sleep .eo{display:none}.dog.happy .tongue{display:inline}
+.g-floor{fill:var(--floor)}.g-fl{stroke:var(--floor-line);stroke-width:1;fill:none}
+.g-carpet{fill:var(--carpet)}.g-meet{fill:var(--meet)}.g-break{fill:var(--break)}
+.g-wall{fill:var(--wall)}.g-wall2{fill:var(--wall-side)}
+.g-desk{fill:var(--desk)}.g-desk2{fill:var(--desk-side)}.g-desk3{fill:var(--desk-front)}.g-screen{fill:var(--screen)}
+.g-table{fill:var(--table)}.g-table2{fill:var(--table-side)}
+.g-glass{fill:none;stroke:var(--glass);stroke-width:3;opacity:.8}
+.g-sofa{fill:var(--sofa)}.g-sofa2{fill:var(--sofa-side)}
+.g-leaf{fill:var(--leaf)}.g-leaf2{fill:var(--leaf-2)}.g-pot{fill:var(--pot)}
+.g-shadow{fill:rgba(20,24,32,.15)}
+.led{transition:fill .3s}
+.dog .tongue{display:none}.dog.happy .tongue{display:inline}
 .ring{fill:none;stroke:var(--mauve);stroke-width:3;opacity:0}
 .dog.hl .ring{opacity:1;animation:ring 1s infinite}
 @keyframes ring{50%{stroke-width:6;opacity:.5}}
 /* tags & bubbles */
-.tag{position:absolute;transform:translate(-50%,-50%);font:600 12px/1 'Plus Jakarta Sans',Inter,sans-serif;color:#22252c;background:rgba(255,255,255,.94);border:1px solid #d5dae3;padding:4px 8px 4px 7px;border-radius:999px;white-space:nowrap;box-shadow:0 4px 10px -6px rgba(20,24,32,.35);display:flex;gap:5px;align-items:center}
-.tag i{width:8px;height:8px;border-radius:50%;background:#a3aab8;display:block}
-.tag.zone{background:rgba(255,255,255,.78);color:#5b6170;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:10.5px;border-style:dashed}
-.bub{position:absolute;transform:translate(-50%,calc(-100% - 8px));background:#fff;color:#191c22;border-radius:14px;padding:7px 10px;font:500 12.5px/1.35 Inter,sans-serif;max-width:200px;width:max-content;box-shadow:0 10px 24px -10px rgba(20,24,32,.45),0 0 0 1px rgba(20,24,32,.06);opacity:0;transition:opacity .25s}
+.tag{position:absolute;transform:translate(-50%,-50%);font:600 11.5px/1 'Plus Jakarta Sans',Inter,sans-serif;color:#22252c;background:rgba(255,255,255,.94);border:1px solid #d5dae3;padding:3px 7px 3px 6px;border-radius:999px;white-space:nowrap;box-shadow:0 4px 10px -6px rgba(20,24,32,.35);display:flex;gap:5px;align-items:center}
+.tag i{width:7px;height:7px;border-radius:50%;background:#a3aab8;display:block}
+.tag.zone{background:rgba(255,255,255,.8);color:#5b6170;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:10.5px;border-style:dashed}
+.bub{position:absolute;transform:translate(-50%,calc(-100% - 8px));background:#fff;color:#191c22;border-radius:14px;padding:6px 9px;font:500 12px/1.35 Inter,sans-serif;max-width:180px;width:max-content;box-shadow:0 10px 24px -10px rgba(20,24,32,.45),0 0 0 1px rgba(20,24,32,.06);opacity:0;transition:opacity .25s;z-index:1}
 .bub::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;width:12px;height:12px;background:inherit;transform:rotate(45deg);border-radius:2px}
 .bub.on{opacity:1}.bub.err{background:#fff0f2}.bub.good{background:#eef9f2}.bub b{font-weight:600;color:#793c55}
 /* status colours */
-.s-off{--c:#a3aab8}.s-enroute{--c:var(--blue)}.s-onshift{--c:var(--warn)}.s-sent{--c:var(--sent)}.s-done{--c:var(--ok)}.s-late,.s-missed{--c:var(--bad)}.s-office{--c:var(--mauve)}
+.s-desk{--c:#a3aab8}.s-working{--c:var(--ok)}.s-meeting{--c:var(--purple)}.s-break{--c:var(--blue)}.s-printer{--c:var(--teal)}.s-helping{--c:var(--mauve)}.s-alert{--c:var(--bad)}.s-walking{--c:#c3c8d2}
 .tag[class*="s-"] i,.st .dot{background:var(--c)}
-.tag.s-late,.tag.s-missed{border-color:#f0b3bf}
+.tag.s-alert{border-color:#f0b3bf}
+.tag.saved{background:#e3f5ea;border-color:#9fd4b4}.tag.saved::after{content:'Saved';font-weight:600;color:#21603f;margin-left:2px}
 /* controls */
 .livebar{display:flex;gap:9px;align-items:center;margin:10px 4px 0;font-size:13.5px;color:var(--muted)}
 .pulse{width:9px;height:9px;border-radius:50%;background:#8fb4d8;flex:none;animation:pl 1.6s infinite}
@@ -79,7 +74,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;padding:0 4px}
 .btn,.seg button{font:600 14px/1 Inter,system-ui,sans-serif;min-height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
 .btn.go{background:var(--mauve);border-color:var(--mauve);color:#fff}
-.btn:focus-visible,.seg button:focus-visible,select:focus-visible,.st:focus-visible{outline:3px solid var(--pink);outline-offset:2px}
+.btn:focus-visible,.seg button:focus-visible,.st:focus-visible{outline:3px solid var(--pink);outline-offset:2px}
 .seg{display:flex;flex-wrap:wrap;gap:6px}.seg button{min-height:34px;padding:0 12px;font-size:13px}
 .seg button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .lbl{font-size:13px;color:var(--muted);margin:0 2px 0 6px}
@@ -88,18 +83,19 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
 .card h2{font:700 18px/1.2 'Plus Jakarta Sans',Inter,sans-serif;margin:0 0 4px}
 .card .sub{margin:0 0 8px;font-size:13px;color:var(--muted)}
-.st{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:8px 6px;border-top:1px solid var(--line);border-radius:10px;cursor:pointer}
-.st:first-of-type{border-top:0}.st:hover{background:var(--chip-bg)}
-.av{width:40px;height:40px;border-radius:12px;background:var(--chip-bg);display:grid;place-items:center;position:relative}
-.av svg{width:40px;height:40px}
-.av .dot{position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:50%;border:2px solid var(--card)}
-.st b{font-weight:600;font-size:15px}.st .role{font-weight:400;color:var(--muted);font-size:12.5px}
+.team{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+.st{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:7px 6px;border-top:1px solid var(--line);border-radius:10px;cursor:pointer}
+.st:first-child{border-top:0}.st:hover{background:var(--chip-bg)}
+.av{width:44px;height:44px;border-radius:12px;background:var(--chip-bg);position:relative;overflow:hidden}
+.av svg{width:44px;height:44px;display:block}
+.av .dot{position:absolute;right:2px;bottom:2px;width:11px;height:11px;border-radius:50%;border:2px solid var(--card)}
+.st b{font-weight:600;font-size:15px}
 .st small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35}
-.st .where{color:var(--plum);font-weight:500}
-.right{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.st .what{color:var(--plum);font-weight:500}
+.right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.right small{font-variant-numeric:tabular-nums}
 .chip{font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;background:color-mix(in srgb,var(--c) 18%,transparent);color:color-mix(in srgb,var(--c) 70%,var(--ink));white-space:nowrap}
-select{font:500 12px/1 Inter,sans-serif;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;padding:3px 4px;max-width:140px}
-.log{list-style:none;margin:0;padding:0;max-height:520px;overflow:auto;font-size:13px}
+.log{list-style:none;margin:0;padding:0;max-height:760px;overflow:auto;font-size:13px}
 .log li{padding:7px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px}
 .log li:first-child{border-top:0}
 .log time{color:var(--muted);font-variant-numeric:tabular-nums}
@@ -111,33 +107,33 @@ select{font:500 12px/1 Inter,sans-serif;color:var(--muted);background:transparen
 .how p{margin:0;font-size:14.5px;color:var(--muted)}
 .note{font-size:13px;color:var(--muted);margin:10px 0 0}
 @media(max-width:900px){.side{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:640px){.tag{font-size:10.5px;padding:3px 6px;display:none}.tag.s-onshift,.tag.s-late,.tag.s-missed{display:flex}.tag i{width:6px;height:6px}.how{grid-template-columns:minmax(0,1fr)}.bub{max-width:140px;padding:5px 7px;font-size:11.5px}.clock{padding:5px 8px;right:6px;top:6px}}
-@media(prefers-reduced-motion:reduce){.bub{transition:none}.pulse,.dog.sleep .zz,.dog.hl .ring{animation:none!important}.dog.sleep .zz{opacity:.7}}
+@media(max-width:640px){.tag{font-size:10px;padding:2px 5px;display:none}.tag.s-working,.tag.s-alert{display:flex}.tag i{width:6px;height:6px}.how{grid-template-columns:minmax(0,1fr)}.bub{max-width:140px;padding:5px 7px;font-size:11.5px}.clock{padding:5px 8px;right:6px;top:6px}}
+@media(prefers-reduced-motion:reduce){.bub{transition:none}.pulse,.dog.hl .ring{animation:none!important}}
 </style>
 
 <div class="band"><div class="wrap">
-  <span class="mock">Mockup · sample staff and shifts</span>
+  <span class="mock">Mockup · simulated CRM activity</span>
   <h1>The care floor</h1>
-  <p class="lede">Every caregiver on the roster gets a dog avatar, and the breed is picked from their name. As WellSky shift updates come in, the dogs act them out: they head to the client's home, clock in at the door, post care log notes while they work, then clock out and send their care log to the HR desk, where Rosa verifies the hours into the Payroll tab. Between shifts they nap in the lounge. This mockup plays a made-up day so you can see how it would look.</p>
+  <p class="lede">The Together Homecare office team, each as their own dog. When someone updates the CRM, their dog gets to work at their desk and the update shows up in a bubble and in the activity log. Between updates the team heads to meetings, the printer and the break room. The people and breeds are real; the updates in this mockup are made up so you can see how it would look.</p>
 
   <div class="grid">
     <div>
-      <div class="stats" id="stats" aria-live="off"></div>
+      <div class="stats" id="stats"></div>
       <div class="stage">
         <div class="screen">
-          <svg id="scene" viewBox="-640 -110 1280 820" role="img" aria-label="Isometric neighbourhood: five client homes along a road, an HR desk on the left and a staff lounge at the bottom, with a dog for each staff member"></svg>
+          <svg id="scene" viewBox="-640 -120 1280 830" role="img" aria-label="Isometric office with fifteen desks, a meeting room, a break room and a printer, with a dog in formal attire for each team member"></svg>
           <div class="layer" id="tags"></div>
           <div class="layer" id="bubbles"></div>
-          <div class="clock" aria-hidden="true"><small>Sample day</small><span id="clock">7:25 AM</span></div>
+          <div class="clock" aria-hidden="true"><small>Sample workday</small><span id="clock">8:00 AM</span></div>
         </div>
-        <div class="livebar" role="status"><span class="pulse"></span><span id="livetext">Mockup: WellSky updates are simulated, nothing is read from the real schedule.</span></div>
+        <div class="livebar" role="status"><span class="pulse"></span><span>Mockup: CRM updates are simulated, nothing is read from the real sheet yet.</span></div>
         <div class="bar">
           <button class="btn go" id="restart" type="button">Restart day</button>
           <button class="btn" id="pause" type="button" aria-pressed="false">Pause</button>
           <span class="lbl">Scenario</span>
           <div class="seg" id="scn" role="group" aria-label="Scenario">
             <button type="button" data-v="normal" aria-pressed="true">Normal day</button>
-            <button type="button" data-v="late" aria-pressed="false">Late and missed shifts</button>
+            <button type="button" data-v="deadline" aria-pressed="false">Payroll deadline</button>
           </div>
           <span class="lbl">Speed</span>
           <div class="seg" id="spd" role="group" aria-label="Speed">
@@ -147,355 +143,361 @@ select{font:500 12px/1 Inter,sans-serif;color:var(--muted);background:transparen
           </div>
         </div>
       </div>
-      <p class="note">Click a staff member to find their dog. Change the breed with the menu on their row.</p>
+      <p class="note">Click someone in the team list to find their dog on the floor.</p>
     </div>
 
     <div class="side">
-      <div class="card"><h2>Staff</h2><p class="sub">Breed is chosen from the name. HR can change it.</p><div id="roster"></div></div>
-      <div class="card"><h2>Activity</h2><p class="sub">Newest first. Each line is one shift update.</p><ol class="log" id="log"></ol></div>
+      <div class="card"><h2>Team</h2><p class="sub">15 people. Each has a desk and a dog.</p><div class="team" id="roster"></div></div>
+      <div class="card"><h2>Activity</h2><p class="sub">Newest first. Each line is one CRM update.</p><ol class="log" id="log"></ol></div>
     </div>
   </div>
 
   <div class="how">
-    <div><b>Shift updates come in</b><p>In the real build, a small Vercel function reads the latest rows of the Shift Log sheet that the extension fills from WellSky, every few seconds, the same way the post office follows n8n.</p></div>
-    <div><b>Staff become dogs</b><p>Each caregiver name maps to a breed. The breed sits in a column next to their name, so it stays the same every day and HR can change it.</p></div>
-    <div><b>Watch only</b><p>The floor only reads shift updates. It never edits WellSky or the sheet, and it is limited to people signed in to your Vercel team.</p></div>
+    <div><b>Updates come in</b><p>In the real build, a small Vercel function reads the CRM's change history every few seconds, the same way the post office follows n8n.</p></div>
+    <div><b>Each person has a dog</b><p>Who made the change decides which dog moves. Breeds and desks are fixed per person, so everyone's dog looks the same every day.</p></div>
+    <div><b>Watch only</b><p>The floor only reads updates. It never changes the CRM, and only people signed in to your Vercel team can open it.</p></div>
   </div>
 </div></div>
 
 <script>
 (function(){
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const NS='http://www.w3.org/2000/svg';
-const VB={x:-640,y:-110,w:1280,h:820};
+const VB={x:-640,y:-120,w:1280,h:830};
 const P=(x,y,z=0)=>[(x-y)*0.866,(x+y)*0.5-z];
 const pts=a=>a.map(p=>P(...p).map(v=>v.toFixed(1)).join(',')).join(' ');
 const poly=(a,c,ex='')=>`<polygon points="${pts(a)}" class="${c}" ${ex}/>`;
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const pick=a=>a[Math.floor(Math.random()*a.length)];
 
-/* ---------- breeds ---------- */
+/* ---------- breeds (front view, standing) ---------- */
 const BREEDS={
- golden:{n:'Golden Retriever',body:'#d9a24a',ear:'flop',earC:'#c0832c',snoutC:'#e7bb6c',legH:12,len:17,tail:'fluffy',size:1.08},
- corgi:{n:'Corgi',body:'#e08a3c',belly:'#fff6ea',ear:'point',earC:'#e08a3c',snoutC:'#fff6ea',legH:6,len:18,tail:'stub',size:1},
- dalmatian:{n:'Dalmatian',body:'#f7f5f0',ear:'flop',earC:'#2a2a2a',snoutC:'#f7f5f0',legH:14,len:16,tail:'straight',pat:'spots',size:1.06},
- beagle:{n:'Beagle',body:'#f5efe6',head:'#b8732f',ear:'long',earC:'#7e4a1d',snoutC:'#f5efe6',legH:10,len:15,tail:'straight',tailC:'#3b2f2a',pat:'saddle',patC:'#3b2f2a',size:1},
- husky:{n:'Husky',body:'#7e8794',belly:'#f2f4f7',ear:'point',earC:'#6c7480',snoutC:'#f2f4f7',legH:13,len:16,tail:'curl',pat:'mask',eye:'#3d8fd6',size:1.1},
- poodle:{n:'Poodle',body:'#e9c7a4',ear:'curly',earC:'#dcb38b',snoutC:'#f1d6ba',legH:14,len:13,tail:'pom',pat:'curly',size:1},
- dachshund:{n:'Dachshund',body:'#8b4a22',ear:'long',earC:'#64320f',snoutC:'#9c5a30',legH:5,len:21,tail:'straight',size:.95},
- shiba:{n:'Shiba Inu',body:'#d9773b',belly:'#fbe9d6',ear:'point',earC:'#d9773b',snoutC:'#fbe9d6',legH:11,len:15,tail:'curl',size:1},
- collie:{n:'Border Collie',body:'#26262b',belly:'#fafafa',ear:'semi',earC:'#26262b',snoutC:'#fafafa',legH:12,len:16,tail:'fluffy',pat:'blaze',legC:'#fafafa',size:1.04},
- pug:{n:'Pug',body:'#e0c393',ear:'small',earC:'#2b2420',snoutC:'#2b2420',legH:9,len:13,tail:'curl',size:1,eyeR:2.4,snout:1},
+ golden:{n:'Golden Retriever',fur:'#d9a24a',ear:'flop',earC:'#c0832c',muz:'#ecc77f',tail:'fluffy'},
+ bully:{n:'American Bully',fur:'#7f8792',ear:'rose',earC:'#6c737e',muz:'#c4c9d1',blaze:'#f4f4f2',tail:'thin',wide:1,size:1.08,jaw:1},
+ maltese:{n:'Maltese',fur:'#fbfaf7',ear:'hair',earC:'#f0ebe2',muz:'#ffffff',fluff:1,bow:'#ef8fb3',tail:'fluffy',size:.9},
+ samoyed:{n:'Samoyed',fur:'#ffffff',ear:'point',earC:'#ffffff',muz:'#ffffff',fluff:1.25,tail:'fluffy',smile:1},
+ spitz:{n:'Japanese Spitz',fur:'#fdfdfb',ear:'point',earC:'#fdfdfb',muz:'#ffffff',fluff:1.1,tail:'fluffy',size:.94,smile:1},
+ shihtzu:{n:'Shih Tzu',fur:'#f3ece0',ear:'hair',earC:'#c99a5b',muz:'#fbf6ee',patch:'#c99a5b',fluff:.9,bow:'#e05a6b',tail:'fluffy',size:.9,flat:1},
+ husky:{n:'Husky',fur:'#6f7884',ear:'point',earC:'#5e6673',muz:'#f2f4f7',mask:'#f2f4f7',eye:'#3d8fd6',tail:'fluffy'},
+ mastiff:{n:'Mastiff',fur:'#d5b07a',ear:'drop',earC:'#4a3b2c',muz:'#2f2620',tail:'thin',wide:1,size:1.16,jaw:1,wrinkle:1},
+ pomeranian:{n:'Pomeranian',fur:'#e5913f',ear:'small',earC:'#e5913f',muz:'#f2b778',fluff:1.3,tail:'fluffy',size:.82},
+ havanese:{n:'Havanese',fur:'#efe2cc',ear:'hair',earC:'#b48a5a',muz:'#f8f0e2',patch:'#b48a5a',fluff:.8,tail:'fluffy',size:.9},
+ poodle:{n:'Poodle',fur:'#e9c7a4',ear:'curly',earC:'#dcb38b',muz:'#f1d6ba',pom:1,tail:'pom',size:.98},
+ poodleBlack:{n:'Poodle',fur:'#2e2b30',ear:'curly',earC:'#252228',muz:'#3b373e',pom:1,tail:'pom',size:.98},
+ bloodhound:{n:'Bloodhound',fur:'#a5622f',ear:'long',earC:'#7e4518',muz:'#b8763f',cap:'#3a2a20',tail:'thin',droopy:1,wrinkle:1,size:1.04},
+ collie:{n:'Border Collie',fur:'#26262b',ear:'semi',earC:'#26262b',muz:'#fafafa',stripe:'#fafafa',tail:'fluffy'},
+ chow:{n:'Chow Chow',fur:'#c8763a',ear:'round',earC:'#b3652c',muz:'#d99257',fluff:1.45,mane:1,tail:'fluffy',blueTongue:1,size:1.04,smallEye:1},
 };
-const BREED_IDS=Object.keys(BREEDS);
-
-function dogSVG(id){
-  const b=BREEDS[id], s=b.size||1, L=b.len*s, lh=b.legH*s, bh=15*s, by=-(lh+bh/2);
-  const hx=L*.85, hy=by-bh*.55, r=10*s, legC=b.legC||b.body, head=b.head||b.body;
-  const tx=-L*.92, ty=by-bh*.2, out=[];
-  const leg=(x,o)=>`<rect x="${(x-2.3*s).toFixed(1)}" y="${by.toFixed(1)}" width="${(4.6*s).toFixed(1)}" height="${(-by).toFixed(1)}" rx="2.2" fill="${legC}" ${o?'opacity=".82"':''}/>`;
-  out.push(`<g class="lb">${leg(-L*.25,1)}${leg(L*.62,1)}</g>`);
-  // tail
-  let t='';const tc=b.tailC||b.body;
-  if(b.tail==='straight')t=`<path d="M${tx} ${ty} Q${tx-8*s} ${ty-5*s} ${tx-10*s} ${ty-15*s}" stroke="${tc}" stroke-width="${3.6*s}" fill="none" stroke-linecap="round"/>`+(id==='beagle'?`<circle cx="${tx-10*s}" cy="${ty-15*s}" r="${2.2*s}" fill="#fff"/>`:'');
-  if(b.tail==='curl')t=`<path d="M${tx} ${ty} C${tx-11*s} ${ty-3*s} ${tx-11*s} ${ty-16*s} ${tx-2*s} ${ty-13*s}" stroke="${tc}" stroke-width="${4.2*s}" fill="none" stroke-linecap="round"/>`;
-  if(b.tail==='fluffy')t=`<ellipse cx="${tx-7*s}" cy="${ty-5*s}" rx="${9*s}" ry="${4.4*s}" transform="rotate(-38 ${tx-7*s} ${ty-5*s})" fill="${tc}"/>`+(id==='collie'?`<circle cx="${tx-13*s}" cy="${ty-10*s}" r="${2.6*s}" fill="#fafafa"/>`:'');
-  if(b.tail==='stub')t=`<circle cx="${tx}" cy="${ty}" r="${3.6*s}" fill="${tc}"/>`;
-  if(b.tail==='pom')t=`<path d="M${tx} ${ty} L${tx-6*s} ${ty-11*s}" stroke="${tc}" stroke-width="${2.6*s}" stroke-linecap="round"/><circle cx="${tx-6.5*s}" cy="${ty-12.5*s}" r="${5*s}" fill="${tc}"/>`;
-  out.push(`<g class="tail" data-x="${tx}" data-y="${ty}">${t}</g>`);
-  // body
-  out.push(`<ellipse cx="0" cy="${by}" rx="${L}" ry="${bh/2}" fill="${b.body}"/>`);
-  if(b.belly)out.push(`<ellipse cx="${L*.12}" cy="${by+bh*.2}" rx="${L*.68}" ry="${bh*.28}" fill="${b.belly}"/>`);
-  if(b.pat==='spots')[[-L*.5,by-2,2.6],[-L*.05,by+3,2.2],[L*.35,by-3,2.4],[-L*.25,by-5,1.8],[L*.1,by-6,1.6],[-L*.7,by+3,1.6]].forEach(([x,y,rr])=>out.push(`<ellipse cx="${x}" cy="${y}" rx="${rr*s}" ry="${rr*.8*s}" fill="#222"/>`));
-  if(b.pat==='saddle')out.push(`<ellipse cx="${-L*.18}" cy="${by-bh*.14}" rx="${L*.68}" ry="${bh*.36}" fill="${b.patC}"/>`);
-  if(b.pat==='curly')[-.7,-.35,0,.35].forEach(f=>out.push(`<circle cx="${L*f}" cy="${by-bh*.42}" r="${5*s}" fill="${b.body}"/>`));
-  if(b.pat==='blaze')out.push(`<ellipse cx="${L*.72}" cy="${by+bh*.02}" rx="${6*s}" ry="${7*s}" fill="#fafafa"/>`);
-  out.push(`<g class="la">${leg(-L*.6)}${leg(L*.3)}</g>`);
-  // neck
-  out.push(`<ellipse cx="${L*.62}" cy="${by-bh*.22}" rx="${6*s}" ry="${8*s}" fill="${b.pat==='blaze'?'#fafafa':b.body}"/>`);
-  // ears behind head
-  const pe=(h)=>`<polygon points="${hx-r*.75},${hy-r*.4} ${hx-r*.42},${hy-r*h} ${hx+r*.02},${hy-r*.72}" fill="${b.earC}"/><polygon points="${hx-r*.05},${hy-r*.62} ${hx+r*.32},${hy-r*(h+.05)} ${hx+r*.62},${hy-r*.48}" fill="${b.earC}"/><polygon points="${hx+r*.08},${hy-r*.66} ${hx+r*.3},${hy-r*(h-.3)} ${hx+r*.47},${hy-r*.56}" fill="#f2b9c4" opacity=".8"/>`;
-  if(b.ear==='point')out.push(pe(1.6));
-  if(b.ear==='semi')out.push(pe(1.3));
-  if(b.ear==='small')out.push(`<polygon points="${hx-r*.65},${hy-r*.55} ${hx-r*.15},${hy-r*1.08} ${hx+r*.05},${hy-r*.55}" fill="${b.earC}"/>`);
-  // head
-  out.push(`<circle cx="${hx}" cy="${hy}" r="${r}" fill="${head}"/>`);
-  if(b.pat==='curly')out.push(`<circle cx="${hx-r*.1}" cy="${hy-r*.9}" r="${6*s}" fill="${b.body}"/>`);
-  if(b.pat==='mask')out.push(`<ellipse cx="${hx+r*.28}" cy="${hy+r*.32}" rx="${r*.72}" ry="${r*.55}" fill="#f2f4f7"/><circle cx="${hx+r*.15}" cy="${hy-r*.42}" r="${1.5*s}" fill="#f2f4f7"/>`);
-  if(b.pat==='blaze')out.push(`<ellipse cx="${hx+r*.42}" cy="${hy-r*.15}" rx="${r*.17}" ry="${r*.72}" fill="#fafafa"/>`);
-  if(id==='spots'||b.pat==='spots')out.push(`<ellipse cx="${hx-r*.35}" cy="${hy-r*.35}" rx="${2*s}" ry="${1.6*s}" fill="#222"/>`);
-  if(id==='shiba'||id==='corgi')out.push(`<ellipse cx="${hx+r*.35}" cy="${hy+r*.4}" rx="${r*.6}" ry="${r*.45}" fill="${b.belly}"/>`);
-  // snout, nose, mouth
-  const sl=(3.6+(b.snout??6)*.5)*s, sx=hx+r*.72+sl*.3, sy=hy+r*.3;
-  out.push(`<ellipse cx="${sx}" cy="${sy}" rx="${sl}" ry="${4.3*s}" fill="${b.snoutC}"/>`);
-  out.push(`<ellipse class="tongue" cx="${sx+sl*.1}" cy="${sy+4*s}" rx="${2*s}" ry="${2.6*s}" fill="#ef7f95"/>`);
-  out.push(`<circle cx="${sx+sl-1.2*s}" cy="${sy-1.6*s}" r="${2.1*s}" fill="#1d1a1a"/>`);
-  // eye
-  const ex=hx+r*.3, ey=hy-r*.15, er=(b.eyeR||1.8)*s;
-  out.push(`<g class="eo"><circle cx="${ex}" cy="${ey}" r="${er}" fill="${b.eye||'#1d1a1a'}"/><circle cx="${ex+er*.35}" cy="${ey-er*.35}" r="${er*.35}" fill="#fff"/></g>`);
-  out.push(`<path class="ec" d="M${ex-er} ${ey} Q${ex} ${ey+er} ${ex+er} ${ey}" stroke="#1d1a1a" stroke-width="1.2" fill="none" stroke-linecap="round"/>`);
-  out.push(`<circle cx="${hx+r*.15}" cy="${hy+r*.45}" r="${2.2*s}" fill="#ff8fa8" opacity=".35"/>`);
-  // hanging ears in front
-  if(b.ear==='flop')out.push(`<ellipse cx="${hx-r*.38}" cy="${hy+r*.12}" rx="${3.9*s}" ry="${7.6*s}" transform="rotate(18 ${hx-r*.38} ${hy+r*.12})" fill="${b.earC}"/>`);
-  if(b.ear==='long')out.push(`<ellipse cx="${hx-r*.3}" cy="${hy+r*.45}" rx="${4.3*s}" ry="${10*s}" transform="rotate(12 ${hx-r*.3} ${hy+r*.45})" fill="${b.earC}"/>`);
-  if(b.ear==='curly')[[-.4,.0],[-.45,.55],[-.38,1.05]].forEach(([fx,fy])=>out.push(`<circle cx="${hx+r*fx}" cy="${hy+r*fy}" r="${4.3*s}" fill="${b.earC}"/>`));
-  if(id==='pug')out.push(`<path d="M${hx-r*.1} ${hy-r*.55} q${r*.3} ${-r*.15} ${r*.6} 0" stroke="#b89a6c" stroke-width="1.2" fill="none"/>`);
-  return {svg:out.join(''), top:hy-r-(b.ear==='point'?r*.6:0), s};
-}
-function avatarSVG(id){const d=dogSVG(id);return `<svg viewBox="-30 -46 64 50" aria-hidden="true"><g transform="translate(-4,0)">${d.svg}</g></svg>`}
-
-/* ---------- staff (sample, made up) ---------- */
-const STAFF=[
- {id:'maria',name:'Maria Santos'},{id:'james',name:'James Okafor'},{id:'aisha',name:'Aisha Khan'},{id:'tom',name:'Tom Becker'},
- {id:'grace',name:'Grace Liu'},{id:'luis',name:'Luis Perez'},{id:'nina',name:'Nina Rossi'},{id:'ben',name:'Ben Walker'},
- {id:'rosa',name:'Rosa Diaz',role:'HR coordinator'}
+/* ---------- the team ---------- */
+const OUTFITS=[ // jacket, shirt, neckwear, neck colour, pants
+ ['#2f3e5c','#ffffff','tie','#ac6b75','#2b2f3a'],['#3a3d45','#eaf1fb','bow','#793c55','#2b2d33'],['#6b3b55','#ffffff','scarf','#efb1d6','#2b2f3a'],
+ ['#b88a5a','#ffffff','tie','#2f3e5c','#4a3a2c'],['#2f5a4a','#fff7ee','pearls','#ffffff','#253a32'],['#7a2e3a','#ffffff','bow','#2b2f3a','#2b2d33'],
+ ['#4a5d7a','#ffffff','tie','#d7a04b','#2b2f3a'],['#222428','#ffffff','tie','#c84a61','#1d1f23'],['#8d6fae','#ffffff','scarf','#fbe3ee','#3a3346'],
 ];
-// breed from name: hash, then step to the next free breed so nobody shares one
-(function(){const used=new Set();let saved={};try{saved=JSON.parse(localStorage.getItem('careFloorBreeds')||'{}')}catch(e){}
-  STAFF.forEach(p=>{let h=0;for(const c of p.name.toLowerCase())h=(h*31+c.charCodeAt(0))>>>0;let i=h%BREED_IDS.length;while(used.has(BREED_IDS[i]))i=(i+1)%BREED_IDS.length;used.add(BREED_IDS[i]);p.auto=BREED_IDS[i];p.breed=BREEDS[saved[p.id]]?saved[p.id]:p.auto;});})();
-const first=n=>n.split(' ')[0];
+const TEAM=[
+ ['jex','Jex','golden'],['raff','Raff','bully'],['angelica','Angelica','maltese'],['hana','Hana','samoyed'],
+ ['angelle','Angelle','spitz','Hello'],['ira','Ira','shihtzu'],['jose','Jose','husky'],['paul','Paul','mastiff'],
+ ['lizzie','Lizzie','pomeranian'],['kim','Kim','havanese'],['kristene','Kristene','poodle'],['randy','Randy','bloodhound'],
+ ['patricia','Patricia','poodleBlack'],['yolanda','Yolanda','collie'],['liz','Liz','chow'],
+].map(([id,name,breed,nick],i)=>({id,name,breed,nick,outfit:OUTFITS[(i*4)%OUTFITS.length]}));
+
+function dogSVG(bid,outfit){
+  const b=BREEDS[bid],s=b.size||1,[jacket,shirt,neck,neckC,pants]=outfit;
+  const LEG=14*s,TH=22*s,TW=(b.wide?27:22)*s,HR=12.5*s,top=-LEG-TH,hy=top-HR*.72,o=[];
+  const dark=c=>c; // colours are literal material colours
+  // tail peeking out behind
+  if(b.tail==='fluffy')o.push(`<g class="tail"><ellipse cx="${TW*.55}" cy="${top+TH*.55}" rx="${6*s}" ry="${9*s}" transform="rotate(30 ${TW*.55} ${top+TH*.55})" fill="${b.fur}"/></g>`);
+  else if(b.tail==='pom')o.push(`<g class="tail"><path d="M${TW*.35} ${top+TH*.7} L${TW*.62} ${top+TH*.3}" stroke="${b.fur}" stroke-width="${2.6*s}"/><circle cx="${TW*.64}" cy="${top+TH*.25}" r="${4.6*s}" fill="${b.fur}"/></g>`);
+  else o.push(`<g class="tail"><path d="M${TW*.35} ${top+TH*.75} Q${TW*.75} ${top+TH*.6} ${TW*.7} ${top+TH*.15}" stroke="${b.fur}" stroke-width="${3.2*s}" fill="none" stroke-linecap="round"/></g>`);
+  // legs
+  const leg=(x,cls)=>`<g class="${cls}"><rect x="${x-3.6*s}" y="${-LEG-1}" width="${7.2*s}" height="${LEG}" rx="${2*s}" fill="${pants}"/><ellipse cx="${x+(x<0?-1:1)*.6*s}" cy="${-1.6*s}" rx="${5*s}" ry="${2.7*s}" fill="#1d1b1f"/></g>`;
+  o.push(leg(-TW*.24,'ll'),leg(TW*.24,'lr'));
+  // torso
+  o.push(`<rect x="${-TW/2}" y="${top}" width="${TW}" height="${TH+2*s}" rx="${7*s}" fill="${jacket}"/>`);
+  o.push(`<polygon points="${-5.5*s},${top} ${5.5*s},${top} 0,${top+12*s}" fill="${shirt}"/>`);
+  o.push(`<path d="M${-TW*.38} ${top+2*s} L0 ${top+13*s} L${TW*.38} ${top+2*s}" stroke="rgba(0,0,0,.25)" stroke-width="${1.1*s}" fill="none"/>`);
+  if(neck==='tie')o.push(`<polygon points="${-1.9*s},${top+1*s} ${1.9*s},${top+1*s} ${1.2*s},${top+3.6*s} ${-1.2*s},${top+3.6*s}" fill="${neckC}"/><polygon points="${-1.3*s},${top+3.4*s} ${1.3*s},${top+3.4*s} ${2.3*s},${top+11*s} 0,${top+13*s} ${-2.3*s},${top+11*s}" fill="${neckC}"/>`);
+  if(neck==='bow')o.push(`<polygon points="0,${top+3*s} ${-5*s},${top} ${-5*s},${top+6*s}" fill="${neckC}"/><polygon points="0,${top+3*s} ${5*s},${top} ${5*s},${top+6*s}" fill="${neckC}"/><circle cx="0" cy="${top+3*s}" r="${1.4*s}" fill="${neckC}"/>`);
+  if(neck==='scarf')o.push(`<ellipse cx="0" cy="${top+1.5*s}" rx="${7*s}" ry="${3*s}" fill="${neckC}"/><path d="M${2*s} ${top+3*s} L${4.5*s} ${top+11*s} L${1*s} ${top+10*s}Z" fill="${neckC}"/>`);
+  if(neck==='pearls')[-4,-2,0,2,4].forEach((x,i)=>o.push(`<circle cx="${x*s}" cy="${top+2*s+Math.abs(x)*-.35*s+2*s}" r="${1.2*s}" fill="${neckC}" stroke="rgba(0,0,0,.15)" stroke-width=".4"/>`));
+  o.push(`<circle cx="0" cy="${top+16*s}" r="${.9*s}" fill="rgba(0,0,0,.35)"/><circle cx="0" cy="${top+19.5*s}" r="${.9*s}" fill="rgba(0,0,0,.35)"/>`);
+  // THC badge
+  o.push(`<rect x="${TW*.14}" y="${top+6*s}" width="${5*s}" height="${6.2*s}" rx="${.8*s}" fill="#efb1d6"/><rect x="${TW*.14+1*s}" y="${top+7.2*s}" width="${3*s}" height="${1.2*s}" fill="#793c55"/>`);
+  // arms
+  const arm=(sx,cls)=>`<g class="${cls}" data-sx="${sx}" data-sy="${top+3*s}"><rect x="${sx-3.2*s}" y="${top+2*s}" width="${6.4*s}" height="${TH-3*s}" rx="${3.2*s}" fill="${jacket}"/><circle cx="${sx}" cy="${top+TH-1.4*s}" r="${3.3*s}" fill="${b.fur==='#ffffff'||b.fur==='#fdfdfb'||b.fur==='#fbfaf7'?'#f4efe8':b.fur}"/></g>`;
+  o.push(arm(-TW/2-1.6*s,'al'),arm(TW/2+1.6*s,'ar'));
+  // head: fluff / mane
+  if(b.fluff){const R=HR*(b.mane?1.18:1.02),n=b.mane?11:9;for(let i=0;i<n;i++){const a=i/n*Math.PI*2;o.push(`<circle cx="${Math.cos(a)*R}" cy="${hy+Math.sin(a)*R*.95+(b.mane?2*s:0)}" r="${HR*.42*Math.min(b.fluff,1.25)}" fill="${b.fur}"/>`)}}
+  // ears behind
+  const tri=(sx,h,w,c)=>`<polygon points="${sx*HR*.25},${hy-HR*.75} ${sx*HR*(.7+w)},${hy-HR*h} ${sx*HR*.92},${hy-HR*.25}" fill="${c}"/>`;
+  if(b.ear==='point')[-1,1].forEach(sx=>o.push(tri(sx,1.55,.02,b.earC)+`<polygon points="${sx*HR*.42},${hy-HR*.75} ${sx*HR*.7},${hy-HR*1.3} ${sx*HR*.8},${hy-HR*.5}" fill="#f2b9c4" opacity=".85"/>`));
+  if(b.ear==='small')[-1,1].forEach(sx=>o.push(tri(sx,1.42,-.05,b.earC)));
+  if(b.ear==='semi')[-1,1].forEach(sx=>o.push(tri(sx,1.3,.05,b.earC)));
+  if(b.ear==='round')[-1,1].forEach(sx=>o.push(`<circle cx="${sx*HR*.66}" cy="${hy-HR*.86}" r="${HR*.28}" fill="${b.earC}"/>`));
+  if(b.pom)o.push(`<circle cx="0" cy="${hy-HR*1.02}" r="${HR*.55}" fill="${b.fur}"/><circle cx="${-HR*.35}" cy="${hy-HR*.85}" r="${HR*.38}" fill="${b.fur}"/><circle cx="${HR*.35}" cy="${hy-HR*.85}" r="${HR*.38}" fill="${b.fur}"/>`);
+  // head
+  o.push(`<ellipse cx="0" cy="${hy}" rx="${HR*(b.jaw?1.08:1)}" ry="${HR*.95}" fill="${b.fur}"/>`);
+  if(b.mask)o.push(`<path d="M${-HR*.95} ${hy+HR*.05} Q${-HR*.5} ${hy-HR*.35} 0 ${hy-HR*.12} Q${HR*.5} ${hy-HR*.35} ${HR*.95} ${hy+HR*.05} Q${HR*.8} ${hy+HR*.9} 0 ${hy+HR*.95} Q${-HR*.8} ${hy+HR*.9} ${-HR*.95} ${hy+HR*.05}Z" fill="${b.mask}"/><circle cx="${-HR*.38}" cy="${hy-HR*.38}" r="${1.5*s}" fill="${b.mask}"/><circle cx="${HR*.38}" cy="${hy-HR*.38}" r="${1.5*s}" fill="${b.mask}"/>`);
+  if(b.stripe)o.push(`<path d="M${-HR*.12} ${hy-HR*.95} L${HR*.12} ${hy-HR*.95} L${HR*.3} ${hy+HR*.2} L${-HR*.3} ${hy+HR*.2}Z" fill="${b.stripe}"/>`);
+  if(b.blaze)o.push(`<path d="M${-HR*.1} ${hy-HR*.8} L${HR*.1} ${hy-HR*.8} L${HR*.32} ${hy+HR*.25} L${-HR*.32} ${hy+HR*.25}Z" fill="${b.blaze}"/><ellipse cx="0" cy="${top+TH*.42}" rx="${4*s}" ry="${2.4*s}" fill="${b.blaze}" opacity="0"/>`);
+  if(b.cap)o.push(`<path d="M${-HR*.85} ${hy-HR*.35} Q0 ${hy-HR*1.25} ${HR*.85} ${hy-HR*.35} Q0 ${hy-HR*.6} ${-HR*.85} ${hy-HR*.35}Z" fill="${b.cap}" opacity=".55"/>`);
+  if(b.patch)[-1,1].forEach(sx=>o.push(`<ellipse cx="${sx*HR*.42}" cy="${hy-HR*.12}" rx="${HR*.36}" ry="${HR*.4}" fill="${b.patch}"/>`));
+  if(b.wrinkle)o.push(`<path d="M${-HR*.35} ${hy-HR*.55} q${HR*.35} ${-HR*.15} ${HR*.7} 0 M${-HR*.25} ${hy-HR*.42} q${HR*.25} ${-HR*.1} ${HR*.5} 0" stroke="rgba(0,0,0,.25)" stroke-width="${.9*s}" fill="none"/>`);
+  // eyes
+  const ex=HR*.37,ey=hy-HR*.08,er=(b.smallEye?1.4:1.9)*s;
+  [-1,1].forEach(sx=>{o.push(`<circle cx="${sx*ex}" cy="${ey}" r="${er}" fill="${b.eye||'#1d1a1a'}"/><circle cx="${sx*ex+er*.35}" cy="${ey-er*.4}" r="${er*.38}" fill="#fff"/>`);
+    if(b.droopy)o.push(`<path d="M${sx*ex-er*1.6} ${ey-er*.2} Q${sx*ex} ${ey-er*1.6} ${sx*ex+er*1.6} ${ey-er*.2}" fill="${b.fur}"/><path d="M${sx*ex-er*1.3} ${ey+er*1.2} q${er*1.3} ${er*.9} ${er*2.6} 0" stroke="#7a3d14" stroke-width=".8" fill="none"/>`)});
+  if(b.fur==='#2e2b30'||b.fur==='#26262b'&&!b.stripe)[-1,1].forEach(sx=>o.push(`<circle cx="${sx*ex}" cy="${ey}" r="${er+.6}" fill="none" stroke="#5a5560" stroke-width=".6"/>`));
+  // muzzle
+  const mw=HR*(b.jaw?.62:b.flat?.4:.48),my=hy+HR*.4;
+  o.push(`<ellipse cx="0" cy="${my}" rx="${mw}" ry="${HR*(b.flat?.28:.34)}" fill="${b.muz}"/>`);
+  o.push(`<ellipse class="tongue" cx="0" cy="${my+HR*.3}" rx="${2.2*s}" ry="${2.8*s}" fill="${b.blueTongue?'#4b4f8f':'#ef7f95'}"/>`);
+  o.push(`<ellipse cx="0" cy="${my-HR*.14}" rx="${2.9*s}" ry="${2*s}" fill="#1d1a1a"/>`);
+  o.push(`<path d="M${-3*s} ${my+HR*.12} Q${-1.5*s} ${my+HR*.24} 0 ${my+HR*.08} Q${1.5*s} ${my+HR*.24} ${3*s} ${my+HR*.12}" stroke="${b.muz==='#2f2620'?'#000':'#4a3a33'}" stroke-width="${.9*s}" fill="none" stroke-linecap="round"/>`);
+  [-1,1].forEach(sx=>o.push(`<circle cx="${sx*HR*.62}" cy="${hy+HR*.3}" r="${2.3*s}" fill="#ff8fa8" opacity=".3"/>`));
+  // ears in front
+  if(b.ear==='flop')[-1,1].forEach(sx=>o.push(`<ellipse cx="${sx*HR*.9}" cy="${hy+HR*.1}" rx="${HR*.3}" ry="${HR*.62}" transform="rotate(${sx*12} ${sx*HR*.9} ${hy+HR*.1})" fill="${b.earC}"/>`));
+  if(b.ear==='long')[-1,1].forEach(sx=>o.push(`<ellipse cx="${sx*HR*.92}" cy="${hy+HR*.45}" rx="${HR*.32}" ry="${HR*.98}" transform="rotate(${sx*8} ${sx*HR*.92} ${hy+HR*.45})" fill="${b.earC}"/>`));
+  if(b.ear==='hair')[-1,1].forEach(sx=>o.push(`<ellipse cx="${sx*HR*.92}" cy="${hy+HR*.35}" rx="${HR*.36}" ry="${HR*.85}" fill="${b.earC}"/>`));
+  if(b.ear==='curly')[-1,1].forEach(sx=>[[.92,-.05],[.98,.4],[.9,.82]].forEach(([fx,fy])=>o.push(`<circle cx="${sx*HR*fx}" cy="${hy+HR*fy}" r="${HR*.32}" fill="${b.earC}"/>`)));
+  if(b.ear==='rose')[-1,1].forEach(sx=>o.push(`<polygon points="${sx*HR*.45},${hy-HR*.8} ${sx*HR*1.05},${hy-HR*.95} ${sx*HR*.92},${hy-HR*.45}" fill="${b.earC}"/>`));
+  if(b.ear==='drop')[-1,1].forEach(sx=>o.push(`<ellipse cx="${sx*HR*.92}" cy="${hy-HR*.3}" rx="${HR*.26}" ry="${HR*.38}" transform="rotate(${sx*-20} ${sx*HR*.92} ${hy-HR*.3})" fill="${b.earC}"/>`));
+  if(b.bow)o.push(`<g transform="translate(${HR*.15},${hy-HR*.98})"><polygon points="0,0 ${-4.5*s},${-3*s} ${-4.5*s},${3*s}" fill="${b.bow}"/><polygon points="0,0 ${4.5*s},${-3*s} ${4.5*s},${3*s}" fill="${b.bow}"/><circle r="${1.4*s}" fill="${b.bow}"/></g>`);
+  return {svg:o.join(''),top:hy-HR*1.3,s};
+}
+function avatarSVG(p){const d=dogSVG(p.breed,p.outfit);return `<svg viewBox="-24 ${d.top-2} 48 48" aria-hidden="true">${d.svg}</svg>`}
 
 /* ---------- places ---------- */
-const HOUSES=[0,1,2,3,4].map(i=>({x0:34+i*134,y0:30,w:72,d:58,client:['M. R.','J. T.','E. W.','H. B.','D. C.'][i],roof:`var(--roof${i+1})`}));
-HOUSES.forEach(h=>{h.door=h.x0+36;h.spot=[h.door,116]});
-const ROADY=160, PATHX=540, LOUNGE_TOP=392;
-const SPOTS=[[452,446],[532,446],[612,446],[452,526],[532,526],[612,526],[480,612],[590,612]];
-const DESK_SPOT=[128,458], INBOX=[168,398,34];
+const HALL=245;               // corridor between rooms and desks (x)
+const ROWS=[262,412,562], AISLE=[224,374,524];
+const DESKS=[];ROWS.forEach((y0,r)=>{for(let c=0;c<5;c++){const x0=272+c*84;DESKS.push({x0,y0,w:62,d:30,r,spot:[x0+40,y0-13],help:[x0+62,y0-18]})}});
+const MEET=[[78,168],[118,172],[158,172],[198,166],[208,112],[66,112]];
+const BREAK=[[96,520],[146,540],[100,600],[160,612],[120,650],[196,560]];
+const PRINTER=[650,104];
+const exitOf=pl=>{
+  if(pl.k==='desk'||pl.k==='help'){const dk=DESKS[pl.i],a=AISLE[dk.r];return [[pl.spot[0],a],[HALL,a]]}
+  if(pl.k==='meet')return [[pl.spot[0],190],[HALL,190]];
+  if(pl.k==='break')return [[HALL,pl.spot[1]]];
+  if(pl.k==='printer')return [[PRINTER[0],AISLE[0]],[HALL,AISLE[0]]];
+  return [];
+};
 
-/* ---------- build static scene ---------- */
+/* ---------- static scene ---------- */
 const scene=document.getElementById('scene');
+function box(x0,y0,w,d,h,top,l,r,z0=0){const x1=x0+w,y1=y0+d;return poly([[x0,y1,z0],[x1,y1,z0],[x1,y1,h],[x0,y1,h]],l)+poly([[x1,y0,z0],[x1,y1,z0],[x1,y1,h],[x1,y0,h]],r)+poly([[x0,y0,h],[x1,y0,h],[x1,y1,h],[x0,y1,h]],top)}
+function plant(x,y,k=1){const[X,Y]=P(x,y);return `<ellipse cx="${X}" cy="${Y}" rx="${12*k}" ry="${5*k}" class="g-shadow"/><path d="M${X-7*k} ${Y-12*k} L${X+7*k} ${Y-12*k} L${X+5*k} ${Y} L${X-5*k} ${Y}Z" class="g-pot"/><circle cx="${X}" cy="${Y-24*k}" r="${12*k}" class="g-leaf2"/><circle cx="${X-4*k}" cy="${Y-29*k}" r="${8*k}" class="g-leaf"/>`}
+const sortables=[]; // static items that need depth sorting against dogs
 function buildScene(){
   let s='';
-  s+=poly([[0,0],[700,0],[700,700],[0,700]],'g-grass');
-  for(let i=50;i<700;i+=50){s+=`<polyline class="g-gl" points="${pts([[i,0],[i,700]])}"/><polyline class="g-gl" points="${pts([[0,i],[700,i]])}"/>`}
-  s+=poly([[8,ROADY-24],[692,ROADY-24],[692,ROADY+24],[8,ROADY+24]],'g-road');
-  s+=`<polyline class="g-dash" points="${pts([[20,ROADY],[690,ROADY]])}"/>`;
-  s+=poly([[PATHX-18,ROADY+24],[PATHX+18,ROADY+24],[PATHX+18,LOUNGE_TOP+8],[PATHX-18,LOUNGE_TOP+8]],'g-road');
-  // HR office
-  s+=poly([[18,300],[250,300],[250,545],[18,545]],'g-office');
-  s+=box(28,312,34,40,58,'g-wall','g-wall2','g-wall2');
-  s+=box(80,372,104,40,26,'g-desk','g-desk2','g-desk2');
-  s+=`<polygon points="${pts([[112,380,30],[162,380,30],[162,380,66],[112,380,66]])}" class="g-screen"/>`;
-  for(let r=0;r<5;r++)for(let c=0;c<4;c++){const x=116+c*11.5,z=61-r*6;s+=`<polygon points="${pts([[x,380.5,z],[x+10,380.5,z],[x+10,380.5,z-4.6],[x,380.5,z-4.6]])}" fill="${r===0?'#ac6b75':(c===3&&r<4?'#7fd1a0':'#e9eef5')}" opacity=".95"/>`}
-  s+=box(160,388,22,20,32,'g-wall','g-wall2','g-wall2');
-  s+=tree(230,320,.8);
-  // lounge
-  s+=poly([[410,400],[690,400],[690,690],[410,690]],'g-rug');
-  SPOTS.forEach(([x,y])=>{const[X,Y]=P(x,y);s+=`<ellipse cx="${X}" cy="${Y+2}" rx="30" ry="14" class="g-bed"/>`});
-  {const[X,Y]=P(660,660);s+=`<ellipse cx="${X}" cy="${Y}" rx="12" ry="6" fill="#5f8fb3"/><ellipse cx="${X}" cy="${Y-2}" rx="8" ry="3.5" fill="#bfe0f5"/>`;}
-  {const[X,Y]=P(430,660);s+=`<circle cx="${X}" cy="${Y-6}" r="7" fill="#e9962f"/><path d="M${X-6} ${Y-8} q6 5 12 0" stroke="#fff" stroke-width="1.5" fill="none"/>`;}
-  // trees & houses, back to front
-  const items=[];
-  HOUSES.forEach((h,i)=>items.push({d:h.x0+h.y0+h.w,svg:house(h,i)}));
-  [[660,250,1],[300,310,.9],[40,640,1.1],[330,660,.9],[690,330,.8],[250,560,.8]].forEach(([x,y,k])=>items.push({d:x+y,svg:tree(x,y,k)}));
-  items.sort((a,b)=>a.d-b.d).forEach(it=>s+=it.svg);
-  scene.innerHTML=`<g id="static">${s}</g><g id="dogs"></g><g id="fx"></g>`;
-}
-function box(x0,y0,w,d,h,top,l,r){const x1=x0+w,y1=y0+d;return poly([[x0,y1,0],[x1,y1,0],[x1,y1,h],[x0,y1,h]],l)+poly([[x1,y0,0],[x1,y1,0],[x1,y1,h],[x1,y0,h]],r)+poly([[x0,y0,h],[x1,y0,h],[x1,y1,h],[x0,y1,h]],top)}
-function tree(x,y,k){const[X,Y]=P(x,y);return `<ellipse cx="${X}" cy="${Y}" rx="${18*k}" ry="${8*k}" class="g-shadow"/><rect x="${X-3*k}" y="${Y-22*k}" width="${6*k}" height="${22*k}" class="g-trunk"/><circle cx="${X}" cy="${Y-34*k}" r="${19*k}" class="g-leaf2"/><circle cx="${X-5*k}" cy="${Y-40*k}" r="${14*k}" class="g-leaf"/>`}
-function house(h,i){
-  const {x0,y0,w,d}=h,x1=x0+w,y1=y0+d,H=52,R=22,ym=y0+d/2;let s='';
-  s+=`<ellipse cx="${P(x0+w/2,y1)[0]}" cy="${P(x0+w/2,y1)[1]+4}" rx="60" ry="12" class="g-shadow"/>`;
-  s+=poly([[x0,y1,0],[x1,y1,0],[x1,y1,H],[x0,y1,H]],'g-wall');
-  s+=poly([[x1,y0,0],[x1,y1,0],[x1,y1,H],[x1,y0,H]],'g-wall2');
-  s+=poly([[x1,y0,H],[x1,y1,H],[x1,ym,H+R]],'g-wall2');
-  s+=poly([[x0,y0,H],[x1,y0,H],[x1,ym,H+R],[x0,ym,H+R]],'',`fill="${h.roof}" opacity=".75"`);
-  s+=poly([[x0-3,y1+3,H-2],[x1+3,y1+3,H-2],[x1+3,ym,H+R],[x0-3,ym,H+R]],'',`fill="${h.roof}"`);
-  s+=poly([[h.door-9,y1,0],[h.door+9,y1,0],[h.door+9,y1,26],[h.door-9,y1,26]],'g-door');
-  s+=poly([[x0+6,y1,18],[x0+20,y1,18],[x0+20,y1,34],[x0+6,y1,34]],'g-win',`id="w${i}a"`);
-  s+=poly([[x1-20,y1,18],[x1-6,y1,18],[x1-6,y1,34],[x1-20,y1,34]],'g-win',`id="w${i}b"`);
-  s+=poly([[x1,y0+16,18],[x1,y0+42,18],[x1,y0+42,34],[x1,y0+16,34]],'g-win',`id="w${i}c"`);
-  s+=poly([[h.door-14,y1,0],[h.door+14,y1,0],[h.door+14,y1+10,0],[h.door-14,y1+10,0]],'',`fill="${h.roof}" opacity=".35"`);
-  return s;
+  s+=poly([[0,0],[700,0],[700,700],[0,700]],'g-floor');
+  for(let i=50;i<700;i+=50){s+=`<polyline class="g-fl" points="${pts([[i,0],[i,700]])}"/><polyline class="g-fl" points="${pts([[0,i],[700,i]])}"/>`}
+  // back walls
+  s+=poly([[0,0,0],[700,0,0],[700,0,70],[0,0,70]],'g-wall2')+poly([[0,0,0],[0,700,0],[0,700,70],[0,0,70]],'g-wall');
+  // CRM board on the back wall
+  s+=poly([[300,0,22],[520,0,22],[520,0,62],[300,0,62]],'g-screen');
+  for(let i=0;i<6;i++){const x=312+i*34,h=8+((i*37)%28);s+=poly([[x,0,26],[x+20,0,26],[x+20,0,26+h],[x,0,26+h]],'',`fill="${i%2?'#7fd1a0':'#efb1d6'}" opacity=".9"`)}
+  s+=poly([[260,140],[690,140],[690,560],[260,560]],'g-carpet');
+  s+=poly([[14,14],[236,14],[236,200],[14,200]],'g-meet');
+  s+=poly([[14,460],[236,460],[236,690],[14,690]],'g-break');
+  // meeting room glass
+  s+=`<polyline class="g-glass" points="${pts([[236,14,0],[236,200,0],[14,200,0]])}"/><polyline class="g-glass" points="${pts([[236,14,48],[236,200,48],[14,200,48]])}"/>`;
+  [[236,60],[236,110],[236,160],[60,200],[110,200],[160,200],[236,200]].forEach(([x,y])=>s+=`<polyline class="g-glass" points="${pts([[x,y,0],[x,y,48]])}"/>`);
+  // break room: counter + coffee machine against left wall
+  s+=box(18,480,34,150,34,'g-desk','g-desk3','g-desk2');
+  s+=box(22,500,22,22,56,'g-screen','g-screen','g-screen',34);
+  s+=plant(30,670,1.1)+plant(220,30,1)+plant(690,640,1.1)+plant(250,450,.9);
+  scene.innerHTML=`<g id="static">${s}</g><g id="sorted"></g><g id="fx"></g>`;
+  const sorted=document.getElementById('sorted');
+  const add=(svg,x,y)=>{const g=document.createElementNS(NS,'g');g.innerHTML=svg;g.depth=P(x,y)[1];sorted.appendChild(g);sortables.push(g);return g};
+  // meeting table, sofa, printer
+  add(box(70,82,124,46,22,'g-table','g-table2','g-table2'),132,128);
+  add(box(150,640,70,30,16,'g-sofa','g-sofa2','g-sofa2')+box(150,662,70,8,30,'g-sofa2','g-sofa2','g-sofa2'),185,668);
+  add(box(626,30,44,40,32,'g-wall','g-wall2','g-wall2')+poly([[632,36,32],[664,36,32],[664,62,32],[632,62,32]],'g-screen'),648,70);
+  // desks
+  DESKS.forEach((dk,i)=>{const {x0,y0,w,d}=dk;let t=box(x0,y0,w,d,22,'g-desk','g-desk3','g-desk2');
+    t+=box(x0+6,y0+4,22,4,48,'g-screen','g-screen','g-screen',22);
+    t+=poly([[x0+34,y0+10,22],[x0+52,y0+10,22],[x0+52,y0+20,22],[x0+34,y0+20,22]],'',`fill="#f4f6fa" opacity=".9"`);
+    const[LX,LY]=P(x0+w/2,y0+d,12);t+=`<circle class="led" id="led${i}" cx="${LX}" cy="${LY}" r="3.2" fill="#c3c8d2"/>`;
+    dk.g=add(t,x0+w/2,y0+d);dk.g.depth=P(x0+w/2,y0+d*.6)[1];});
 }
 
 /* ---------- dogs ---------- */
-const dogsG=()=>document.getElementById('dogs');
-const tagsL=document.getElementById('tags'), bubL=document.getElementById('bubbles');
+const tagsL=document.getElementById('tags'),bubL=document.getElementById('bubbles');
 const toPct=(X,Y)=>[(X-VB.x)/VB.w*100,(Y-VB.y)/VB.h*100];
-const SCALE=1.3;
-const dogs={};
+const SCALE=1.18,dogs={};
 function makeDog(p,i){
   const g=document.createElementNS(NS,'g');g.setAttribute('class','dog');
-  const tag=document.createElement('div');tag.className='tag s-off';tag.innerHTML=`<i></i>${first(p.name)}`;tagsL.appendChild(tag);
+  const tag=document.createElement('div');tag.className='tag s-desk';tag.innerHTML=`<i></i>${p.name}`;tagsL.appendChild(tag);
   const bub=document.createElement('div');bub.className='bub';bubL.appendChild(bub);
-  const home=p.id==='rosa'?DESK_SPOT:SPOTS[i];
-  const d={...p,g,tag,bub,home,x:home[0],y:home[1],path:[],face:1,phase:Math.random()*6,status:p.id==='rosa'?'office':'off',where:p.id==='rosa'?'At the HR desk':'Napping in the lounge',bubUntil:0,hlUntil:0,run:1,shift:null};
-  renderDog(d);dogsG().appendChild(g);dogs[p.id]=d;
+  const desk={k:'desk',i,spot:DESKS[i].spot};
+  const d={...p,g,tag,bub,desk,place:desk,x:desk.spot[0],y:desk.spot[1],path:[],queue:[],phase:Math.random()*6,status:'desk',what:'At desk',updates:0,bubUntil:0,hlUntil:0,nextAt:0,locked:false,led:i};
+  const ds=dogSVG(p.breed,p.outfit);d.top=ds.top*SCALE;
+  g.innerHTML=`<ellipse class="ring" cx="0" cy="0" rx="26" ry="10"/><ellipse class="g-shadow" cx="0" cy="0" rx="${15*ds.s}" ry="5"/><g transform="scale(${SCALE})">${ds.svg}</g>`;
+  ['al','ar','ll','lr'].forEach(k=>d[k]=g.querySelector('.'+k));d.tail=g.querySelector('.tail');
+  document.getElementById('sorted').appendChild(g);dogs[p.id]=d;
 }
-function renderDog(d){
-  const ds=dogSVG(d.breed);d.top=ds.top*SCALE;
-  d.g.innerHTML=`<ellipse class="ring" cx="0" cy="0" rx="34" ry="13"/><ellipse class="g-shadow" cx="0" cy="0" rx="${26*ds.s}" ry="7"/><g class="flip">${ds.svg}</g><text class="zz" x="16" y="${d.top-4}">z</text><text class="zz b" x="24" y="${d.top-14}">z</text>`;
-  d.flip=d.g.querySelector('.flip');d.la=d.g.querySelector('.la');d.lb=d.g.querySelector('.lb');d.tail=d.g.querySelector('.tail');
-  d.tx=+d.tail.dataset.x;d.ty=+d.tail.dataset.y;
+function say(d,html,cls='',ms=3200,prio=false){if(!prio&&document.querySelectorAll('.bub.on').length>=3)return;d.bubPrio=prio;d.bub.innerHTML=html;d.bub.className='bub on '+cls;d.bubUntil=performance.now()+ms}
+function setStatus(d,st,what){d.status=st;if(st==='walking'&&!d.bubPrio){d.bub.classList.remove('on');d.bubUntil=0}if(what)d.what=what;d.tag.className='tag s-'+st;
+  const led=document.getElementById('led'+d.led);if(led)led.setAttribute('fill',{working:'#3f9a6e',alert:'#c84a61',desk:'#c3c8d2'}[st]||'#e3e7ee');updateRoster()}
+function walkTo(d,pl,onArrive){
+  if(d.path.length){d.queue.push(()=>walkTo(d,pl,onArrive));return}
+  const out=exitOf(d.place),inn=exitOf(pl).reverse();
+  d.path=[...out,...inn,pl.spot.slice()];d.place=pl;d.onArrive=onArrive||null;
 }
-function say(d,html,cls='',ms=3400){d.bub.innerHTML=html;d.bub.className='bub on '+cls;d.bubUntil=performance.now()+ms;}
-function setStatus(d,st,where){d.status=st;if(where)d.where=where;d.tag.className='tag s-'+st;updateRoster();}
-
-/* ---------- routes ---------- */
-function routeToHouse(d,h){const from=[d.x,d.y],r=[];if(from[1]>LOUNGE_TOP-10)r.push([PATHX,Math.max(LOUNGE_TOP,from[1]-10)]);r.push([PATHX,LOUNGE_TOP],[PATHX,ROADY],[h.door,ROADY],h.spot.slice());return r}
-function routeHome(d){const r=[[d.x,ROADY],[PATHX,ROADY],[PATHX,LOUNGE_TOP],[PATHX,d.home[1]-4],d.home.slice()];return r}
 
 /* ---------- clock & log ---------- */
-const START=445, END=1110; // 7:25 AM to 6:30 PM
-let simT=START, speed=1, paused=false, scenario='normal', events=[], evI=0, verified=0, verifiedH=0, envs=[], ending=false;
+const START=480,END=1035; // 8:00 AM to 5:15 PM
+let simT=START,speed=1,paused=false,scenario='normal',events=[],evI=0,total=0;
 const fmt=m=>{m=Math.round(m);let h=Math.floor(m/60),mm=m%60,ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${String(mm).padStart(2,'0')} ${ap}`};
 const logEl=document.getElementById('log');
-function log(html,cls=''){const li=document.createElement('li');if(cls)li.className=cls;li.innerHTML=`<time>${fmt(simT)}</time><span>${html}</span>`;logEl.prepend(li);while(logEl.children.length>80)logEl.lastChild.remove();}
+function log(html,cls=''){const li=document.createElement('li');if(cls)li.className=cls;li.innerHTML=`<time>${fmt(simT)}</time><span>${html}</span>`;logEl.prepend(li);while(logEl.children.length>90)logEl.lastChild.remove()}
+const cap=t=>t[0].toUpperCase()+t.slice(1);
 
-/* ---------- shifts ---------- */
-const SHIFTS=[
- {who:'maria',h:0,s:480,e:720,notes:[[525,'Breakfast and morning meds reminder'],[620,'Short walk to the mailbox'],[690,'Made lunch: soup and toast']]},
- {who:'james',h:1,s:480,e:660,notes:[[520,'Shower assist done'],[590,'Laundry and light housekeeping']]},
- {who:'aisha',h:2,s:540,e:780,notes:[[590,'Blood pressure logged: 128/82'],[670,'Crossword and tea'],[740,'Lunch, ate well']]},
- {who:'grace',h:4,s:570,e:810,notes:[[615,'Physio exercises'],[750,'Lunch and dishes']]},
- {who:'tom',h:3,s:600,e:840,notes:[[640,'Grocery run'],[720,'Meal prep for the week'],[795,'Medication reminder']]},
- {who:'nina',h:1,s:690,e:930,notes:[[735,'Lunch prepared'],[840,"Ride to the doctor's appointment"]]},
- {who:'luis',h:0,s:750,e:990,notes:[[795,'Afternoon walk'],[900,'Read the paper together'],[960,'Dinner prepped']]},
- {who:'ben',h:2,s:810,e:1050,notes:[[870,'Bath assist'],[1000,'Evening meds reminder']]},
+/* ---------- what people do ---------- */
+const UPDATES=[
+ ()=>`ran the WellSky schedule scan, ${rnd(24,60)} shift rows added`,
+ ()=>`verified ${rnd(8,22)} shift rows in the Log tab`,
+ ()=>`matched actual and scheduled clock times on ${rnd(5,16)} rows`,
+ ()=>`fixed ${rnd(2,3)} unparsed rows`,
+ ()=>`updated the Payroll tab for week 48`,
+ ()=>`added notes to ${rnd(3,9)} records`,
+ ()=>`flagged ${rnd(2,5)} rows for a second look`,
+ ()=>`approved a batch of ${rnd(10,30)} hours rows`,
+ ()=>`closed ${rnd(2,6)} follow-up tasks`,
+ ()=>`refreshed the projected hours column`,
+ ()=>`cleaned up duplicate rows in the Log tab`,
+ ()=>`exported the November Payroll summary`,
+ ()=>`updated ${rnd(2,6)} contact records`,
+ ()=>`attached ${rnd(2,5)} signed forms to their records`,
 ];
-const lit=new Array(5).fill(0);
-function setLit(h,on){lit[h]+=on?1:-1;['a','b','c'].forEach(k=>document.getElementById('w'+h+k).classList.toggle('lit',lit[h]>0))}
-
+function doUpdate(d){
+  const txt=pick(UPDATES)();setStatus(d,'working','Updating the CRM');say(d,`<b>Updating</b> · ${cap(txt)}`);
+  const dur=scenario==='deadline'?rnd(6,14):rnd(10,22);
+  d.busyTxt=txt;d.nextAt=simT+dur;d.finish=()=>{d.updates++;total++;log(`<em>${d.name}</em> ${txt}.`);setStatus(d,'desk','Saved: '+cap(txt));d.savedUntil=performance.now()+1800;updateStats()};
+}
+function goPrinter(d){setStatus(d,'walking','Walking to the printer');walkTo(d,{k:'printer',spot:PRINTER},()=>{const t=pick(['Printing the payroll summary','Picking up signed forms','Scanning documents into the CRM']);setStatus(d,'printer',t);say(d,t);d.nextAt=simT+rnd(5,9);d.back=true})}
+function goBreak(d,mins,why='Coffee break'){const free=BREAK.find(b=>!Object.values(dogs).some(o=>o.place.spot===b));if(!free){d.nextAt=simT+8;return}
+  setStatus(d,'walking','Heading to the break room');walkTo(d,{k:'break',spot:free},()=>{setStatus(d,'break',why);say(d,why==='Lunch'?'Lunch time':pick(['Grabbing a coffee','Quick stretch','Refilling my water']));d.nextAt=simT+mins;d.back=true})}
+function backToDesk(d){d.back=false;setStatus(d,'walking','Walking back to the desk');walkTo(d,d.desk,()=>{setStatus(d,'desk','At desk');d.nextAt=simT+rnd(2,6)})}
+function decide(d){
+  if(d.locked||d.path.length)return;
+  if(d.finish){const f=d.finish;d.finish=null;f();d.nextAt=simT+rnd(3,10);return}
+  if(d.back){backToDesk(d);return}
+  const r=Math.random(),busy=scenario==='deadline';
+  if(r<(busy?.74:.55))doUpdate(d);
+  else if(r<(busy?.8:.67))goPrinter(d);
+  else if(r<(busy?.86:.8))goBreak(d,rnd(10,18));
+  else{const t=pick(['Reading email','On a phone call','Reviewing yesterday\'s rows','Planning the week']);setStatus(d,'desk',t);d.nextAt=simT+rnd(8,18)}
+}
+function meeting(t0,t1,title,ids){
+  events.push({t:t0,fn:()=>{log(`<em>${title}</em> starts in the meeting room with ${ids.map(i=>dogs[i].name).join(', ')}.`);
+    ids.forEach((id,k)=>{const d=dogs[id];d.locked=true;if(d.finish){const f=d.finish;d.finish=null;f()}d.back=false;setStatus(d,'walking','Heading to '+title);walkTo(d,{k:'meet',spot:MEET[k]},()=>{setStatus(d,'meeting',title)})});
+    setTimeout(()=>say(dogs[ids[0]],`Let's start: <b>${title}</b>`,'',3000,true),1800/speed)}});
+  events.push({t:t1,fn:()=>{log(`<em>${title}</em> wrapped up.`);ids.forEach(id=>{const d=dogs[id];d.locked=false;backToDesk(d)})}});
+}
+function lunch(t0,t1,ids){events.push({t:t0,fn:()=>ids.forEach(id=>{const d=dogs[id];if(d.locked)return;d.locked=true;if(d.finish){const f=d.finish;d.finish=null;f()}d.back=false;goBreak(d,0,'Lunch')})});
+  events.push({t:t1,fn:()=>ids.forEach(id=>{const d=dogs[id];if(d.status==='break'||d.place.k==='break'){d.locked=false;backToDesk(d)}else d.locked=false})})}
+function snag(t0,t1,who,helper,problem,fix){
+  events.push({t:t0,fn:()=>{const d=dogs[who];d.locked=true;if(d.finish)d.finish=null;
+    const go=()=>{setStatus(d,'alert',problem);say(d,`<b>Stuck:</b> ${problem}`,'err',4000,true);log(`<em>${d.name}</em> hit a snag: ${problem}.`,'alert');updateStats()};
+    if(d.place.k!=='desk'){d.back=false;walkTo(d,d.desk,go)}else go()}});
+  events.push({t:t0+6,fn:()=>{const h=dogs[helper];h.locked=true;if(h.finish){const f=h.finish;h.finish=null;f()}h.back=false;setStatus(h,'walking',`Going to help ${dogs[who].name}`);
+    walkTo(h,{k:'help',i:dogs[who].desk.i,spot:DESKS[dogs[who].desk.i].help},()=>{setStatus(h,'helping',`Helping ${dogs[who].name}`);say(h,`On it, ${dogs[who].name}!`,'',2600,true)});log(`<em>${h.name}</em> is going over to help ${dogs[who].name}.`)}});
+  events.push({t:t1,fn:()=>{const d=dogs[who],h=dogs[helper];d.locked=false;h.locked=false;d.updates++;total++;
+    setStatus(d,'desk','Fixed: '+fix);say(d,`<b>Fixed.</b> ${fix}`,'good',3600,true);log(`<em>${d.name}</em> and ${h.name} sorted it: ${fix}.`,'good');d.nextAt=simT+6;backToDesk(h);updateStats()}});
+}
 function buildEvents(){
-  const ev=[];
-  SHIFTS.forEach(base=>{
-    const sh={...base,house:HOUSES[base.h],worker:dogs[base.who],clockIn:null,late:0,missed:false};
-    if(scenario==='late'&&sh.who==='aisha')sh.late=1;
-    if(scenario==='late'&&sh.who==='ben')sh.missed=true;
-    if(sh.missed){
-      ev.push({t:sh.s+15,fn:()=>missedAlert(sh)});
-      ev.push({t:sh.s+22,fn:()=>{sh.worker=dogs.james;sh.cover=true;depart(sh)}});
-    }else{
-      ev.push({t:sh.late?sh.s-4:sh.s-32,fn:()=>depart(sh)});
-      ev.push({t:sh.s,fn:()=>{if(sh.arrived&&!sh.clockIn)clockIn(sh)}});
-      if(sh.late)ev.push({t:sh.s+5,fn:()=>lateAlert(sh)});
-    }
-    sh.notes.forEach(([t,txt])=>ev.push({t,fn:()=>note(sh,txt)}));
-    ev.push({t:sh.e,fn:()=>clockOut(sh)});
-  });
-  ev.push({t:1070,fn:()=>{log(`<em>Day wrapped.</em> ${verified} shifts verified, ${verifiedH.toFixed(1)} h sent to Payroll.`,'good');say(dogs.rosa,`<b>That's the day.</b> ${verified} shifts, ${verifiedH.toFixed(1)} h verified.`,'good',5000)}});
-  ev.sort((a,b)=>a.t-b.t);return ev;
-}
-function depart(sh){
-  const d=sh.worker,c=sh.house.client;d.shift=sh;d.run=sh.late||sh.cover?1.5:1;
-  setStatus(d,sh.late?'late':'enroute',`Heading to ${c}'s home`);
-  d.path=routeToHouse(d,sh.house);d.onArrive=()=>{sh.arrived=true;d.face=-1;if(simT>=sh.s-.5)clockIn(sh);else{setStatus(d,'enroute',`At ${c}'s door, shift starts ${fmt(sh.s)}`)}};
-  say(d,sh.cover?`On my way to cover <b>${c}</b>!`:sh.late?`Running late to <b>${c}</b>!`:`Off to <b>${c}</b> for ${fmt(sh.s)}`,sh.late?'err':'');
-  log(sh.cover?`<em>${first(d.name)}</em> is covering ${first(dogs.ben.name)}'s shift at ${c}'s home and is on the way.`:`<em>${first(d.name)}</em> is heading to ${c}'s home for the ${fmt(sh.s)} shift.`);
-}
-function clockIn(sh){
-  const d=sh.worker;sh.clockIn=Math.round(simT);const late=sh.clockIn-sh.s;
-  setStatus(d,'onshift',`With ${sh.house.client} · ${fmt(sh.clockIn)} to ${fmt(sh.e)}`);setLit(sh.h,true);
-  say(d,`Clocked in <b>${fmt(sh.clockIn)}</b>`);
-  log(`<em>${first(d.name)}</em> clocked in at ${sh.house.client}'s home, ${fmt(sh.clockIn)}${late>2?`, ${late} min late`:''}.`,late>2?'alert':'');
-  if(late>2)say(dogs.rosa,`${first(d.name)} is in at ${sh.house.client}. <b>${late} min late</b> noted.`,'',3600);
-}
-function note(sh,txt){const d=sh.worker;if(!sh.clockIn)return;d.where=txt;updateRoster();say(d,txt);log(`Care log · <em>${first(d.name)}</em>: ${txt}.`)}
-function lateAlert(sh){if(sh.clockIn)return;const d=sh.worker;setStatus(d,'late');say(dogs.rosa,`<b>${first(d.name)}</b> hasn't clocked in at ${sh.house.client} yet.`,'err',3600);log(`<em>${first(d.name)}</em> has not clocked in for the ${fmt(sh.s)} shift at ${sh.house.client}'s home.`,'alert')}
-function missedAlert(sh){const d=dogs[sh.who];setStatus(d,'missed',`Missed the ${fmt(sh.s)} shift at ${sh.house.client}`);say(dogs.rosa,`No clock-in from <b>${first(d.name)}</b> at ${sh.house.client}. Calling for cover.`,'err',4200);log(`Missed clock-in: <em>${first(d.name)}</em>, ${fmt(sh.s)} shift at ${sh.house.client}'s home.`,'alert')}
-function clockOut(sh){
-  const d=sh.worker;if(!sh.clockIn)return;const hrs=(sh.e-sh.clockIn)/60;
-  setLit(sh.h,false);setStatus(d,'sent','Care log sent to HR');say(d,`Clocked out <b>${fmt(sh.e)}</b> · ${hrs.toFixed(1)} h`);
-  log(`<em>${first(d.name)}</em> clocked out at ${sh.house.client}'s home, ${fmt(sh.e)}. ${hrs.toFixed(1)} h.`);
-  const [X0,Y0]=P(sh.house.door,sh.house.y0+sh.house.d,30),[X1,Y1]=P(...INBOX);
-  const el=document.createElementNS(NS,'g');el.innerHTML=`<rect x="-9" y="-6" width="18" height="12" rx="2" fill="#fff" stroke="#ac6b75" stroke-width="1.6"/><path d="M-9 -6 L0 1 L9 -6" stroke="#ac6b75" stroke-width="1.4" fill="none"/>`;
-  document.getElementById('fx').appendChild(el);
-  envs.push({el,X0,Y0,X1,Y1,t:0,done:()=>{
-    verified++;verifiedH+=hrs;setStatus(d,'done',d.status==='sent'?`Verified · ${hrs.toFixed(1)} h on Payroll`:d.where);
-    if(d.status==='done')d.where=`Verified · ${hrs.toFixed(1)} h on Payroll`;updateRoster();
-    say(dogs.rosa,`<b>${first(d.name)}</b>: ${hrs.toFixed(1)} h verified, Payroll row updated.`,'good');
-    log(`<em>Verified</em> ${first(d.name)}'s shift at ${sh.house.client}: ${fmt(sh.clockIn)} to ${fmt(sh.e)}, ${hrs.toFixed(1)} h. Payroll tab updated.`,'good');
-    updateStats();}});
-  d.run=1;d.path=routeHome(d);d.onArrive=()=>{d.face=1;if(d.status==='done')d.where=d.where.replace(/^Verified/,'Resting · verified');updateRoster()};
+  events=[];
+  meeting(600,640,'Weekly payroll huddle',['jex','raff','angelica','paul','yolanda']);
+  lunch(720,765,['ira','lizzie','kristene','patricia','angelle','kim']);
+  meeting(870,905,'CRM check-in',['hana','jose','kim','randy','liz']);
+  if(scenario==='deadline'){
+    snag(650,672,'jose','jex',"the scan stopped early because a dialog didn't close","re-ran the scan and every row was read");
+    snag(930,950,'kim','raff','3 rows came back unparsed','dates fixed, all 3 rows parsed');
+    events.push({t:990,fn:()=>{log(`<em>Payroll submitted</em> for week 48. ${total} CRM updates today.`,'good');say(dogs.angelica,'<b>Payroll is in!</b> Nice work, team.','good',5000,true)}});
+  }else{
+    snag(800,820,'lizzie','paul',"the Payroll tab didn't refresh",'refreshed and the totals match');
+  }
+  events.push({t:1020,fn:()=>log(`<em>End of day.</em> ${total} CRM updates from the team.`,'good')});
+  events.sort((a,b)=>a.t-b.t);
 }
 
-/* ---------- roster & stats ---------- */
-const LABEL={off:'Off shift',enroute:'Heading out',onshift:'On shift',sent:'Clocked out',done:'Verified',late:'Late',missed:'Missed',office:'At HR desk'};
+/* ---------- team list & stats ---------- */
+const LABEL={desk:'At desk',working:'Updating CRM',meeting:'In a meeting',break:'On break',printer:'At the printer',helping:'Helping',alert:'Needs help',walking:'Walking'};
 const roster=document.getElementById('roster');
 function buildRoster(){
   roster.innerHTML='';
-  STAFF.forEach(p=>{
-    const row=document.createElement('div');row.className='st';row.tabIndex=0;row.dataset.id=p.id;
-    row.innerHTML=`<div class="av"></div><div><b>${p.name}</b>${p.role?` <span class="role">· ${p.role}</span>`:''}<small class="breed"></small><small class="where"></small></div><div class="right"><span class="chip"></span><select aria-label="Breed for ${p.name}" id="breed-${p.id}">${BREED_IDS.map(b=>`<option value="${b}">${BREEDS[b].n}${b===p.auto?' (from name)':''}</option>`).join('')}</select></div>`;
-    const sel=row.querySelector('select');sel.value=dogs[p.id].breed;
-    sel.addEventListener('click',e=>e.stopPropagation());
-    sel.addEventListener('change',()=>{const d=dogs[p.id];d.breed=sel.value;renderDog(d);updateRoster();try{const m=JSON.parse(localStorage.getItem('careFloorBreeds')||'{}');m[p.id]=sel.value;localStorage.setItem('careFloorBreeds',JSON.stringify(m))}catch(e){}});
-    const find=()=>{const d=dogs[p.id];d.hlUntil=performance.now()+2600;say(d,`I'm <b>${first(d.name)}</b>'s ${BREEDS[d.breed].n}. ${d.where}.`,'',2600)};
+  TEAM.forEach(p=>{const row=document.createElement('div');row.className='st';row.tabIndex=0;row.dataset.id=p.id;
+    row.innerHTML=`<div class="av">${avatarSVG(p)}<span class="dot"></span></div><div><b>${p.name}</b>${p.nick?` <small style="display:inline">(${p.nick})</small>`:''}<small>${BREEDS[p.breed].n}</small><small class="what"></small></div><div class="right"><span class="chip"></span><small class="cnt"></small></div>`;
+    const find=()=>{const d=dogs[p.id];d.hlUntil=performance.now()+2600;say(d,`Hi, I'm <b>${d.name}</b>. ${d.what}.`,'',2600,true)};
     row.addEventListener('click',find);row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();find()}});
-    roster.appendChild(row);
-  });
+    roster.appendChild(row)});
   updateRoster();
 }
 function updateRoster(){
   if(!roster.children.length)return;
   [...roster.children].forEach(row=>{const d=dogs[row.dataset.id];row.className='st s-'+d.status;
-    const av=row.querySelector('.av');if(av.dataset.b!==d.breed){av.innerHTML=avatarSVG(d.breed)+'<span class="dot"></span>';av.dataset.b=d.breed}
-    row.querySelector('.breed').textContent=BREEDS[d.breed].n;row.querySelector('.where').textContent=d.where;row.querySelector('.chip').textContent=LABEL[d.status];});
-  updateStats();
+    row.querySelector('.what').textContent=d.what;row.querySelector('.chip').textContent=LABEL[d.status];
+    row.querySelector('.cnt').textContent=`${d.updates} update${d.updates===1?'':'s'}`});
 }
 const statsEl=document.getElementById('stats');
-function updateStats(){
-  const all=Object.values(dogs).filter(d=>d.id!=='rosa');const c=k=>all.filter(d=>k.includes(d.status)).length;
-  statsEl.innerHTML=[['On shift',c(['onshift']),'var(--warn)'],['Heading out',c(['enroute']),'var(--blue)'],['Verified today',verified,'var(--ok)'],['Needs attention',c(['late','missed']),'var(--bad)']]
-   .map(([l,n,col])=>`<span class="stat"><i style="background:${col}"></i><b>${n}</b>${l}</span>`).join('');
-}
+function updateStats(){const all=Object.values(dogs),c=k=>all.filter(d=>d.status===k).length;
+  statsEl.innerHTML=[['CRM updates today',total,'var(--mauve)'],['Updating now',c('working'),'var(--ok)'],['In meetings',c('meeting'),'var(--purple)'],['On break',c('break'),'var(--blue)'],['Needs help',c('alert'),'var(--bad)']]
+   .map(([l,n,col])=>`<span class="stat"><i style="background:${col}"></i><b>${n}</b>${l}</span>`).join('')}
 
 /* ---------- loop ---------- */
 const clockEl=document.getElementById('clock');let last=performance.now();
 function frame(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;const k=paused?0:dt*speed;
-  if(!paused){simT+=k*5;while(evI<events.length&&events[evI].t<=simT){events[evI++].fn()}
-    if(simT>=END){restart();}}
+  if(!paused){simT+=k*5;while(evI<events.length&&events[evI].t<=simT)events[evI++].fn();
+    Object.values(dogs).forEach(d=>{if(simT>=d.nextAt)decide(d)});if(simT>=END)restart()}
   clockEl.textContent=fmt(simT);
   const list=Object.values(dogs);
   list.forEach(d=>{
     let walking=false;
-    if(d.path.length&&k>0){let step=200*k*d.run;while(step>0&&d.path.length){const [tx,ty]=d.path[0],dx=tx-d.x,dy=ty-d.y,dist=Math.hypot(dx,dy);
-      const sx=(dx-dy);if(Math.abs(sx)>.5)d.face=sx>0?1:-1;
-      if(dist<=step){d.x=tx;d.y=ty;step-=dist;d.path.shift();if(!d.path.length&&d.onArrive){const f=d.onArrive;d.onArrive=null;f()}}else{d.x+=dx/dist*step;d.y+=dy/dist*step;step=0}}
-      walking=true;}
-    if(!paused)d.phase+=dt*speed*(walking?14*d.run:3);
-    const [X,Y]=P(d.x,d.y);const working=d.status==='onshift'&&!d.path.length;const office=d.id==='rosa';
-    const bob=walking?Math.abs(Math.sin(d.phase))*-2.2:(working?Math.sin(d.phase*1.6)*-1.2:0);
+    if(d.path.length&&k>0){let step=170*k;while(step>0&&d.path.length){const[tx,ty]=d.path[0],dx=tx-d.x,dy=ty-d.y,dist=Math.hypot(dx,dy);
+      if(dist<=step){d.x=tx;d.y=ty;step-=dist;d.path.shift();if(!d.path.length){const f=d.onArrive;d.onArrive=null;if(f)f();if(d.queue.length)d.queue.shift()()}}else{d.x+=dx/dist*step;d.y+=dy/dist*step;step=0}}
+      walking=true}
+    if(!paused)d.phase+=dt*speed*(walking?13:d.status==='working'?16:2.5);
+    const[X,Y]=P(d.x,d.y);const typing=d.status==='working'||d.status==='helping';
+    const bob=walking&&!reduce?-Math.abs(Math.sin(d.phase))*2:0;
     d.g.setAttribute('transform',`translate(${X.toFixed(1)},${(Y+bob).toFixed(1)})`);
-    d.flip.setAttribute('transform',`scale(${d.face*SCALE},${SCALE})`);
-    const sw=walking&&!reduce?Math.sin(d.phase)*2.6:0;
-    d.la.setAttribute('transform',`translate(${sw},0)`);d.lb.setAttribute('transform',`translate(${-sw},0)`);
-    const wag=(working||d.status==='done'&&walking||office&&now<d.bubUntil)&&!reduce?Math.sin(d.phase*4)*18:(walking?Math.sin(d.phase)*8:0);
-    d.tail.setAttribute('transform',`rotate(${wag.toFixed(1)} ${d.tx} ${d.ty})`);
-    const atHome=!d.path.length&&!office&&['off','done','missed'].includes(d.status);
-    d.g.classList.toggle('sleep',atHome);d.g.classList.toggle('happy',working||(office&&now<d.bubUntil));d.g.classList.toggle('hl',now<d.hlUntil);
-    const [tl,tt]=toPct(X,Y+16);d.tag.style.left=tl+'%';d.tag.style.top=tt+'%';
-    const [bl,bt]=toPct(X,Y+d.top-6);d.bub.style.left=bl+'%';d.bub.style.top=bt+'%';
+    const sw=walking&&!reduce?Math.sin(d.phase):0;
+    d.ll.setAttribute('transform',`translate(0,${(Math.min(0,sw)*2.4).toFixed(2)})`);d.lr.setAttribute('transform',`translate(0,${(Math.min(0,-sw)*2.4).toFixed(2)})`);
+    const armA=walking?sw*16:typing&&!reduce?-18+Math.sin(d.phase)*6:d.status==='alert'?-150:0,armB=walking?-sw*16:typing&&!reduce?18-Math.sin(d.phase+1.5)*6:0;
+    d.al.setAttribute('transform',`rotate(${armA.toFixed(1)} ${d.al.dataset.sx} ${d.al.dataset.sy})`);
+    d.ar.setAttribute('transform',`rotate(${armB.toFixed(1)} ${d.ar.dataset.sx} ${d.ar.dataset.sy})`);
+    const wag=(['break','meeting'].includes(d.status)||typing)&&!reduce?Math.sin(d.phase*2.5)*10:0;
+    d.tail.setAttribute('transform',`rotate(${wag.toFixed(1)})`);
+    d.g.classList.toggle('happy',['break','helping'].includes(d.status)||now<d.bubUntil&&d.bub.classList.contains('good'));
+    d.g.classList.toggle('hl',now<d.hlUntil);const sv=now<(d.savedUntil||0);if(sv!==d.tag.classList.contains('saved'))d.tag.classList.toggle('saved',sv);
+    const[tl,tt]=toPct(X,Y+12);d.tag.style.left=tl+'%';d.tag.style.top=tt+'%';
+    const[bl,bt]=toPct(X,Y+d.top-4);d.bub.style.left=bl+'%';d.bub.style.top=bt+'%';
     if(now>d.bubUntil&&d.bub.classList.contains('on'))d.bub.classList.remove('on');
-    d.depth=Y;
+    d.g.depth=Y;
   });
-  const g=dogsG();list.sort((a,b)=>a.depth-b.depth).forEach((d,i)=>{if(g.children[i]!==d.g)g.insertBefore(d.g,g.children[i]||null)});
-  envs=envs.filter(e=>{e.t+=k/1.3;const t=Math.min(1,e.t),cx=(e.X0+e.X1)/2,cy=Math.min(e.Y0,e.Y1)-170;
-    const x=(1-t)*(1-t)*e.X0+2*(1-t)*t*cx+t*t*e.X1,y=(1-t)*(1-t)*e.Y0+2*(1-t)*t*cy+t*t*e.Y1;e.el.setAttribute('transform',`translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${(-20+40*t).toFixed(0)})`);
-    if(t>=1){e.el.remove();e.done();return false}return true});
+  const sorted=document.getElementById('sorted'),all=[...sortables,...list.map(d=>d.g)].sort((a,b)=>a.depth-b.depth);
+  all.forEach((g,i)=>{if(sorted.children[i]!==g)sorted.insertBefore(g,sorted.children[i]||null)});
   requestAnimationFrame(frame);
 }
 
 /* ---------- setup ---------- */
 function restart(){
-  simT=START;evI=0;verified=0;verifiedH=0;envs.forEach(e=>e.el.remove());envs=[];lit.fill(0);
-  document.querySelectorAll('.g-win').forEach(w=>w.classList.remove('lit'));
-  Object.values(dogs).forEach(d=>{d.x=d.home[0];d.y=d.home[1];d.path=[];d.onArrive=null;d.face=1;d.run=1;d.bubUntil=0;d.bub.classList.remove('on');
-    if(d.id==='rosa')setStatus(d,'office','At the HR desk');else setStatus(d,'off','Napping in the lounge')});
-  logEl.innerHTML='';events=buildEvents();
-  log(scenario==='late'?'Sample day started: <em>late and missed shifts</em>. Watch Aisha and Ben.':'Sample day started. 8 shifts on the schedule.');
+  simT=START;evI=0;total=0;logEl.innerHTML='';
+  Object.values(dogs).forEach((d,i)=>{d.x=d.desk.spot[0];d.y=d.desk.spot[1];d.place=d.desk;d.path=[];d.queue=[];d.onArrive=null;d.locked=false;d.back=false;d.finish=null;d.updates=0;d.bubUntil=0;d.bub.classList.remove('on');
+    d.nextAt=START+1+i*1.6;setStatus(d,'desk','At desk')});
+  buildEvents();updateStats();
+  log(scenario==='deadline'?'Workday started. <em>Payroll is due at 4:30 PM</em>, so the team is busier than usual.':'Workday started. Everyone is at their desk.');
 }
 buildScene();
-STAFF.forEach((p,i)=>makeDog(p,i));
+TEAM.forEach((p,i)=>makeDog(p,i));
 buildRoster();restart();
 document.getElementById('restart').onclick=restart;
 const pauseB=document.getElementById('pause');
 pauseB.onclick=()=>{paused=!paused;pauseB.setAttribute('aria-pressed',paused);pauseB.textContent=paused?'Play':'Pause'};
 function seg(id,fn){const el=document.getElementById(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset.v)})}
 seg('spd',v=>speed=+v);seg('scn',v=>{scenario=v;restart()});
-// zone labels
-[[P(135,556),'HR · Shift Verification'],[P(690,560),'Lounge · off shift'],[P(40,232),'Client homes']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
-HOUSES.forEach(h=>{const[X,Y]=P(h.x0+h.w/2,h.y0+h.d/2,88);const z=document.createElement('div');z.className='tag zone';z.textContent=h.client;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
+[[P(125,14,58),'Meeting room'],[P(125,690),'Break room'],[P(410,0,74),'CRM · live board'],[P(690,70,40),'Printer'],[P(690,350),'Desks']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
 requestAnimationFrame(t=>{last=t;requestAnimationFrame(frame)});
 })();
 </script>
