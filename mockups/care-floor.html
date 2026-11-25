@@ -389,13 +389,13 @@ function buildScene(){
   // cafeteria tables (round, white) with stools
   TABLES.forEach(([x,y])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="18" ry="7" class="g-shadow"/><rect x="${X-1.5}" y="${Y-20}" width="3" height="20" fill="#3a3d45"/><ellipse cx="${X}" cy="${Y-21}" rx="22" ry="11" fill="#fff" stroke="#d5dae3"/><circle cx="${X-6}" cy="${Y-23}" r="2.6" fill="#ac6b75"/><circle cx="${X+7}" cy="${Y-21}" r="2.6" fill="#5f8fb3"/>`,x+6,y+6)});
   // lounge: sofa against the right wall, coffee table, lamp, armchair
-  add(boxF(1020,102,28,200,18,'#7f93b5','#6a7ea0','#71859f')+boxF(1042,102,10,200,42,'#8ea1c0','#7084a6','#7f93b5')+boxF(1020,94,32,10,30,'#8ea1c0','#7084a6','#7f93b5')+boxF(1020,300,32,10,30,'#8ea1c0','#7084a6','#7f93b5')
-     +boxF(1024,130,16,22,26,'#c3cde4','#a9b5d2','#b7c2dd',18)+boxF(1024,250,16,22,26,'#a3b3d6','#8a9bc2','#97a8cd',18),1036,200);
+  add(boxF(1020,102,28,200,18,'#8e4a64','#743a51','#80435a')+boxF(1042,102,10,200,42,'#9c5570','#7e4259','#8d4c65')+boxF(1020,94,32,10,30,'#9c5570','#7e4259','#8d4c65')+boxF(1020,300,32,10,30,'#9c5570','#7e4259','#8d4c65')
+     +boxF(1024,130,16,22,26,'#d58aa6','#bd7490','#c97f9b',18)+boxF(1024,250,16,22,26,'#b8607f','#9c4e6a','#aa5775',18),1036,200);
   add(boxF(932,160,44,90,14,'#c9a27c','#a77a52','#b08661')+boxF(944,184,16,12,3,'#5f8fb3','#4a7aa0','#5585ad',14),954,206);
-  add(boxF(844,96,38,38,16,'#8ea1c0','#7084a6','#7f93b5')+boxF(844,96,38,8,32,'#8ea1c0','#7084a6','#7f93b5'),863,118);
+  add(boxF(844,96,38,38,16,'#9c5570','#7e4259','#8d4c65')+boxF(844,96,38,8,32,'#9c5570','#7e4259','#8d4c65'),863,118);
   {const[X,Y]=P(1040,340);add(`<rect x="${X-1}" y="${Y-62}" width="2" height="62" fill="#3a3d45"/><polygon points="${X-8},${Y-60} ${X+8},${Y-60} ${X+5},${Y-72} ${X-5},${Y-72}" fill="#f6e7c8"/><ellipse cx="${X}" cy="${Y}" rx="7" ry="3" fill="#3a3d45"/>`,1040,340)}
   // nap corner: bean bags
-  [[880,628,'#7f93b5'],[980,658,'#a3b3d6'],[920,718,'#5f73a0']].forEach(([x,y,c])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="22" ry="9" class="g-shadow"/><path d="M${X-20} ${Y-2} Q${X-22} ${Y-30} ${X} ${Y-32} Q${X+22} ${Y-30} ${X+20} ${Y-2} Q${X} ${Y+8} ${X-20} ${Y-2}Z" fill="${c}"/>`,x-4,y-4)});
+  [[880,628,'#8e4a64'],[980,658,'#b8607f'],[920,718,'#6b3650']].forEach(([x,y,c])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="22" ry="9" class="g-shadow"/><path d="M${X-20} ${Y-2} Q${X-22} ${Y-30} ${X} ${Y-32} Q${X+22} ${Y-30} ${X+20} ${Y-2} Q${X} ${Y+8} ${X-20} ${Y-2}Z" fill="${c}"/>`,x-4,y-4)});
   // printer station in the last grid cell
   {const {x0,y0}=PRINT_CELL;add(boxF(x0+8,y0+8,58,26,30,'#e9edf2','#cfd6df','#dde3ea')+boxF(x0+24,y0+12,30,18,14,'#3a3f4a','#2a2f3a','#323743',30)+poly([[x0+28,y0+14,44],[x0+50,y0+14,44],[x0+50,y0+26,44],[x0+28,y0+26,44]],'','fill="#fff"'),x0+40,y0+30);
     s=plant(x0+68,y0+66,.8);add(s,x0+68,y0+66)}
