@@ -8,7 +8,7 @@
 :root{
   --bg:#f4f6f9;--ink:#191c22;--muted:#5b6170;--card:#ffffff;--line:#e3e7ee;--stage:#ffffff;
   --mauve:#ac6b75;--plum:#793c55;--pink:#efb1d6;--ok:#3f9a6e;--bad:#c84a61;--blue:#4f86c6;--purple:#8a6bbf;--teal:#3c9aa5;
-  --floor:#fcfdfe;--floor-line:#f1f3f7;--carpet:#e4e9f2;--meet:#fcf0f5;--break:#fcf6ee;--nap:#eef6fc;--door:#8a5a3c;--wall:#fbf8f3;--wall-side:#e9e2d8;
+  --floor:#eef0f4;--floor-line:#e3e6ec;--carpet:#e4e9f2;--meet:#f8e7ef;--break:#f5ecdf;--nap:#e3eef8;--door:#8a5a3c;--wall:#fbf8f3;--wall-side:#e9e2d8;
   --desk:#c9a27c;--desk-side:#b08661;--desk-front:#9d7552;--screen:#2a2f3a;--table:#8f6a4c;--table-side:#77563c;
   --glass:#9fb7d3;--sofa:#7f93b5;--sofa-side:#6a7ea0;--leaf:#9cc68a;--leaf-2:#86b574;--pot:#c98b62;
   --chip-bg:#eef0f4;
@@ -33,7 +33,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .stat b{font:700 16px/1 'Plus Jakarta Sans',Inter,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums}
 .stat i{width:9px;height:9px;border-radius:50%;display:block}
 .stage{position:relative;background:var(--stage);border:1px solid var(--line);border-radius:20px;padding:12px 12px 14px;box-shadow:0 20px 50px -30px rgba(25,28,34,.35)}
-.screen{position:relative;width:100%;max-width:100%;aspect-ratio:1520/900;overflow:hidden;border-radius:12px}
+.screen{position:relative;width:100%;max-width:100%;aspect-ratio:1700/1000;overflow:hidden;border-radius:12px}
 .screen svg{position:absolute;inset:0;width:100%;height:100%}
 .layer{position:absolute;inset:0;pointer-events:none}
 .clock{position:absolute;right:12px;top:10px;font:800 clamp(16px,2.2vw,26px)/1 'Plus Jakarta Sans',Inter,sans-serif;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-variant-numeric:tabular-nums;box-shadow:0 6px 16px -10px rgba(20,24,32,.4)}
@@ -121,7 +121,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
       <div class="stats" id="stats"></div>
       <div class="stage">
         <div class="screen">
-          <svg id="scene" viewBox="-760 -140 1520 900" role="img" aria-label="Isometric office with fifteen desks, a meeting room, a break room and a printer, with a dog in formal attire for each team member"></svg>
+          <svg id="scene" viewBox="-850 -150 1700 1000" role="img" aria-label="Isometric office with fifteen desks, a meeting room, a break room and a printer, with a dog in formal attire for each team member"></svg>
           <div class="layer" id="tags"></div>
           <div class="layer" id="bubbles"></div>
           <div class="clock" aria-hidden="true"><small>Sample workday</small><span id="clock">8:00 AM</span></div>
@@ -163,7 +163,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 (function(){
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const NS='http://www.w3.org/2000/svg';
-const VB={x:-760,y:-140,w:1520,h:900};
+const VB={x:-850,y:-150,w:1700,h:1000};
 const P=(x,y,z=0)=>[(x-y)*0.866,(x+y)*0.5-z];
 const pts=a=>a.map(p=>P(...p).map(v=>v.toFixed(1)).join(',')).join(' ');
 const poly=(a,c,ex='')=>`<polygon points="${pts(a)}" class="${c}" ${ex}/>`;
@@ -273,17 +273,17 @@ function avatarSVG(p){const d=dogSVG(p.breed,p.outfit);return `<svg viewBox="-24
 /* ---------- places ---------- */
 // Floor: a square with the bottom corner cut out (like the post office). Cubicles sit in a spaced 4 x 4 grid;
 // the cafeteria and canteen run along the lower-left edge, the lounge and nap corner along the right.
-const HALL=560, CAFE_WAY=574, CELL=74, PITCH=136, G0=40, S=860, N=590; // S: floor size, N: where the bottom corner is cut
+const HALL=654, CAFE_WAY=672, CELL=74, PITCH=166, G0=44, S=960, N=690; // S: floor size, N: where the bottom corner is cut
 const DESKS=[];for(let r=0;r<4;r++)for(let c=0;c<4;c++){if(r===3&&c===3)continue;const x0=G0+c*PITCH,y0=G0+r*PITCH;
   DESKS.push({cx:x0,x0,y0,r,c,spot:[x0+30,y0+22],door:x0+60,aisle:y0+CELL+18,help:[x0+60,y0+32]})}
 const PRINT_CELL={x0:G0+3*PITCH,y0:G0+3*PITCH};const PRINTER=[PRINT_CELL.x0+38,PRINT_CELL.y0+50];
-const TABLES=[[170,672],[316,716],[460,676],[220,800],[390,812],[530,770]];
+const TABLES=[[196,776],[366,816],[536,778],[256,904],[452,914],[620,872]];
 const CAFE=TABLES.flatMap(([x,y])=>[[x-24,y-16],[x+22,y+8]]);
-const SOFA=[[796,124],[796,176],[796,228],[796,280]];          // paid breaks on the sofa
-const LOUNGE=[[663,150],[690,96],[620,200],[640,262]];          // paid breaks in the lounge (armchair, rug)
-const MEETING=[[712,170],[712,232],[756,146],[756,268],[700,200]]; // meetings around the coffee table
+const SOFA=[[896,124],[896,176],[896,228],[896,280]];          // paid breaks on the sofa
+const LOUNGE=[[763,150],[790,96],[730,210],[748,272]];          // paid breaks in the lounge (armchair, rug)
+const MEETING=[[812,170],[812,232],[856,146],[856,268],[800,200]]; // meetings around the coffee table
 const DOOR=[14,90];
-const NAP=[[676,436],[776,466],[716,526]];
+const NAP=[[776,526],[876,556],[816,616]];
 const exitOf=pl=>{
   if(pl.k==='desk'){const dk=DESKS[pl.i];return [[dk.door,dk.spot[1]],[dk.door,dk.aisle],[HALL,dk.aisle]]}
   if(pl.k==='help'){const dk=DESKS[pl.i];return [[dk.door,dk.aisle],[HALL,dk.aisle]]}
@@ -365,37 +365,37 @@ function buildScene(){
   s+=poly(FLOOR,'g-floor');
   for(let i=40;i<S;i+=40){s+=`<polyline class="g-fl" points="${pts([[i,0],[i,i<=N?S:N]])}"/><polyline class="g-fl" points="${pts([[0,i],[i<=N?S:N,i]])}"/>`}
   // cafeteria (wood floor) with canteen counter, lounge rug, nap corner rug
-  s+=poly([[0,596],[N,596],[N,S],[0,S]],'g-break');
-  for(let y=606;y<S;y+=12)s+=`<polyline points="${pts([[0,y],[N,y]])}" stroke="rgba(160,120,70,.18)" stroke-width="1" fill="none"/>`;
-  s+=poly([[630,80],[850,80],[850,330],[630,330]],'g-meet');
-  s+=poly([[630,400],[850,400],[850,578],[630,578]],'g-nap');
+  s+=poly([[0,696],[N,696],[N,S],[0,S]],'g-break');
+  for(let y=706;y<S;y+=12)s+=`<polyline points="${pts([[0,y],[N,y]])}" stroke="rgba(160,120,70,.18)" stroke-width="1" fill="none"/>`;
+  s+=poly([[730,80],[950,80],[950,330],[730,330]],'g-meet');
+  s+=poly([[730,490],[950,490],[950,668],[730,668]],'g-nap');
   // back walls (low, like the post office) + door + CRM board
   s+=poly([[0,0,0],[S,0,0],[S,0,56],[0,0,56]],'g-wall2')+poly([[0,0,0],[0,S,0],[0,S,56],[0,0,56]],'g-wall');
   s+=poly([[0,70,0],[0,110,0],[0,110,50],[0,70,50]],'g-screen')+poly([[0,74,0],[0,106,0],[0,106,46],[0,74,46]],'g-door');
   s+=poly([[330,0,14],[540,0,14],[540,0,50],[330,0,50]],'g-screen');
   for(let i=0;i<6;i++){const x=342+i*32,h=8+((i*37)%24);s+=poly([[x,0,18],[x+20,0,18],[x+20,0,18+h],[x,0,18+h]],'',`fill="${i%2?'#7fd1a0':'#efb1d6'}" opacity=".9"`)}
   // canteen: counter, coffee machine, fridge, vending machine, water cooler (against the left wall)
-  s+=boxF(6,640,34,180,34,'#c46a7a','#a85566','#b45f70');
-  s+=boxF(6,640,34,180,36,'#f4eee8','#e3d9cf','#ece3d9',34);
-  s+=boxF(10,656,20,22,52,'#2a2f3a','#2a2f3a','#353b48',36);
-  [[14,704,'#f39c12'],[14,734,'#e74c3c'],[14,764,'#f4d03f'],[14,794,'#27ae60']].forEach(([x,y,c])=>{const[X,Y]=P(x+8,y+8,36);s+=`<ellipse cx="${X}" cy="${Y}" rx="9" ry="4.5" fill="#fff"/><circle cx="${X}" cy="${Y-2}" r="4" fill="${c}"/>`});
-  s+=boxF(6,608,30,26,74,'#e9edf2','#cfd6df','#dde3ea');
-  s+=boxF(50,604,26,22,62,'#2a2f3a','#20242d','#2a2f3a')+poly([[76,608,14],[76,622,14],[76,622,56],[76,608,56]],'',`fill="#f6c25b" opacity=".85"`);
-  s+=boxF(92,608,12,12,26,'#f4f6fa','#dfe4ea','#e9edf2')+boxF(94,610,8,8,40,'#a8d2f0','#86b8dc','#98c6e8',26);
-  s+=plant(130,612,.9)+plant(570,846,.9)+plant(600,30,1)+plant(850,370,.9)+plant(612,586,.8)+plant(16,30,1)+plant(612,390,.8);
+  s+=boxF(6,740,34,180,34,'#c46a7a','#a85566','#b45f70');
+  s+=boxF(6,740,34,180,36,'#f4eee8','#e3d9cf','#ece3d9',34);
+  s+=boxF(10,756,20,22,52,'#2a2f3a','#2a2f3a','#353b48',36);
+  [[14,804,'#f39c12'],[14,834,'#e74c3c'],[14,864,'#f4d03f'],[14,894,'#27ae60']].forEach(([x,y,c])=>{const[X,Y]=P(x+8,y+8,36);s+=`<ellipse cx="${X}" cy="${Y}" rx="9" ry="4.5" fill="#fff"/><circle cx="${X}" cy="${Y-2}" r="4" fill="${c}"/>`});
+  s+=boxF(6,708,30,26,74,'#e9edf2','#cfd6df','#dde3ea');
+  s+=boxF(50,704,26,22,62,'#2a2f3a','#20242d','#2a2f3a')+poly([[76,708,14],[76,722,14],[76,722,56],[76,708,56]],'',`fill="#f6c25b" opacity=".85"`);
+  s+=boxF(92,708,12,12,26,'#f4f6fa','#dfe4ea','#e9edf2')+boxF(94,710,8,8,40,'#a8d2f0','#86b8dc','#98c6e8',26);
+  s+=plant(130,712,.9)+plant(670,946,.9)+plant(700,30,1)+plant(950,420,.9)+plant(712,686,.8)+plant(16,30,1)+plant(712,470,.8);
   scene.innerHTML=`<g id="static">${s}</g><g id="sorted"></g><g id="fx"></g>`;
   const sorted=document.getElementById('sorted');
   const add=(svg,x,y)=>{const g=document.createElementNS(NS,'g');g.innerHTML=svg;g.depth=P(x,y)[1];sorted.appendChild(g);sortables.push(g);return g};
   // cafeteria tables (round, white) with stools
   TABLES.forEach(([x,y])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="18" ry="7" class="g-shadow"/><rect x="${X-1.5}" y="${Y-20}" width="3" height="20" fill="#3a3d45"/><ellipse cx="${X}" cy="${Y-21}" rx="22" ry="11" fill="#fff" stroke="#d5dae3"/><circle cx="${X-6}" cy="${Y-23}" r="2.6" fill="#ac6b75"/><circle cx="${X+7}" cy="${Y-21}" r="2.6" fill="#5f8fb3"/>`,x+6,y+6)});
   // lounge: sofa against the right wall, coffee table, lamp, armchair
-  add(boxF(820,102,28,200,18,'#7f93b5','#6a7ea0','#71859f')+boxF(842,102,10,200,42,'#8ea1c0','#7084a6','#7f93b5')+boxF(820,94,32,10,30,'#8ea1c0','#7084a6','#7f93b5')+boxF(820,300,32,10,30,'#8ea1c0','#7084a6','#7f93b5')
-     +boxF(824,130,16,22,26,'#efb1d6','#d996bd','#e3a3c9',18)+boxF(824,250,16,22,26,'#f4d03f','#d9b62c','#e6c234',18),836,200);
-  add(boxF(732,160,44,90,14,'#c9a27c','#a77a52','#b08661')+boxF(744,184,16,12,3,'#5f8fb3','#4a7aa0','#5585ad',14),754,206);
-  add(boxF(644,96,38,38,16,'#b48a5a','#8e6a44','#a07a4e')+boxF(644,96,38,8,32,'#b48a5a','#8e6a44','#a07a4e'),663,118);
-  {const[X,Y]=P(850,340);add(`<rect x="${X-1}" y="${Y-62}" width="2" height="62" fill="#3a3d45"/><polygon points="${X-8},${Y-60} ${X+8},${Y-60} ${X+5},${Y-72} ${X-5},${Y-72}" fill="#f6e7c8"/><ellipse cx="${X}" cy="${Y}" rx="7" ry="3" fill="#3a3d45"/>`,850,340)}
+  add(boxF(920,102,28,200,18,'#7f93b5','#6a7ea0','#71859f')+boxF(942,102,10,200,42,'#8ea1c0','#7084a6','#7f93b5')+boxF(920,94,32,10,30,'#8ea1c0','#7084a6','#7f93b5')+boxF(920,300,32,10,30,'#8ea1c0','#7084a6','#7f93b5')
+     +boxF(924,130,16,22,26,'#efb1d6','#d996bd','#e3a3c9',18)+boxF(924,250,16,22,26,'#f4d03f','#d9b62c','#e6c234',18),936,200);
+  add(boxF(832,160,44,90,14,'#c9a27c','#a77a52','#b08661')+boxF(844,184,16,12,3,'#5f8fb3','#4a7aa0','#5585ad',14),854,206);
+  add(boxF(744,96,38,38,16,'#b48a5a','#8e6a44','#a07a4e')+boxF(744,96,38,8,32,'#b48a5a','#8e6a44','#a07a4e'),763,118);
+  {const[X,Y]=P(950,340);add(`<rect x="${X-1}" y="${Y-62}" width="2" height="62" fill="#3a3d45"/><polygon points="${X-8},${Y-60} ${X+8},${Y-60} ${X+5},${Y-72} ${X-5},${Y-72}" fill="#f6e7c8"/><ellipse cx="${X}" cy="${Y}" rx="7" ry="3" fill="#3a3d45"/>`,950,340)}
   // nap corner: bean bags
-  [[680,448,'#c46a7a'],[780,478,'#5f9e7d'],[720,538,'#e9b949']].forEach(([x,y,c])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="22" ry="9" class="g-shadow"/><path d="M${X-20} ${Y-2} Q${X-22} ${Y-30} ${X} ${Y-32} Q${X+22} ${Y-30} ${X+20} ${Y-2} Q${X} ${Y+8} ${X-20} ${Y-2}Z" fill="${c}"/>`,x-4,y-4)});
+  [[780,538,'#c46a7a'],[880,568,'#5f9e7d'],[820,628,'#e9b949']].forEach(([x,y,c])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="22" ry="9" class="g-shadow"/><path d="M${X-20} ${Y-2} Q${X-22} ${Y-30} ${X} ${Y-32} Q${X+22} ${Y-30} ${X+20} ${Y-2} Q${X} ${Y+8} ${X-20} ${Y-2}Z" fill="${c}"/>`,x-4,y-4)});
   // printer station in the last grid cell
   {const {x0,y0}=PRINT_CELL;add(boxF(x0+8,y0+8,58,26,30,'#e9edf2','#cfd6df','#dde3ea')+boxF(x0+24,y0+12,30,18,14,'#3a3f4a','#2a2f3a','#323743',30)+poly([[x0+28,y0+14,44],[x0+50,y0+14,44],[x0+50,y0+26,44],[x0+28,y0+26,44]],'','fill="#fff"'),x0+40,y0+30);
     s=plant(x0+68,y0+66,.8);add(s,x0+68,y0+66)}
@@ -625,7 +625,7 @@ const pauseB=document.getElementById('pause');
 pauseB.onclick=()=>{paused=!paused;pauseB.setAttribute('aria-pressed',paused);pauseB.textContent=paused?'Play':'Pause'};
 function seg(id,fn){const el=document.getElementById(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset.v)})}
 seg('spd',v=>speed=+v);seg('scn',v=>{scenario=v;restart()});
-[[P(300,S,-8),'Cafeteria'],[P(10,730,104),'Canteen'],[P(740,330),'Lounge'],[P(740,578),'Nap corner'],[P(435,0,64),'CRM · live board'],[P(PRINT_CELL.x0+60,PRINT_CELL.y0+36,58),'Printer']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
+[[P(300,S,-8),'Cafeteria'],[P(10,830,104),'Canteen'],[P(840,330),'Lounge'],[P(840,668),'Nap corner'],[P(435,0,64),'CRM · live board'],[P(PRINT_CELL.x0+60,PRINT_CELL.y0+36,58),'Printer']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
 requestAnimationFrame(t=>{last=t;requestAnimationFrame(frame)});
 })();
 </script>
