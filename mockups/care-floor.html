@@ -66,6 +66,8 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .s-desk{--c:#a3aab8}.s-working{--c:var(--ok)}.s-meeting{--c:var(--purple)}.s-break{--c:var(--blue)}.s-printer{--c:var(--teal)}.s-helping{--c:var(--mauve)}.s-alert{--c:var(--bad)}.s-walking{--c:#c3c8d2}
 .tag[class*="s-"] i,.st .dot{background:var(--c)}
 .tag.s-alert{border-color:#f0b3bf}
+.tag small{font:500 10px/1 Inter,sans-serif;color:#6b7280}
+.parol{animation:glow 2.4s infinite}@keyframes glow{50%{opacity:.75}}
 .tag.saved{background:#e3f5ea;border-color:#9fd4b4}.tag.saved::after{content:'Saved';font-weight:600;color:#21603f;margin-left:2px}
 /* controls */
 .livebar{display:flex;gap:9px;align-items:center;margin:10px 4px 0;font-size:13.5px;color:var(--muted)}
@@ -108,13 +110,13 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .note{font-size:13px;color:var(--muted);margin:10px 0 0}
 @media(max-width:900px){.side{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.tag{font-size:10px;padding:2px 5px;display:none}.tag.s-working,.tag.s-alert{display:flex}.tag i{width:6px;height:6px}.how{grid-template-columns:minmax(0,1fr)}.bub{max-width:140px;padding:5px 7px;font-size:11.5px}.clock{padding:5px 8px;right:6px;top:6px}}
-@media(prefers-reduced-motion:reduce){.bub{transition:none}.pulse,.dog.hl .ring{animation:none!important}}
+@media(prefers-reduced-motion:reduce){.bub{transition:none}.pulse,.parol,.dog.hl .ring{animation:none!important}}
 </style>
 
 <div class="band"><div class="wrap">
   <span class="mock">Mockup · simulated CRM activity</span>
   <h1>The care floor</h1>
-  <p class="lede">The Together Homecare office team, each as their own dog. When someone updates the CRM, their dog gets to work at their desk and the update shows up in a bubble and in the activity log. Between updates the team heads to meetings, the printer and the break room. The people and breeds are real; the updates in this mockup are made up so you can see how it would look.</p>
+  <p class="lede">The Together Homecare office team, each as their own dog. Each cubicle is decorated for where its owner is from: Bataan, Cavite, Quezon Province and Pampanga in the Philippines, and a different California landmark for everyone in California. When someone updates the CRM, their dog gets to work in their cubicle and the update shows up in a bubble and in the activity log. Between updates the team heads to meetings, the printer and the break room. The people and breeds are real; the updates in this mockup are made up so you can see how it would look.</p>
 
   <div class="grid">
     <div>
@@ -147,7 +149,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
     </div>
 
     <div class="side">
-      <div class="card"><h2>Team</h2><p class="sub">15 people. Each has a desk and a dog.</p><div class="team" id="roster"></div></div>
+      <div class="card"><h2>Team</h2><p class="sub">15 people. Each has a cubicle and a dog.</p><div class="team" id="roster"></div></div>
       <div class="card"><h2>Activity</h2><p class="sub">Newest first. Each line is one CRM update.</p><ol class="log" id="log"></ol></div>
     </div>
   </div>
@@ -269,18 +271,76 @@ function avatarSVG(p){const d=dogSVG(p.breed,p.outfit);return `<svg viewBox="-24
 
 /* ---------- places ---------- */
 const HALL=245;               // corridor between rooms and desks (x)
-const ROWS=[262,412,562], AISLE=[224,374,524];
-const DESKS=[];ROWS.forEach((y0,r)=>{for(let c=0;c<5;c++){const x0=272+c*84;DESKS.push({x0,y0,w:62,d:30,r,spot:[x0+40,y0-13],help:[x0+62,y0-18]})}});
+const ROWS=[262,412,562], AISLE=ROWS.map(y=>y+50), TOPWAY=196;
+// cubicle c in row r: walls on the back and left, desk in front, opening on the right
+const DESKS=[];ROWS.forEach((y0,r)=>{for(let c=0;c<5;c++){const cx=262+c*86;DESKS.push({cx,x0:cx+6,y0,w:52,d:28,r,c,spot:[cx+28,y0-12],door:cx+71,help:[cx+71,y0-6]})}});
 const MEET=[[78,168],[118,172],[158,172],[198,166],[208,112],[66,112]];
 const BREAK=[[96,520],[146,540],[100,600],[160,612],[120,650],[196,560]];
 const PRINTER=[650,104];
 const exitOf=pl=>{
-  if(pl.k==='desk'||pl.k==='help'){const dk=DESKS[pl.i],a=AISLE[dk.r];return [[pl.spot[0],a],[HALL,a]]}
+  if(pl.k==='desk'){const dk=DESKS[pl.i],a=AISLE[dk.r];return [[dk.door,dk.spot[1]],[dk.door,a],[HALL,a]]}
+  if(pl.k==='help'){const dk=DESKS[pl.i],a=AISLE[dk.r];return [[dk.door,a],[HALL,a]]}
   if(pl.k==='meet')return [[pl.spot[0],190],[HALL,190]];
   if(pl.k==='break')return [[HALL,pl.spot[1]]];
-  if(pl.k==='printer')return [[PRINTER[0],AISLE[0]],[HALL,AISLE[0]]];
+  if(pl.k==='printer')return [[PRINTER[0],TOPWAY],[HALL,TOPWAY]];
   return [];
 };
+
+/* ---------- where people are from: cubicle themes ---------- */
+// Posters are drawn flat (48 x 28 for the side wall, 22 x 14 for the flag) and mapped onto the wall planes.
+const PHFLAG=`<rect width="22" height="7" fill="#0038a8"/><rect y="7" width="22" height="7" fill="#ce1126"/><polygon points="0,0 12,7 0,14" fill="#fff"/><circle cx="4" cy="7" r="1.8" fill="#fcd116"/><circle cx="1.6" cy="2.2" r=".7" fill="#fcd116"/><circle cx="1.6" cy="11.8" r=".7" fill="#fcd116"/><circle cx="9.6" cy="7" r=".7" fill="#fcd116"/>`;
+const CAFLAG=`<rect width="22" height="14" fill="#fff"/><rect y="11.4" width="22" height="2.6" fill="#b22234"/><polygon points="2.8,1.2 3.4,2.8 5,2.8 3.7,3.8 4.2,5.4 2.8,4.4 1.4,5.4 1.9,3.8 .6,2.8 2.2,2.8" fill="#b22234"/><path d="M6 9.2 Q7 6.2 10.5 6.4 Q12.5 5 14 6.6 L15.5 6.4 Q16.4 7.4 15.4 8 L15 9.6 L13.6 9.6 L13.4 8.6 L9.2 8.8 L9 9.6 L7.4 9.6 Z" fill="#7a4b2a"/><rect x="5" y="9.8" width="12" height=".8" fill="#5a8f3a"/>`;
+const lbl=(t,x,y,c='#fff')=>`<text x="${x}" y="${y}" font-family="Plus Jakarta Sans,Inter,sans-serif" font-weight="800" font-size="3.6" letter-spacing=".3" fill="${c}">${t}</text>`;
+const MOTIFS={
+ bataan:{place:'Bataan, Philippines',short:'Bataan',fabric:'#bcd6e8',trim:'#7fa9c6',flag:PHFLAG,
+  art:`<rect width="48" height="28" fill="#a8daf2"/><rect y="20" width="48" height="8" fill="#2f7fc1"/><polygon points="0,22 14,9 22,13 31,5 48,20 48,22" fill="#4f9a5a"/><rect x="30.2" y="-1" width="1.6" height="8" fill="#fff"/><rect x="28.4" y="1" width="5.2" height="1.4" fill="#fff"/>${lbl('BATAAN',2,26.6)}`,
+  desk:(X,Y)=>`<rect x="${X-3}" y="${Y-3}" width="6" height="3" fill="#d9d4ca"/><rect x="${X-1}" y="${Y-15}" width="2" height="12" fill="#fff" stroke="#c8c2b8" stroke-width=".5"/><rect x="${X-4}" y="${Y-12}" width="8" height="2" fill="#fff" stroke="#c8c2b8" stroke-width=".5"/>`},
+ cavite:{place:'Cavite, Philippines',short:'Cavite',fabric:'#ecc9c9',trim:'#c58f8f',flag:PHFLAG,
+  art:`<rect width="48" height="28" fill="#cfe9f7"/><rect y="15" width="48" height="13" fill="#3a8fc6"/><polygon points="14,17 22,8 26,8 34,17" fill="#7b8f5a"/><ellipse cx="24" cy="9" rx="2" ry=".8" fill="#6fb3d9"/><rect x="0" y="13" width="9" height="3" fill="#5a9a52"/><rect x="39" y="12" width="9" height="4" fill="#5a9a52"/>${lbl('CAVITE',2,26.6)}`,
+  desk:(X,Y)=>`<rect x="${X-.5}" y="${Y-16}" width="1" height="16" fill="#8a6a4a"/><g transform="translate(${X+.5},${Y-16}) scale(.5)">${PHFLAG}</g>`},
+ quezon:{place:'Quezon Province, Philippines',short:'Quezon',fabric:'#f3dda8',trim:'#d4b469',flag:PHFLAG,kiping:1,
+  art:`<rect width="48" height="28" fill="#fff4d6"/><polygon points="8,14 24,4 40,14" fill="#c0392b"/><rect x="11" y="14" width="26" height="12" fill="#e9c27a"/>${[0,1,2,3,4,5,6,7,8].map(i=>`<ellipse cx="${11+i*3.2}" cy="15.5" rx="1.5" ry="2.6" fill="${['#e74c8b','#f1c40f','#27ae60','#e67e22','#9b59b6'][i%5]}"/>`).join('')}<rect x="21" y="19" width="6" height="7" fill="#8a5a3c"/>${lbl('PAHIYAS · QUEZON',2,27,'#7a4b2a')}`,
+  desk:(X,Y)=>`<circle cx="${X}" cy="${Y-5}" r="5" fill="#7a5230"/><circle cx="${X-1.5}" cy="${Y-6.5}" r="1" fill="#4a3018"/><circle cx="${X+1.5}" cy="${Y-6.5}" r="1" fill="#4a3018"/><path d="M${X} ${Y-10} q4 -6 8 -4" stroke="#3f9a6e" stroke-width="1.4" fill="none"/>`},
+ pampanga:{place:'Pampanga, Philippines',short:'Pampanga',fabric:'#f5e6a8',trim:'#d6bd5c',flag:PHFLAG,parol:1,
+  art:`<rect width="48" height="28" fill="#1f2a4d"/>${parolArt(24,13,10)}${lbl('SAN FERNANDO · PAMPANGA',2,27,'#fcd116')}`,
+  desk:(X,Y)=>`<g transform="translate(${X},${Y-8}) scale(.42)">${parolArt(0,0,10)}</g>`},
+ goldengate:{place:'California, USA',short:'California',fabric:'#f2d2bd',trim:'#d79a72',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#f7c9a0"/><rect y="19" width="48" height="9" fill="#3c6f9e"/><rect x="10" y="3" width="2.2" height="17" fill="#c0362c"/><rect x="34" y="3" width="2.2" height="17" fill="#c0362c"/><rect y="15" width="48" height="1.6" fill="#c0362c"/><path d="M0 6 Q11 16 11 4 Q23 18 35 4 Q35 16 48 6" stroke="#c0362c" stroke-width=".8" fill="none"/>${lbl('SAN FRANCISCO',2,26.6)}`,
+  desk:(X,Y)=>`<rect x="${X-3.5}" y="${Y-8}" width="7" height="8" rx="1.2" fill="#c0362c"/><path d="M${X+3.5} ${Y-6.5} q3 1 0 4" stroke="#c0362c" stroke-width="1.2" fill="none"/>`},
+ palms:{place:'California, USA',short:'California',fabric:'#f6d9cc',trim:'#e09e86',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#f8a65a"/><rect width="48" height="10" fill="#f47a7a"/><circle cx="24" cy="19" r="6" fill="#ffd36b"/><rect y="21" width="48" height="7" fill="#7a3d5a"/>${[[9,2],[37,4]].map(([x,t])=>`<path d="M${x} 24 Q${x+1} 14 ${x+2} ${t+4}" stroke="#2b1d2a" stroke-width="1.2" fill="none"/><path d="M${x+2} ${t+4} l-6 2 M${x+2} ${t+4} l6 2 M${x+2} ${t+4} l-4 -3 M${x+2} ${t+4} l4 -3" stroke="#2b1d2a" stroke-width="1.4"/>`).join('')}${lbl('VENICE BEACH',2,27)}`,
+  desk:(X,Y)=>`<rect x="${X-3}" y="${Y-4}" width="6" height="4" fill="#c98b62"/><path d="M${X} ${Y-4} L${X} ${Y-12}" stroke="#7a5230" stroke-width="1.2"/><path d="M${X} ${Y-12} l-5 2 M${X} ${Y-12} l5 2 M${X} ${Y-12} l-3 -3 M${X} ${Y-12} l3 -3" stroke="#3f9a6e" stroke-width="1.6"/>`},
+ surf:{place:'California, USA',short:'California',fabric:'#c9e4ee',trim:'#7fb6cb',flag:CAFLAG,surf:1,
+  art:`<rect width="48" height="28" fill="#dff3fb"/><path d="M0 28 L0 16 Q10 6 22 10 Q30 13 26 18 Q22 14 18 18 Q26 22 48 16 L48 28Z" fill="#2f86b8"/><path d="M22 10 Q30 13 26 18" stroke="#fff" stroke-width="1.4" fill="none"/>${lbl('HUNTINGTON BEACH',2,26.6)}`,
+  desk:(X,Y)=>`<rect x="${X-3}" y="${Y-6}" width="6" height="6" rx="1" fill="#2f86b8"/><circle cx="${X}" cy="${Y-3}" r="1.5" fill="#fff"/>`},
+ poppy:{place:'California, USA',short:'California',fabric:'#f4dbbb',trim:'#dca86e',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#cfe8f5"/><path d="M0 14 Q12 8 24 13 Q36 7 48 12 L48 28 L0 28Z" fill="#8fbf5e"/>${Array.from({length:22},(_,i)=>`<circle cx="${(i*7.3)%46+1}" cy="${15+(i*5.1)%9}" r="1.2" fill="#f28c1c"/>`).join('')}${lbl('POPPY FIELDS',2,27,'#5a3a10')}`,
+  desk:(X,Y)=>`<path d="M${X-3} ${Y-4} L${X+3} ${Y-4} L${X+2} ${Y} L${X-2} ${Y}Z" fill="#c98b62"/>${[-3,0,3].map(d=>`<path d="M${X+d*.4} ${Y-4} L${X+d} ${Y-10}" stroke="#4f9a5a" stroke-width=".8"/><circle cx="${X+d}" cy="${Y-11}" r="2" fill="#f28c1c"/>`).join('')}`},
+ pier:{place:'California, USA',short:'California',fabric:'#ead6e8',trim:'#bd93b8',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#f9c58a"/><rect width="48" height="9" fill="#e98aa0"/><rect y="20" width="48" height="8" fill="#4a7fb0"/><rect x="4" y="18" width="40" height="2" fill="#5a3a2a"/><circle cx="30" cy="11" r="7" fill="none" stroke="#fff" stroke-width="1"/>${[0,1,2,3,4,5].map(i=>`<line x1="30" y1="11" x2="${30+7*Math.cos(i*1.047)}" y2="${11+7*Math.sin(i*1.047)}" stroke="#fff" stroke-width=".5"/>`).join('')}<polygon points="30,11 27,18 33,18" fill="none" stroke="#fff" stroke-width=".8"/>${lbl('SANTA MONICA',2,26.6)}`,
+  desk:(X,Y)=>`<rect x="${X-4}" y="${Y-6}" width="8" height="6" fill="#2b2f3a"/><rect x="${X-4}" y="${Y-8}" width="8" height="2" fill="#fff" transform="rotate(-12 ${X-4} ${Y-6})"/>`},
+ redwood:{place:'California, USA',short:'California',fabric:'#dccabb',trim:'#ab8a70',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#d8ead2"/>${[5,14,24,34,43].map((x,i)=>`<rect x="${x-1.6}" y="${6+i%2*3}" width="3.2" height="${22-i%2*3}" fill="#8b3e22"/><polygon points="${x},${-2+i%2*3} ${x-5},${12+i%2*3} ${x+5},${12+i%2*3}" fill="#2f6b3c"/>`).join('')}${lbl('REDWOODS',2,26.6)}`,
+  desk:(X,Y)=>`<ellipse cx="${X}" cy="${Y-4}" rx="3" ry="4.5" fill="#8b5a2b"/><path d="M${X-3} ${Y-5} h6 M${X-3} ${Y-3} h6" stroke="#5a3a1a" stroke-width=".6"/>`},
+ halfdome:{place:'California, USA',short:'California',fabric:'#d6dee7',trim:'#94a6ba',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#bde0f5"/><path d="M14 22 L14 12 Q16 3 28 4 L28 22Z" fill="#9aa3ad"/><path d="M0 22 L10 15 L18 22 Z M32 22 L40 14 L48 20 L48 22Z" fill="#7f8a96"/>${[4,9,36,42,46].map(x=>`<polygon points="${x},15 ${x-2.5},23 ${x+2.5},23" fill="#2f6b3c"/>`).join('')}<rect y="22" width="48" height="6" fill="#4f8a4a"/>${lbl('YOSEMITE',2,27)}`,
+  desk:(X,Y)=>`<rect x="${X-3}" y="${Y-8}" width="6" height="8" rx="1" fill="#3f9a6e"/><rect x="${X-3}" y="${Y-8}" width="6" height="2" fill="#2b6b4c"/>`},
+ cablecar:{place:'California, USA',short:'California',fabric:'#ecd2d2',trim:'#c48888',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#cfe6f5"/><polygon points="0,28 48,14 48,28" fill="#9aa3ad"/><polygon points="0,26 48,12 48,13.5 0,27.5" fill="#6b7280"/><g transform="rotate(-16 24 16)"><rect x="15" y="9" width="18" height="9" rx="1.5" fill="#c0362c"/><rect x="15" y="13" width="18" height="2" fill="#f6e7c8"/>${[0,1,2,3].map(i=>`<rect x="${17+i*4}" y="10" width="2.6" height="2.4" fill="#cfe6f5"/>`).join('')}</g>${lbl('CABLE CARS',2,6,'#2b2f3a')}`,
+  desk:(X,Y)=>`<rect x="${X-4.5}" y="${Y-6}" width="9" height="5" rx="1" fill="#c0362c"/><rect x="${X-4.5}" y="${Y-3.6}" width="9" height="1.2" fill="#f6e7c8"/><circle cx="${X-2.5}" cy="${Y-.6}" r=".9" fill="#2b2f3a"/><circle cx="${X+2.5}" cy="${Y-.6}" r=".9" fill="#2b2f3a"/>`},
+ citrus:{place:'California, USA',short:'California',fabric:'#f4e3b8',trim:'#d8b45e',flag:CAFLAG,
+  art:`<rect width="48" height="28" fill="#2b5aa0"/><circle cx="24" cy="12" r="8" fill="#f39c12"/><path d="M24 4 q3 -3 6 -1" stroke="#3f9a6e" stroke-width="1.6" fill="none"/><ellipse cx="29" cy="4.4" rx="3" ry="1.4" fill="#3f9a6e"/>${lbl('CALIFORNIA ORANGES',2,26.6,'#ffd36b')}`,
+  desk:(X,Y)=>`<ellipse cx="${X}" cy="${Y-1.5}" rx="5.5" ry="2" fill="#e9e2d8"/>${[[-2.4,-3.6],[2.4,-3.6],[0,-6]].map(([dx,dy])=>`<circle cx="${X+dx}" cy="${Y+dy}" r="2.4" fill="#f39c12"/>`).join('')}`},
+};
+function parolArt(cx,cy,r){
+  const star=(R,c)=>`<polygon points="${Array.from({length:10},(_,i)=>{const a=-Math.PI/2+i*Math.PI/5,rr=i%2?R*.45:R;return `${(cx+Math.cos(a)*rr).toFixed(2)},${(cy+Math.sin(a)*rr).toFixed(2)}`}).join(' ')}" fill="${c}"/>`;
+  return `<circle cx="${cx}" cy="${cy}" r="${r*1.05}" fill="none" stroke="#e74c3c" stroke-width="${r*.12}"/>`+star(r,'#f1c40f')+star(r*.7,'#e74c3c')+star(r*.45,'#2ecc71')+`<circle cx="${cx}" cy="${cy}" r="${r*.16}" fill="#fff"/>`;
+}
+const ORIGIN={jex:'bataan',raff:'bataan',angelica:'cavite',hana:'cavite',angelle:'quezon',ira:'pampanga',
+  jose:'goldengate',paul:'palms',lizzie:'surf',kim:'poppy',kristene:'pier',randy:'redwood',patricia:'halfdome',yolanda:'cablecar',liz:'citrus'};
+// wall planes: art space u to the right, w downward
+const onSide=(x,yStart,zTop)=>{const[ox,oy]=P(x,yStart,zTop);return `matrix(.866,-.5,0,1,${ox.toFixed(1)},${oy.toFixed(1)})`};
+const onBack=(y,x0,zTop)=>{const[ox,oy]=P(x0,y,zTop);return `matrix(.866,.5,0,1,${ox.toFixed(1)},${oy.toFixed(1)})`};
 
 /* ---------- static scene ---------- */
 const scene=document.getElementById('scene');
@@ -296,7 +356,7 @@ function buildScene(){
   // CRM board on the back wall
   s+=poly([[300,0,22],[520,0,22],[520,0,62],[300,0,62]],'g-screen');
   for(let i=0;i<6;i++){const x=312+i*34,h=8+((i*37)%28);s+=poly([[x,0,26],[x+20,0,26],[x+20,0,26+h],[x,0,26+h]],'',`fill="${i%2?'#7fd1a0':'#efb1d6'}" opacity=".9"`)}
-  s+=poly([[260,140],[690,140],[690,560],[260,560]],'g-carpet');
+  s+=poly([[252,214],[696,214],[696,660],[252,660]],'g-carpet');
   s+=poly([[14,14],[236,14],[236,200],[14,200]],'g-meet');
   s+=poly([[14,460],[236,460],[236,690],[14,690]],'g-break');
   // meeting room glass
@@ -313,12 +373,27 @@ function buildScene(){
   add(box(70,82,124,46,22,'g-table','g-table2','g-table2'),132,128);
   add(box(150,640,70,30,16,'g-sofa','g-sofa2','g-sofa2')+box(150,662,70,8,30,'g-sofa2','g-sofa2','g-sofa2'),185,668);
   add(box(626,30,44,40,32,'g-wall','g-wall2','g-wall2')+poly([[632,36,32],[664,36,32],[664,62,32],[632,62,32]],'g-screen'),648,70);
-  // desks
-  DESKS.forEach((dk,i)=>{const {x0,y0,w,d}=dk;let t=box(x0,y0,w,d,22,'g-desk','g-desk3','g-desk2');
-    t+=box(x0+6,y0+4,22,4,48,'g-screen','g-screen','g-screen',22);
-    t+=poly([[x0+34,y0+10,22],[x0+52,y0+10,22],[x0+52,y0+20,22],[x0+34,y0+20,22]],'',`fill="#f4f6fa" opacity=".9"`);
+  // cubicles
+  DESKS.forEach((dk,i)=>{const {cx,x0,y0,w,d}=dk,m=MOTIFS[ORIGIN[TEAM[i].id]],yb=y0-36,yf=y0+28,H=46,SH=40;
+    const fab=`fill="${m.fabric}"`,trim=`fill="${m.trim}"`;
+    // back wall (front face, top edge) and left wall (inner face, top edge)
+    let b=poly([[cx,yb+4,0],[cx+86,yb+4,0],[cx+86,yb+4,H],[cx,yb+4,H]],'',fab)+poly([[cx,yb,H],[cx+86,yb,H],[cx+86,yb+4,H],[cx,yb+4,H]],'',trim);
+    b+=poly([[cx+4,yb,0],[cx+4,yf,0],[cx+4,yf,SH],[cx+4,yb,H]],'',fab+' opacity=".92"')+poly([[cx,yf,0],[cx+4,yf,0],[cx+4,yf,SH],[cx,yf,SH]],'',trim)+poly([[cx,yb,H],[cx+4,yb,H],[cx+4,yf,SH],[cx,yf,SH]],'',trim);
+    if(dk.c===4)b+=poly([[cx+86,yb,0],[cx+86,yf,0],[cx+86,yf,SH],[cx+86,yb,H]],'',fab)+poly([[cx+86,yb,H],[cx+90,yb,H],[cx+90,yf,SH],[cx+86,yf,SH]],'',trim);
+    b+=`<g transform="${onBack(yb+4.5,cx+42,43)}"><g transform="scale(.86)"><rect x="-1.2" y="-1.2" width="50.4" height="30.4" fill="#fff"/>${m.art}</g></g>`;
+    b+=`<g transform="${onSide(cx+4.5,yb+31,41)}"><rect x="-.8" y="-.8" width="23.6" height="15.6" fill="#fff"/>${m.flag}</g>`;
+    if(m.kiping){const cols=['#e74c8b','#f1c40f','#27ae60','#e67e22','#9b59b6','#e74c3c'];for(let k=0;k<12;k++){const[X,Y]=P(cx+3+k*7,yb+4,H);b+=`<ellipse cx="${X}" cy="${Y+4}" rx="2.6" ry="4.6" fill="${cols[k%6]}"/>`}
+      for(let k=0;k<8;k++){const[X,Y]=P(cx+4,yb+4+k*8,H-k*.75);b+=`<ellipse cx="${X}" cy="${Y+4}" rx="2.4" ry="4.2" fill="${cols[(k+3)%6]}"/>`}}
+    if(m.surf){b+=`<g transform="${onSide(cx+5,yf-2,52)}"><ellipse cx="4" cy="26" rx="4" ry="26" fill="#f39c12"/><rect x="3.4" y="2" width="1.2" height="48" fill="#fff"/></g>`}
+    add(b,cx+40,yb);
+    let t=box(x0,y0,w,d,22,'g-desk','g-desk3','g-desk2');
+    t+=box(x0+36,y0+3,14,4,44,'g-screen','g-screen','g-screen',22);
+    t+=poly([[x0+16,y0+12,22],[x0+32,y0+12,22],[x0+32,y0+22,22],[x0+16,y0+22,22]],'',`fill="#f4f6fa" opacity=".9"`);
+    const[DX,DY]=P(x0+7,y0+12,22);t+=m.desk(DX,DY);
     const[LX,LY]=P(x0+w/2,y0+d,12);t+=`<circle class="led" id="led${i}" cx="${LX}" cy="${LY}" r="3.2" fill="#c3c8d2"/>`;
-    dk.g=add(t,x0+w/2,y0+d);dk.g.depth=P(x0+w/2,y0+d*.6)[1];});
+    dk.g=add(t,x0+w/2,y0+d);dk.g.depth=P(x0+w/2,y0+d*.6)[1];
+    if(m.parol){const[X,Y]=P(cx+20,yb+10,H+38);const pg=document.createElementNS(NS,'g');pg.setAttribute('class','parol');pg.innerHTML=`<line x1="${X}" y1="${Y-60}" x2="${X}" y2="${Y-13}" stroke="#8a8f98" stroke-width="1"/><g transform="translate(${X},${Y})">${parolArt(0,0,13)}</g>`;document.getElementById('fx').appendChild(pg)}
+  });
 }
 
 /* ---------- dogs ---------- */
@@ -327,7 +402,7 @@ const toPct=(X,Y)=>[(X-VB.x)/VB.w*100,(Y-VB.y)/VB.h*100];
 const SCALE=1.18,dogs={};
 function makeDog(p,i){
   const g=document.createElementNS(NS,'g');g.setAttribute('class','dog');
-  const tag=document.createElement('div');tag.className='tag s-desk';tag.innerHTML=`<i></i>${p.name}`;tagsL.appendChild(tag);
+  const tag=document.createElement('div');tag.className='tag s-desk';tag.innerHTML=`<i></i>${p.name}<small>${MOTIFS[ORIGIN[p.id]].short}</small>`;tagsL.appendChild(tag);
   const bub=document.createElement('div');bub.className='bub';bubL.appendChild(bub);
   const desk={k:'desk',i,spot:DESKS[i].spot};
   const d={...p,g,tag,bub,desk,place:desk,x:desk.spot[0],y:desk.spot[1],path:[],queue:[],phase:Math.random()*6,status:'desk',what:'At desk',updates:0,bubUntil:0,hlUntil:0,nextAt:0,locked:false,led:i};
@@ -428,8 +503,8 @@ const roster=document.getElementById('roster');
 function buildRoster(){
   roster.innerHTML='';
   TEAM.forEach(p=>{const row=document.createElement('div');row.className='st';row.tabIndex=0;row.dataset.id=p.id;
-    row.innerHTML=`<div class="av">${avatarSVG(p)}<span class="dot"></span></div><div><b>${p.name}</b>${p.nick?` <small style="display:inline">(${p.nick})</small>`:''}<small>${BREEDS[p.breed].n}</small><small class="what"></small></div><div class="right"><span class="chip"></span><small class="cnt"></small></div>`;
-    const find=()=>{const d=dogs[p.id];d.hlUntil=performance.now()+2600;say(d,`Hi, I'm <b>${d.name}</b>. ${d.what}.`,'',2600,true)};
+    row.innerHTML=`<div class="av">${avatarSVG(p)}<span class="dot"></span></div><div><b>${p.name}</b>${p.nick?` <small style="display:inline">(${p.nick})</small>`:''}<small>${BREEDS[p.breed].n} · ${MOTIFS[ORIGIN[p.id]].place}</small><small class="what"></small></div><div class="right"><span class="chip"></span><small class="cnt"></small></div>`;
+    const find=()=>{const d=dogs[p.id];d.hlUntil=performance.now()+2600;say(d,`Hi, I'm <b>${d.name}</b> from ${MOTIFS[ORIGIN[d.id]].place}. ${d.what}.`,'',2600,true)};
     row.addEventListener('click',find);row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();find()}});
     roster.appendChild(row)});
   updateRoster();
@@ -497,7 +572,7 @@ const pauseB=document.getElementById('pause');
 pauseB.onclick=()=>{paused=!paused;pauseB.setAttribute('aria-pressed',paused);pauseB.textContent=paused?'Play':'Pause'};
 function seg(id,fn){const el=document.getElementById(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset.v)})}
 seg('spd',v=>speed=+v);seg('scn',v=>{scenario=v;restart()});
-[[P(125,14,58),'Meeting room'],[P(125,690),'Break room'],[P(410,0,74),'CRM · live board'],[P(690,70,40),'Printer'],[P(690,350),'Desks']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
+[[P(125,14,58),'Meeting room'],[P(125,690),'Break room'],[P(410,0,74),'CRM · live board'],[P(690,70,40),'Printer'],[P(696,440),'Cubicles']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
 requestAnimationFrame(t=>{last=t;requestAnimationFrame(frame)});
 })();
 </script>
