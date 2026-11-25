@@ -8,7 +8,7 @@
 :root{
   --bg:#f4f6f9;--ink:#191c22;--muted:#5b6170;--card:#ffffff;--line:#e3e7ee;--stage:#ffffff;
   --mauve:#ac6b75;--plum:#793c55;--pink:#efb1d6;--ok:#3f9a6e;--bad:#c84a61;--blue:#4f86c6;--purple:#8a6bbf;--teal:#3c9aa5;
-  --floor:#eceff4;--floor-line:#e0e4eb;--carpet:#e4e9f2;--meet:#efe6ee;--break:#f3ebdf;--wall:#fbf8f3;--wall-side:#e9e2d8;
+  --floor:#eceff4;--floor-line:#e0e4eb;--carpet:#e4e9f2;--meet:#f6dce8;--break:#f3e6d3;--nap:#dcebf5;--door:#8a5a3c;--wall:#fbf8f3;--wall-side:#e9e2d8;
   --desk:#c9a27c;--desk-side:#b08661;--desk-front:#9d7552;--screen:#2a2f3a;--table:#8f6a4c;--table-side:#77563c;
   --glass:#9fb7d3;--sofa:#7f93b5;--sofa-side:#6a7ea0;--leaf:#9cc68a;--leaf-2:#86b574;--pot:#c98b62;
   --chip-bg:#eef0f4;
@@ -35,14 +35,14 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 .stat b{font:700 16px/1 'Plus Jakarta Sans',Inter,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums}
 .stat i{width:9px;height:9px;border-radius:50%;display:block}
 .stage{position:relative;background:var(--stage);border:1px solid var(--line);border-radius:20px;padding:12px 12px 14px;box-shadow:0 20px 50px -30px rgba(25,28,34,.35)}
-.screen{position:relative;width:100%;max-width:100%;aspect-ratio:1280/830;overflow:hidden;border-radius:12px}
+.screen{position:relative;width:100%;max-width:100%;aspect-ratio:1520/900;overflow:hidden;border-radius:12px}
 .screen svg{position:absolute;inset:0;width:100%;height:100%}
 .layer{position:absolute;inset:0;pointer-events:none}
 .clock{position:absolute;right:12px;top:10px;font:800 clamp(16px,2.2vw,26px)/1 'Plus Jakarta Sans',Inter,sans-serif;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-variant-numeric:tabular-nums;box-shadow:0 6px 16px -10px rgba(20,24,32,.4)}
 .clock small{display:block;font:600 10.5px/1.2 Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
 /* scene materials */
 .g-floor{fill:var(--floor)}.g-fl{stroke:var(--floor-line);stroke-width:1;fill:none}
-.g-carpet{fill:var(--carpet)}.g-meet{fill:var(--meet)}.g-break{fill:var(--break)}
+.g-carpet{fill:var(--carpet)}.g-meet{fill:var(--meet)}.g-break{fill:var(--break)}.g-nap{fill:var(--nap)}.g-door{fill:var(--door)}
 .g-wall{fill:var(--wall)}.g-wall2{fill:var(--wall-side)}
 .g-desk{fill:var(--desk)}.g-desk2{fill:var(--desk-side)}.g-desk3{fill:var(--desk-front)}.g-screen{fill:var(--screen)}
 .g-table{fill:var(--table)}.g-table2{fill:var(--table-side)}
@@ -116,14 +116,14 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 <div class="band"><div class="wrap">
   <span class="mock">Mockup · simulated CRM activity</span>
   <h1>The care floor</h1>
-  <p class="lede">The Together Homecare office team, each as their own dog. Each cubicle is decorated for where its owner is from: Bataan, Cavite, Quezon Province and Pampanga in the Philippines, and a different California landmark for everyone in California. When someone updates the CRM, their dog gets to work in their cubicle and the update shows up in a bubble and in the activity log. Between updates the team heads to meetings, the printer and the break room. The people and breeds are real; the updates in this mockup are made up so you can see how it would look.</p>
+  <p class="lede">The Together Homecare office team, each as their own dog. Each cubicle is decorated for where its owner is from: Bataan, Cavite, Quezon Province and Pampanga in the Philippines, and a different California landmark for everyone in California. When someone updates the CRM, their dog gets to work in their cubicle and the update shows up in a bubble and in the activity log. Between updates the team grabs food at the canteen, eats in the cafeteria, meets on the lounge sofa, rests in the nap corner and visits the printer. The people and breeds are real; the updates in this mockup are made up so you can see how it would look.</p>
 
   <div class="grid">
     <div>
       <div class="stats" id="stats"></div>
       <div class="stage">
         <div class="screen">
-          <svg id="scene" viewBox="-640 -120 1280 830" role="img" aria-label="Isometric office with fifteen desks, a meeting room, a break room and a printer, with a dog in formal attire for each team member"></svg>
+          <svg id="scene" viewBox="-760 -140 1520 900" role="img" aria-label="Isometric office with fifteen desks, a meeting room, a break room and a printer, with a dog in formal attire for each team member"></svg>
           <div class="layer" id="tags"></div>
           <div class="layer" id="bubbles"></div>
           <div class="clock" aria-hidden="true"><small>Sample workday</small><span id="clock">8:00 AM</span></div>
@@ -165,7 +165,7 @@ h1{font:800 clamp(32px,4.4vw,46px)/1.05 'Plus Jakarta Sans',Inter,sans-serif;mar
 (function(){
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const NS='http://www.w3.org/2000/svg';
-const VB={x:-640,y:-120,w:1280,h:830};
+const VB={x:-760,y:-140,w:1520,h:900};
 const P=(x,y,z=0)=>[(x-y)*0.866,(x+y)*0.5-z];
 const pts=a=>a.map(p=>P(...p).map(v=>v.toFixed(1)).join(',')).join(' ');
 const poly=(a,c,ex='')=>`<polygon points="${pts(a)}" class="${c}" ${ex}/>`;
@@ -270,21 +270,25 @@ function dogSVG(bid,outfit){
 function avatarSVG(p){const d=dogSVG(p.breed,p.outfit);return `<svg viewBox="-24 ${d.top-2} 48 48" aria-hidden="true">${d.svg}</svg>`}
 
 /* ---------- places ---------- */
-const HALL=245;               // corridor between rooms and desks (x)
-const ROWS=[262,412,562], AISLE=ROWS.map(y=>y+50), TOPWAY=196;
-// cubicle c in row r: walls on the back and left, desk in front, opening on the right
-const DESKS=[];ROWS.forEach((y0,r)=>{for(let c=0;c<5;c++){const cx=262+c*86;DESKS.push({cx,x0:cx+6,y0,w:52,d:28,r,c,spot:[cx+28,y0-12],door:cx+71,help:[cx+71,y0-6]})}});
-const MEET=[[78,168],[118,172],[158,172],[198,166],[208,112],[66,112]];
-const BREAK=[[96,520],[146,540],[100,600],[160,612],[120,650],[196,560]];
-const PRINTER=[650,104];
+// Floor: a square with the bottom corner cut out (like the post office). Cubicles sit in a spaced 4 x 4 grid;
+// the cafeteria and canteen run along the lower-left edge, the lounge and nap corner along the right.
+const HALL=560, CAFE_WAY=574, CELL=74, PITCH=136, G0=40, S=860, N=590; // S: floor size, N: where the bottom corner is cut
+const DESKS=[];for(let r=0;r<4;r++)for(let c=0;c<4;c++){if(r===3&&c===3)continue;const x0=G0+c*PITCH,y0=G0+r*PITCH;
+  DESKS.push({cx:x0,x0,y0,r,c,spot:[x0+30,y0+22],door:x0+60,aisle:y0+CELL+18,help:[x0+60,y0+32]})}
+const PRINT_CELL={x0:G0+3*PITCH,y0:G0+3*PITCH};const PRINTER=[PRINT_CELL.x0+38,PRINT_CELL.y0+50];
+const TABLES=[[170,672],[316,716],[460,676],[220,800],[390,812],[530,770]];
+const CAFE=TABLES.flatMap(([x,y])=>[[x-24,y-16],[x+22,y+8]]);
+const LOUNGE=[[796,124],[796,176],[796,228],[796,280],[706,150],[706,236]];
+const NAP=[[676,436],[776,466],[716,526]];
 const exitOf=pl=>{
-  if(pl.k==='desk'){const dk=DESKS[pl.i],a=AISLE[dk.r];return [[dk.door,dk.spot[1]],[dk.door,a],[HALL,a]]}
-  if(pl.k==='help'){const dk=DESKS[pl.i],a=AISLE[dk.r];return [[dk.door,a],[HALL,a]]}
-  if(pl.k==='meet')return [[pl.spot[0],190],[HALL,190]];
-  if(pl.k==='break')return [[HALL,pl.spot[1]]];
-  if(pl.k==='printer')return [[PRINTER[0],TOPWAY],[HALL,TOPWAY]];
+  if(pl.k==='desk'){const dk=DESKS[pl.i];return [[dk.door,dk.spot[1]],[dk.door,dk.aisle],[HALL,dk.aisle]]}
+  if(pl.k==='help'){const dk=DESKS[pl.i];return [[dk.door,dk.aisle],[HALL,dk.aisle]]}
+  if(pl.k==='break')return [[pl.spot[0],CAFE_WAY],[HALL,CAFE_WAY]];
+  if(pl.k==='printer')return [[PRINTER[0],PRINT_CELL.y0+CELL+18],[HALL,PRINT_CELL.y0+CELL+18]];
+  if(pl.k==='meet'||pl.k==='nap')return [[HALL,pl.spot[1]]];
   return [];
 };
+const MEET=LOUNGE, BREAK=CAFE;
 
 /* ---------- where people are from: cubicle themes ---------- */
 // Posters are drawn flat (48 x 28 for the side wall, 22 x 14 for the flag) and mapped onto the wall planes.
@@ -345,64 +349,86 @@ const onBack=(y,x0,zTop)=>{const[ox,oy]=P(x0,y,zTop);return `matrix(.866,.5,0,1,
 /* ---------- static scene ---------- */
 const scene=document.getElementById('scene');
 function box(x0,y0,w,d,h,top,l,r,z0=0){const x1=x0+w,y1=y0+d;return poly([[x0,y1,z0],[x1,y1,z0],[x1,y1,h],[x0,y1,h]],l)+poly([[x1,y0,z0],[x1,y1,z0],[x1,y1,h],[x1,y0,h]],r)+poly([[x0,y0,h],[x1,y0,h],[x1,y1,h],[x0,y1,h]],top)}
+const boxF=(x0,y0,w,d,h,top,l,r,z0=0)=>{const x1=x0+w,y1=y0+d,f=c=>`fill="${c}"`;return poly([[x0,y1,z0],[x1,y1,z0],[x1,y1,h],[x0,y1,h]],'',f(l))+poly([[x1,y0,z0],[x1,y1,z0],[x1,y1,h],[x1,y0,h]],'',f(r))+poly([[x0,y0,h],[x1,y0,h],[x1,y1,h],[x0,y1,h]],'',f(top))};
 function plant(x,y,k=1){const[X,Y]=P(x,y);return `<ellipse cx="${X}" cy="${Y}" rx="${12*k}" ry="${5*k}" class="g-shadow"/><path d="M${X-7*k} ${Y-12*k} L${X+7*k} ${Y-12*k} L${X+5*k} ${Y} L${X-5*k} ${Y}Z" class="g-pot"/><circle cx="${X}" cy="${Y-24*k}" r="${12*k}" class="g-leaf2"/><circle cx="${X-4*k}" cy="${Y-29*k}" r="${8*k}" class="g-leaf"/>`}
 const sortables=[]; // static items that need depth sorting against dogs
 function buildScene(){
-  let s='';
-  s+=poly([[0,0],[700,0],[700,700],[0,700]],'g-floor');
-  for(let i=50;i<700;i+=50){s+=`<polyline class="g-fl" points="${pts([[i,0],[i,700]])}"/><polyline class="g-fl" points="${pts([[0,i],[700,i]])}"/>`}
-  // back walls
-  s+=poly([[0,0,0],[700,0,0],[700,0,70],[0,0,70]],'g-wall2')+poly([[0,0,0],[0,700,0],[0,700,70],[0,0,70]],'g-wall');
-  // CRM board on the back wall
-  s+=poly([[300,0,22],[520,0,22],[520,0,62],[300,0,62]],'g-screen');
-  for(let i=0;i<6;i++){const x=312+i*34,h=8+((i*37)%28);s+=poly([[x,0,26],[x+20,0,26],[x+20,0,26+h],[x,0,26+h]],'',`fill="${i%2?'#7fd1a0':'#efb1d6'}" opacity=".9"`)}
-  s+=poly([[252,214],[696,214],[696,660],[252,660]],'g-carpet');
-  s+=poly([[14,14],[236,14],[236,200],[14,200]],'g-meet');
-  s+=poly([[14,460],[236,460],[236,690],[14,690]],'g-break');
-  // meeting room glass
-  s+=`<polyline class="g-glass" points="${pts([[236,14,0],[236,200,0],[14,200,0]])}"/><polyline class="g-glass" points="${pts([[236,14,48],[236,200,48],[14,200,48]])}"/>`;
-  [[236,60],[236,110],[236,160],[60,200],[110,200],[160,200],[236,200]].forEach(([x,y])=>s+=`<polyline class="g-glass" points="${pts([[x,y,0],[x,y,48]])}"/>`);
-  // break room: counter + coffee machine against left wall
-  s+=box(18,480,34,150,34,'g-desk','g-desk3','g-desk2');
-  s+=box(22,500,22,22,56,'g-screen','g-screen','g-screen',34);
-  s+=plant(30,670,1.1)+plant(220,30,1)+plant(690,640,1.1)+plant(250,450,.9);
+  let s='';const FLOOR=[[0,0],[S,0],[S,N],[N,N],[N,S],[0,S]];
+  // slab edges, then floor
+  s+=poly([[0,S,0],[N,S,0],[N,S,-10],[0,S,-10]],'g-wall2')+poly([[N,N,0],[N,S,0],[N,S,-10],[N,N,-10]],'g-wall')
+    +poly([[N,N,0],[S,N,0],[S,N,-10],[N,N,-10]],'g-wall2')+poly([[S,0,0],[S,N,0],[S,N,-10],[S,0,-10]],'g-wall');
+  s+=poly(FLOOR,'g-floor');
+  for(let i=40;i<S;i+=40){s+=`<polyline class="g-fl" points="${pts([[i,0],[i,i<=N?S:N]])}"/><polyline class="g-fl" points="${pts([[0,i],[i<=N?S:N,i]])}"/>`}
+  // cafeteria (wood floor) with canteen counter, lounge rug, nap corner rug
+  s+=poly([[0,596],[N,596],[N,S],[0,S]],'g-break');
+  for(let y=606;y<S;y+=12)s+=`<polyline points="${pts([[0,y],[N,y]])}" stroke="rgba(160,120,70,.18)" stroke-width="1" fill="none"/>`;
+  s+=poly([[630,80],[850,80],[850,330],[630,330]],'g-meet');
+  s+=poly([[630,400],[850,400],[850,578],[630,578]],'g-nap');
+  // back walls (low, like the post office) + door + CRM board
+  s+=poly([[0,0,0],[S,0,0],[S,0,56],[0,0,56]],'g-wall2')+poly([[0,0,0],[0,S,0],[0,S,56],[0,0,56]],'g-wall');
+  s+=poly([[0,70,0],[0,110,0],[0,110,50],[0,70,50]],'g-screen')+poly([[0,74,0],[0,106,0],[0,106,46],[0,74,46]],'g-door');
+  s+=poly([[330,0,14],[540,0,14],[540,0,50],[330,0,50]],'g-screen');
+  for(let i=0;i<6;i++){const x=342+i*32,h=8+((i*37)%24);s+=poly([[x,0,18],[x+20,0,18],[x+20,0,18+h],[x,0,18+h]],'',`fill="${i%2?'#7fd1a0':'#efb1d6'}" opacity=".9"`)}
+  // canteen: counter, coffee machine, fridge, vending machine, water cooler (against the left wall)
+  s+=boxF(6,640,34,180,34,'#c46a7a','#a85566','#b45f70');
+  s+=boxF(6,640,34,180,36,'#f4eee8','#e3d9cf','#ece3d9',34);
+  s+=boxF(10,656,20,22,52,'#2a2f3a','#2a2f3a','#353b48',36);
+  [[14,704,'#f39c12'],[14,734,'#e74c3c'],[14,764,'#f4d03f'],[14,794,'#27ae60']].forEach(([x,y,c])=>{const[X,Y]=P(x+8,y+8,36);s+=`<ellipse cx="${X}" cy="${Y}" rx="9" ry="4.5" fill="#fff"/><circle cx="${X}" cy="${Y-2}" r="4" fill="${c}"/>`});
+  s+=boxF(6,608,30,26,74,'#e9edf2','#cfd6df','#dde3ea');
+  s+=boxF(50,604,26,22,62,'#2a2f3a','#20242d','#2a2f3a')+poly([[76,608,14],[76,622,14],[76,622,56],[76,608,56]],'',`fill="#f6c25b" opacity=".85"`);
+  s+=boxF(92,608,12,12,26,'#f4f6fa','#dfe4ea','#e9edf2')+boxF(94,610,8,8,40,'#a8d2f0','#86b8dc','#98c6e8',26);
+  s+=plant(130,612,.9)+plant(570,846,.9)+plant(600,30,1)+plant(850,370,.9)+plant(612,586,.8)+plant(16,30,1)+plant(612,390,.8);
   scene.innerHTML=`<g id="static">${s}</g><g id="sorted"></g><g id="fx"></g>`;
   const sorted=document.getElementById('sorted');
   const add=(svg,x,y)=>{const g=document.createElementNS(NS,'g');g.innerHTML=svg;g.depth=P(x,y)[1];sorted.appendChild(g);sortables.push(g);return g};
-  // meeting table, sofa, printer
-  add(box(70,82,124,46,22,'g-table','g-table2','g-table2'),132,128);
-  add(box(150,640,70,30,16,'g-sofa','g-sofa2','g-sofa2')+box(150,662,70,8,30,'g-sofa2','g-sofa2','g-sofa2'),185,668);
-  add(box(626,30,44,40,32,'g-wall','g-wall2','g-wall2')+poly([[632,36,32],[664,36,32],[664,62,32],[632,62,32]],'g-screen'),648,70);
+  // cafeteria tables (round, white) with stools
+  TABLES.forEach(([x,y])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="18" ry="7" class="g-shadow"/><rect x="${X-1.5}" y="${Y-20}" width="3" height="20" fill="#3a3d45"/><ellipse cx="${X}" cy="${Y-21}" rx="22" ry="11" fill="#fff" stroke="#d5dae3"/><circle cx="${X-6}" cy="${Y-23}" r="2.6" fill="#ac6b75"/><circle cx="${X+7}" cy="${Y-21}" r="2.6" fill="#5f8fb3"/>`,x+6,y+6)});
+  // lounge: sofa against the right wall, coffee table, lamp, armchair
+  add(boxF(820,102,28,200,18,'#7f93b5','#6a7ea0','#71859f')+boxF(842,102,10,200,42,'#8ea1c0','#7084a6','#7f93b5')+boxF(820,94,32,10,30,'#8ea1c0','#7084a6','#7f93b5')+boxF(820,300,32,10,30,'#8ea1c0','#7084a6','#7f93b5')
+     +boxF(824,130,16,22,26,'#efb1d6','#d996bd','#e3a3c9',18)+boxF(824,250,16,22,26,'#f4d03f','#d9b62c','#e6c234',18),836,200);
+  add(boxF(732,160,44,90,14,'#c9a27c','#a77a52','#b08661')+boxF(744,184,16,12,3,'#5f8fb3','#4a7aa0','#5585ad',14),754,206);
+  add(boxF(644,96,38,38,16,'#b48a5a','#8e6a44','#a07a4e')+boxF(644,96,38,8,32,'#b48a5a','#8e6a44','#a07a4e'),663,118);
+  {const[X,Y]=P(850,340);add(`<rect x="${X-1}" y="${Y-62}" width="2" height="62" fill="#3a3d45"/><polygon points="${X-8},${Y-60} ${X+8},${Y-60} ${X+5},${Y-72} ${X-5},${Y-72}" fill="#f6e7c8"/><ellipse cx="${X}" cy="${Y}" rx="7" ry="3" fill="#3a3d45"/>`,850,340)}
+  // nap corner: bean bags
+  [[680,448,'#c46a7a'],[780,478,'#5f9e7d'],[720,538,'#e9b949']].forEach(([x,y,c])=>{const[X,Y]=P(x,y);add(`<ellipse cx="${X}" cy="${Y}" rx="22" ry="9" class="g-shadow"/><path d="M${X-20} ${Y-2} Q${X-22} ${Y-30} ${X} ${Y-32} Q${X+22} ${Y-30} ${X+20} ${Y-2} Q${X} ${Y+8} ${X-20} ${Y-2}Z" fill="${c}"/>`,x-4,y-4)});
+  // printer station in the last grid cell
+  {const {x0,y0}=PRINT_CELL;add(boxF(x0+8,y0+8,58,26,30,'#e9edf2','#cfd6df','#dde3ea')+boxF(x0+24,y0+12,30,18,14,'#3a3f4a','#2a2f3a','#323743',30)+poly([[x0+28,y0+14,44],[x0+50,y0+14,44],[x0+50,y0+26,44],[x0+28,y0+26,44]],'','fill="#fff"'),x0+40,y0+30);
+    s=plant(x0+68,y0+66,.8);add(s,x0+68,y0+66)}
   // cubicles
-  DESKS.forEach((dk,i)=>{const {cx,x0,y0,w,d}=dk,m=MOTIFS[ORIGIN[TEAM[i].id]],yb=y0-36,yf=y0+28,H=46,SH=40;
+  DESKS.forEach((dk,i)=>{const {x0,y0}=dk,x1=x0+CELL,y1=y0+CELL,m=MOTIFS[ORIGIN[TEAM[i].id]],H=46,LOW=24;
     const fab=`fill="${m.fabric}"`,trim=`fill="${m.trim}"`;
-    // back wall (front face, top edge) and left wall (inner face, top edge)
-    let b=poly([[cx,yb+4,0],[cx+86,yb+4,0],[cx+86,yb+4,H],[cx,yb+4,H]],'',fab)+poly([[cx,yb,H],[cx+86,yb,H],[cx+86,yb+4,H],[cx,yb+4,H]],'',trim);
-    b+=poly([[cx+4,yb,0],[cx+4,yf,0],[cx+4,yf,SH],[cx+4,yb,H]],'',fab+' opacity=".92"')+poly([[cx,yf,0],[cx+4,yf,0],[cx+4,yf,SH],[cx,yf,SH]],'',trim)+poly([[cx,yb,H],[cx+4,yb,H],[cx+4,yf,SH],[cx,yf,SH]],'',trim);
-    if(dk.c===4)b+=poly([[cx+86,yb,0],[cx+86,yf,0],[cx+86,yf,SH],[cx+86,yb,H]],'',fab)+poly([[cx+86,yb,H],[cx+90,yb,H],[cx+90,yf,SH],[cx+86,yf,SH]],'',trim);
-    b+=`<g transform="${onBack(yb+4.5,cx+42,43)}"><g transform="scale(.86)"><rect x="-1.2" y="-1.2" width="50.4" height="30.4" fill="#fff"/>${m.art}</g></g>`;
-    b+=`<g transform="${onSide(cx+4.5,yb+31,41)}"><rect x="-.8" y="-.8" width="23.6" height="15.6" fill="#fff"/>${m.flag}</g>`;
-    if(m.kiping){const cols=['#e74c8b','#f1c40f','#27ae60','#e67e22','#9b59b6','#e74c3c'];for(let k=0;k<12;k++){const[X,Y]=P(cx+3+k*7,yb+4,H);b+=`<ellipse cx="${X}" cy="${Y+4}" rx="2.6" ry="4.6" fill="${cols[k%6]}"/>`}
-      for(let k=0;k<8;k++){const[X,Y]=P(cx+4,yb+4+k*8,H-k*.75);b+=`<ellipse cx="${X}" cy="${Y+4}" rx="2.4" ry="4.2" fill="${cols[(k+3)%6]}"/>`}}
-    if(m.surf){b+=`<g transform="${onSide(cx+5,yf-2,52)}"><ellipse cx="4" cy="26" rx="4" ry="26" fill="#f39c12"/><rect x="3.4" y="2" width="1.2" height="48" fill="#fff"/></g>`}
-    add(b,cx+40,yb);
-    let t=box(x0,y0,w,d,22,'g-desk','g-desk3','g-desk2');
-    t+=box(x0+36,y0+3,14,4,44,'g-screen','g-screen','g-screen',22);
-    t+=poly([[x0+16,y0+12,22],[x0+32,y0+12,22],[x0+32,y0+22,22],[x0+16,y0+22,22]],'',`fill="#f4f6fa" opacity=".9"`);
-    const[DX,DY]=P(x0+7,y0+12,22);t+=m.desk(DX,DY);
-    const[LX,LY]=P(x0+w/2,y0+d,12);t+=`<circle class="led" id="led${i}" cx="${LX}" cy="${LY}" r="3.2" fill="#c3c8d2"/>`;
-    dk.g=add(t,x0+w/2,y0+d);dk.g.depth=P(x0+w/2,y0+d*.6)[1];
-    if(m.parol){const[X,Y]=P(cx+20,yb+10,H+38);const pg=document.createElementNS(NS,'g');pg.setAttribute('class','parol');pg.innerHTML=`<line x1="${X}" y1="${Y-60}" x2="${X}" y2="${Y-13}" stroke="#8a8f98" stroke-width="1"/><g transform="translate(${X},${Y})">${parolArt(0,0,13)}</g>`;document.getElementById('fx').appendChild(pg)}
+    // floor of the cubicle
+    let b=poly([[x0,y0,0],[x1,y0,0],[x1,y1,0],[x0,y1,0]],'',fab+' opacity=".45"');
+    // back wall + left wall (tall, trimmed)
+    b+=poly([[x0,y0+3,0],[x1,y0+3,0],[x1,y0+3,H],[x0,y0+3,H]],'',fab)+poly([[x0,y0,H],[x1,y0,H],[x1,y0+3,H],[x0,y0+3,H]],'',trim);
+    b+=poly([[x0+3,y0,0],[x0+3,y1,0],[x0+3,y1,H],[x0+3,y0,H]],'',fab+' opacity=".95"')+poly([[x0,y0,H],[x0+3,y0,H],[x0+3,y1,H],[x0,y1,H]],'',trim)+poly([[x0,y1,0],[x0+3,y1,0],[x0+3,y1,H],[x0,y1,H]],'',trim);
+    b+=`<g transform="${onSide(x0+3.5,y0+56,42)}"><g transform="scale(.9)"><rect x="-1.2" y="-1.2" width="50.4" height="30.4" fill="#fff"/>${m.art}</g></g>`;
+    b+=`<g transform="${onBack(y0+3.5,x0+49,42)}"><rect x="-.8" y="-.8" width="23.6" height="15.6" fill="#fff"/>${m.flag}</g>`;
+    if(m.kiping){const cols=['#e74c8b','#f1c40f','#27ae60','#e67e22','#9b59b6','#e74c3c'];for(let k=0;k<10;k++){const[X,Y]=P(x0+3+k*7,y0+3,H);b+=`<ellipse cx="${X}" cy="${Y+4}" rx="2.6" ry="4.6" fill="${cols[k%6]}"/>`}
+      for(let k=0;k<10;k++){const[X,Y]=P(x0+3,y0+3+k*7,H);b+=`<ellipse cx="${X}" cy="${Y+4}" rx="2.4" ry="4.2" fill="${cols[(k+3)%6]}"/>`}}
+    if(m.surf)b+=`<g transform="${onSide(x0+4,y1-2,52)}"><ellipse cx="4" cy="26" rx="4" ry="26" fill="#f39c12"/><rect x="3.4" y="2" width="1.2" height="48" fill="#fff"/></g>`;
+    add(b,x0+40,y0);
+    // desk in front of the dog, monitor facing them
+    let t=boxF(x0+8,y0+38,46,22,22,'#c9a27c','#9d7552','#b08661');
+    t+=boxF(x0+34,y0+41,12,4,44,'#2a2f3a','#2a2f3a','#353b48',22);
+    t+=poly([[x0+16,y0+48,22],[x0+30,y0+48,22],[x0+30,y0+57,22],[x0+16,y0+57,22]],'',`fill="#f4f6fa" opacity=".9"`);
+    const[DX,DY]=P(x0+11,y0+50,22);t+=m.desk(DX,DY);
+    const[LX,LY]=P(x0+31,y0+60,12);t+=`<circle class="led" id="led${i}" cx="${LX}" cy="${LY}" r="3.2" fill="#c3c8d2"/>`;
+    dk.g=add(t,x0+31,y0+60);dk.g.depth=P(x0+31,y0+52)[1];
+    // low front wall (left part) and low right wall (back part): the gap at the front-right corner is the way in
+    add(poly([[x0,y1-3,0],[x0+42,y1-3,0],[x0+42,y1-3,LOW],[x0,y1-3,LOW]],'',fab)+poly([[x0,y1,0],[x0+42,y1,0],[x0+42,y1,LOW],[x0,y1,LOW]],'',fab)+poly([[x0,y1-3,LOW],[x0+42,y1-3,LOW],[x0+42,y1,LOW],[x0,y1,LOW]],'',trim)+poly([[x0+42,y1-3,0],[x0+42,y1,0],[x0+42,y1,LOW],[x0+42,y1-3,LOW]],'',trim),x0+21,y1);
+    add(poly([[x1,y0,0],[x1,y0+42,0],[x1,y0+42,H],[x1,y0,H]],'',fab)+poly([[x1-3,y0,H],[x1,y0,H],[x1,y0+42,H],[x1-3,y0+42,H]],'',trim)+poly([[x1-3,y0+42,0],[x1,y0+42,0],[x1,y0+42,H],[x1-3,y0+42,H]],'',trim),x1,y0+30);
+    if(m.parol){const[X,Y]=P(x0+16,y0+14,H+34);const pg=document.createElementNS(NS,'g');pg.setAttribute('class','parol');pg.innerHTML=`<line x1="${X}" y1="${Y-60}" x2="${X}" y2="${Y-13}" stroke="#8a8f98" stroke-width="1"/><g transform="translate(${X},${Y})">${parolArt(0,0,13)}</g>`;document.getElementById('fx').appendChild(pg)}
   });
 }
 
 /* ---------- dogs ---------- */
 const tagsL=document.getElementById('tags'),bubL=document.getElementById('bubbles');
 const toPct=(X,Y)=>[(X-VB.x)/VB.w*100,(Y-VB.y)/VB.h*100];
-const SCALE=1.18,dogs={};
+const SCALE=1.16,dogs={};
 function makeDog(p,i){
   const g=document.createElementNS(NS,'g');g.setAttribute('class','dog');
-  const tag=document.createElement('div');tag.className='tag s-desk';tag.innerHTML=`<i></i>${p.name}<small>${MOTIFS[ORIGIN[p.id]].short}</small>`;tagsL.appendChild(tag);
+  const tag=document.createElement('div');tag.className='tag s-desk';tag.innerHTML=`<i></i>${p.name}`;tagsL.appendChild(tag);
   const bub=document.createElement('div');bub.className='bub';bubL.appendChild(bub);
   const desk={k:'desk',i,spot:DESKS[i].spot};
   const d={...p,g,tag,bub,desk,place:desk,x:desk.spot[0],y:desk.spot[1],path:[],queue:[],phase:Math.random()*6,status:'desk',what:'At desk',updates:0,bubUntil:0,hlUntil:0,nextAt:0,locked:false,led:i};
@@ -452,7 +478,9 @@ function doUpdate(d){
 }
 function goPrinter(d){setStatus(d,'walking','Walking to the printer');walkTo(d,{k:'printer',spot:PRINTER},()=>{const t=pick(['Printing the payroll summary','Picking up signed forms','Scanning documents into the CRM']);setStatus(d,'printer',t);say(d,t);d.nextAt=simT+rnd(5,9);d.back=true})}
 function goBreak(d,mins,why='Coffee break'){const free=BREAK.find(b=>!Object.values(dogs).some(o=>o.place.spot===b));if(!free){d.nextAt=simT+8;return}
-  setStatus(d,'walking','Heading to the break room');walkTo(d,{k:'break',spot:free},()=>{setStatus(d,'break',why);say(d,why==='Lunch'?'Lunch time':pick(['Grabbing a coffee','Quick stretch','Refilling my water']));d.nextAt=simT+mins;d.back=true})}
+  setStatus(d,'walking','Heading to the cafeteria');walkTo(d,{k:'break',spot:free},()=>{setStatus(d,'break',why==='Lunch'?'Lunch in the cafeteria':'Coffee in the cafeteria');say(d,why==='Lunch'?'Lunch time':pick(['Grabbing a coffee from the canteen','Snack break','Refilling my water']));d.nextAt=simT+mins;d.back=true})}
+function goNap(d){const free=NAP.find(b=>!Object.values(dogs).some(o=>o.place.spot===b));if(!free){d.nextAt=simT+6;return}
+  setStatus(d,'walking','Heading to the nap corner');walkTo(d,{k:'nap',spot:free},()=>{setStatus(d,'break','Resting in the nap corner');say(d,'Five-minute rest');d.nextAt=simT+rnd(8,14);d.back=true})}
 function backToDesk(d){d.back=false;setStatus(d,'walking','Walking back to the desk');walkTo(d,d.desk,()=>{setStatus(d,'desk','At desk');d.nextAt=simT+rnd(2,6)})}
 function decide(d){
   if(d.locked||d.path.length)return;
@@ -461,11 +489,12 @@ function decide(d){
   const r=Math.random(),busy=scenario==='deadline';
   if(r<(busy?.74:.55))doUpdate(d);
   else if(r<(busy?.8:.67))goPrinter(d);
-  else if(r<(busy?.86:.8))goBreak(d,rnd(10,18));
+  else if(r<(busy?.86:.77))goBreak(d,rnd(10,18));
+  else if(!busy&&r<.82)goNap(d);
   else{const t=pick(['Reading email','On a phone call','Reviewing yesterday\'s rows','Planning the week']);setStatus(d,'desk',t);d.nextAt=simT+rnd(8,18)}
 }
 function meeting(t0,t1,title,ids){
-  events.push({t:t0,fn:()=>{log(`<em>${title}</em> starts in the meeting room with ${ids.map(i=>dogs[i].name).join(', ')}.`);
+  events.push({t:t0,fn:()=>{log(`<em>${title}</em> starts on the lounge sofa with ${ids.map(i=>dogs[i].name).join(', ')}.`);
     ids.forEach((id,k)=>{const d=dogs[id];d.locked=true;if(d.finish){const f=d.finish;d.finish=null;f()}d.back=false;setStatus(d,'walking','Heading to '+title);walkTo(d,{k:'meet',spot:MEET[k]},()=>{setStatus(d,'meeting',title)})});
     setTimeout(()=>say(dogs[ids[0]],`Let's start: <b>${title}</b>`,'',3000,true),1800/speed)}});
   events.push({t:t1,fn:()=>{log(`<em>${title}</em> wrapped up.`);ids.forEach(id=>{const d=dogs[id];d.locked=false;backToDesk(d)})}});
@@ -483,7 +512,7 @@ function snag(t0,t1,who,helper,problem,fix){
 }
 function buildEvents(){
   events=[];
-  meeting(600,640,'Weekly payroll huddle',['jex','raff','angelica','paul','yolanda']);
+  meeting(600,640,'Payroll huddle',['jex','raff','angelica','paul','yolanda']);
   lunch(720,765,['ira','lizzie','kristene','patricia','angelle','kim']);
   meeting(870,905,'CRM check-in',['hana','jose','kim','randy','liz']);
   if(scenario==='deadline'){
@@ -572,7 +601,7 @@ const pauseB=document.getElementById('pause');
 pauseB.onclick=()=>{paused=!paused;pauseB.setAttribute('aria-pressed',paused);pauseB.textContent=paused?'Play':'Pause'};
 function seg(id,fn){const el=document.getElementById(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset.v)})}
 seg('spd',v=>speed=+v);seg('scn',v=>{scenario=v;restart()});
-[[P(125,14,58),'Meeting room'],[P(125,690),'Break room'],[P(410,0,74),'CRM · live board'],[P(690,70,40),'Printer'],[P(696,440),'Cubicles']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
+[[P(300,S,-8),'Cafeteria'],[P(10,730,104),'Canteen'],[P(740,330),'Lounge'],[P(740,578),'Nap corner'],[P(435,0,64),'CRM · live board'],[P(PRINT_CELL.x0+60,PRINT_CELL.y0+36,58),'Printer']].forEach(([[X,Y],t])=>{const z=document.createElement('div');z.className='tag zone';z.textContent=t;const[l,tp]=toPct(X,Y);z.style.left=l+'%';z.style.top=tp+'%';tagsL.appendChild(z)});
 requestAnimationFrame(t=>{last=t;requestAnimationFrame(frame)});
 })();
 </script>
