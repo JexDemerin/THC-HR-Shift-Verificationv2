@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Respite Care Story</title>
+<meta name="description" content="Together Home Care: an animated respite care story.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FFF8EF; --peach:#FFE3CC; --coral:#F07C5A; --rose:#E85D75; --gold:#F5B841;
+  --teal:#2A9D8F; --navy:#23395B; --ink:#2B2B3A; --soft:#6B6B80; --sky:#DDEFFB; --mint:#DFF3EC;
+  --bg:#1d1b26;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:Nunito,system-ui,sans-serif;color:var(--ink);overflow:hidden}
+.stage-wrap{width:min(100vw - 32px, (100vh - 90px) * .8);aspect-ratio:4/5;position:relative}
+.stage{position:absolute;inset:0;width:1080px;height:1350px;transform-origin:top left;background:var(--cream);border-radius:28px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.controls{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center}
+.controls button{font:800 14px Nunito,sans-serif;border:0;border-radius:999px;padding:10px 18px;background:#fff;color:var(--navy);cursor:pointer}
+.controls button:hover{background:var(--peach)}
+body.rec .controls{display:none}
+body.rec{background:var(--cream)}
+body.rec .stage{border-radius:0;box-shadow:none}
+
+/* progress */
+.progress{position:absolute;top:0;left:0;height:10px;background:linear-gradient(90deg,var(--coral),var(--gold));width:0;z-index:20}
+.brand{position:absolute;bottom:38px;left:0;right:0;text-align:center;font:800 26px Nunito;letter-spacing:.18em;color:var(--navy);opacity:.55;z-index:15;text-transform:uppercase}
+
+/* scenes */
+.scene{position:absolute;inset:0;padding:110px 90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:0;visibility:hidden;transition:opacity .7s ease,visibility 0s .7s}
+.scene.on{opacity:1;visibility:visible;transition:opacity .7s ease}
+.a{opacity:0;transform:translateY(40px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.8,.2,1.15)}
+.scene.on .a{opacity:1;transform:none}
+.d1{transition-delay:.3s!important}.d2{transition-delay:.9s!important}.d3{transition-delay:1.5s!important}
+.d4{transition-delay:2.1s!important}.d5{transition-delay:2.7s!important}.d6{transition-delay:3.3s!important}.d7{transition-delay:3.9s!important}
+
+h1,h2{font-family:Fraunces,Georgia,serif;color:var(--navy);line-height:1.08}
+h1{font-size:92px;font-weight:800}
+h2{font-size:72px;font-weight:800}
+p.big{font-size:44px;line-height:1.35;font-weight:700;color:var(--ink)}
+p.mid{font-size:38px;line-height:1.4;font-weight:600;color:var(--soft)}
+.hl{color:var(--coral)}
+.pill{display:inline-block;background:var(--navy);color:#fff;font:800 30px Nunito;border-radius:999px;padding:14px 30px;letter-spacing:.04em}
+
+/* S1 */
+#s1{background:radial-gradient(circle at 50% 35%,#FFE9D6 0,#FFF8EF 60%)}
+.heart{font-size:150px;animation:beat 1.2s ease-in-out infinite;display:inline-block}
+@keyframes beat{0%,100%{transform:scale(1)}30%{transform:scale(1.15)}60%{transform:scale(.97)}}
+.bubble{background:#fff;border-radius:48px;padding:50px 56px;box-shadow:0 20px 50px rgba(240,124,90,.18);position:relative;margin:40px 0}
+.bubble:after{content:"";position:absolute;bottom:-34px;left:120px;border:22px solid transparent;border-top:36px solid #fff}
+
+/* S2 */
+#s2{background:linear-gradient(180deg,var(--sky),var(--cream))}
+.cards{display:flex;gap:40px;margin-top:60px}
+.card{background:#fff;border-radius:36px;padding:40px 36px;width:400px;box-shadow:0 14px 40px rgba(35,57,91,.12)}
+.card .ico{font-size:90px}
+.card h3{font:800 44px Fraunces,serif;color:var(--navy);margin:10px 0 6px}
+.card p{font-size:30px;color:var(--soft);font-weight:700}
+
+/* S3 */
+#s3{background:#2E3150;color:#fff}
+#s3 h2{color:#fff}
+.moon{font-size:120px;margin-bottom:30px}
+.worry{font-size:46px;font-weight:800;color:#E8E6F5;margin:18px 0;position:relative;display:inline-block}
+.worry:after{content:"";position:absolute;left:-10px;right:-10px;top:52%;height:6px;background:var(--coral);border-radius:4px;transform:scaleX(0);transform-origin:left;transition:transform .6s ease 0s}
+.scene.on .worry.strike:after{transform:scaleX(1);transition-delay:4.6s}
+
+/* S4 */
+#s4{background:linear-gradient(180deg,#FFF1E0,var(--cream))}
+.door-row{display:flex;align-items:flex-end;justify-content:center;gap:30px;height:520px;margin:30px 0 40px}
+.door{width:300px;height:480px;background:#B9785A;border-radius:14px 14px 0 0;position:relative;perspective:900px;box-shadow:inset 0 0 0 16px #8C5640}
+.door .leaf{position:absolute;inset:16px 16px 0;background:#D79A74;transform-origin:left;transition:transform 1.4s ease .8s;border-radius:6px 6px 0 0}
+.door .leaf:after{content:"";position:absolute;right:26px;top:50%;width:22px;height:22px;border-radius:50%;background:var(--gold)}
+.scene.on .door .leaf{transform:rotateY(-75deg)}
+.door .light{position:absolute;inset:16px 16px 0;background:linear-gradient(180deg,#FFF6C8,#FFE38A)}
+.grace{position:absolute;bottom:0;left:50%;transform:translateX(-50%) scale(.6);opacity:0;transition:all 1s ease 1.8s}
+.scene.on .grace{transform:translateX(-50%) scale(1);opacity:1}
+.clock{font:800 64px Fraunces,serif;color:var(--coral)}
+.routine{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+.routine span{background:#fff;border-radius:999px;padding:14px 24px;font-size:28px;font-weight:800;color:var(--navy);box-shadow:0 8px 20px rgba(0,0,0,.07)}
+
+/* S5 split */
+#s5{padding:0;flex-direction:row}
+.half{flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 40px;position:relative}
+.half.left{background:var(--sky)}
+.half.right{background:var(--mint)}
+.half .tag{font:800 26px Nunito;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);margin-bottom:24px}
+.laptop{width:400px;margin:20px 0}
+.screen{background:var(--navy);border-radius:20px 20px 0 0;height:250px;padding:22px;position:relative;overflow:hidden}
+.base{height:22px;background:#B8C4D6;border-radius:0 0 22px 22px;margin:0 -22px}
+.slide-bar{height:20px;border-radius:8px;background:rgba(255,255,255,.25);margin:12px 0}
+.chart{display:flex;align-items:flex-end;gap:14px;height:120px;margin-top:16px}
+.chart i{flex:1;background:var(--gold);border-radius:6px 6px 0 0;height:0;transition:height 1s ease}
+.scene.on .chart i:nth-child(1){height:40%;transition-delay:1s}
+.scene.on .chart i:nth-child(2){height:65%;transition-delay:1.6s}
+.scene.on .chart i:nth-child(3){height:55%;transition-delay:2.2s}
+.scene.on .chart i:nth-child(4){height:95%;transition-delay:2.8s}
+.live{position:absolute;top:16px;right:16px;background:var(--rose);color:#fff;font:800 18px Nunito;padding:4px 12px;border-radius:999px;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.4}}
+.checklist{list-style:none;text-align:left;width:100%;max-width:440px}
+.checklist li{background:#fff;border-radius:24px;padding:22px 24px;margin:16px 0;font-size:31px;font-weight:800;color:var(--navy);display:flex;gap:16px;align-items:center;box-shadow:0 8px 22px rgba(42,157,143,.14)}
+.checklist li b{font-size:44px}
+.time-chip{font:800 54px Fraunces,serif;color:var(--navy);margin-top:20px}
+
+/* S6 tower */
+#s6{background:linear-gradient(180deg,#FFF3E2,#FFE3CC)}
+.tower{display:flex;flex-direction:column-reverse;align-items:center;height:560px;justify-content:flex-start;margin:30px 0}
+.blk{width:150px;height:78px;border-radius:12px;margin-top:-2px;opacity:0;transform:translateY(-500px);box-shadow:inset 0 -8px 0 rgba(0,0,0,.12)}
+.scene.on .blk{animation:drop .6s cubic-bezier(.3,1.4,.5,1) forwards}
+@keyframes drop{to{opacity:1;transform:translateY(0) rotate(var(--r,0deg))}}
+.stars{font-size:70px;opacity:0;transition:opacity .6s ease 4.6s}
+.scene.on .stars{opacity:1}
+
+/* S7 */
+#s7{background:var(--navy)}
+#s7 h1{color:#fff}
+#s7 p.big{color:#FFE3CC}
+#s7 .three{display:flex;gap:28px;margin-top:50px}
+#s7 .three span{background:rgba(255,255,255,.1);color:#fff;border-radius:999px;padding:18px 34px;font:800 38px Nunito}
+
+/* S8 */
+#s8{background:var(--cream)}
+.checks{list-style:none;text-align:left;margin-top:50px}
+.checks li{font-size:40px;font-weight:800;color:var(--navy);margin:26px 0;display:flex;gap:22px;align-items:flex-start}
+.checks li .ck{flex:none;width:58px;height:58px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px}
+
+/* S9 cup */
+#s9{background:radial-gradient(circle at 50% 40%,#FFE9D6 0,#FFF8EF 65%)}
+.cup{width:260px;height:270px;position:relative;margin:20px auto 40px}
+.cup .body{position:absolute;inset:0 0 0 0;border:14px solid var(--navy);border-top:0;border-radius:0 0 90px 90px;overflow:hidden;background:#fff}
+.cup .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(180deg,var(--gold),var(--coral));transition:height 2.4s ease .8s}
+.scene.on .cup .fill{height:85%}
+.cup .handle{position:absolute;right:-74px;top:50px;width:90px;height:120px;border:14px solid var(--navy);border-left:0;border-radius:0 60px 60px 0}
+.cup .steam{position:absolute;top:-96px;left:50%;transform:translateX(-50%);opacity:0;transition:opacity 1s ease 3s}
+.scene.on .cup .steam{opacity:1}
+.cta{margin-top:40px;background:var(--coral);color:#fff;font:800 40px Nunito;padding:26px 50px;border-radius:999px;box-shadow:0 16px 36px rgba(240,124,90,.35)}
+.tags{margin-top:36px;font-size:24px;font-weight:700;color:var(--soft);line-height:1.6;max-width:900px}
+</style>
+</head>
+<body>
+<div class="stage-wrap" id="wrap">
+<div class="stage" id="stage">
+  <div class="progress" id="prog"></div>
+
+  <!-- 1: hook -->
+  <section class="scene" id="s1" data-dur="5000">
+    <div class="heart a d1">💛</div>
+    <div class="bubble a d2"><h1>“Mommy, can<br>Ms. Grace stay<br>longer?”</h1></div>
+    <p class="mid a d4">A respite care story</p>
+  </section>
+
+  <!-- 2: meet Sarah -->
+  <section class="scene" id="s2" data-dur="5500">
+    <h2 class="a d1">Meet Sarah.</h2>
+    <p class="mid a d2" style="margin-top:20px">Working mom. Big day ahead.</p>
+    <div class="cards">
+      <div class="card a d3"><div class="ico">💼</div><h3>10:00 AM</h3><p>Big client presentation</p></div>
+      <div class="card a d4"><div class="ico">🦕</div><h3>Ethan, 6</h3><p>Special needs. Needs attention all day.</p></div>
+    </div>
+  </section>
+
+  <!-- 3: before -->
+  <section class="scene" id="s3" data-dur="6500">
+    <div class="moon a d1">🌙</div>
+    <h2 class="a d1">Before respite care…</h2>
+    <div style="margin-top:50px">
+      <div class="a d2"><span class="worry strike">Rescheduling meetings</span></div>
+      <div class="a d3"><span class="worry strike">Working until midnight</span></div>
+      <div class="a d4"><span class="worry strike">Feeling guilty either way</span></div>
+    </div>
+    <p class="big a d7" style="color:var(--gold);margin-top:60px;transition-delay:5s!important">This morning was different.</p>
+  </section>
+
+  <!-- 4: Grace arrives -->
+  <section class="scene" id="s4" data-dur="6500">
+    <div class="clock a d1">8:30 AM</div>
+    <div class="door-row">
+      <div class="door"><div class="light"></div>
+        <svg class="grace" width="220" height="400" viewBox="0 0 220 400" aria-label="Ms. Grace">
+          <circle cx="110" cy="80" r="62" fill="#6B3E26"/>
+          <circle cx="110" cy="92" r="50" fill="#A86B4C"/>
+          <path d="M80 98 q30 26 60 0" stroke="#3a2016" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <circle cx="92" cy="82" r="6" fill="#3a2016"/><circle cx="128" cy="82" r="6" fill="#3a2016"/>
+          <path d="M40 400 q0-200 70-240 q70 40 70 240z" fill="#2A9D8F"/>
+          <rect x="140" y="250" width="70" height="60" rx="10" fill="#F5B841"/>
+          <text x="175" y="292" font-size="34" text-anchor="middle">🧩</text>
+        </svg>
+      </div>
+    </div>
+    <h2 class="a d3" style="font-size:62px">Ms. Grace arrives with a smile<br><span class="hl">and Ethan's favorite puzzles.</span></h2>
+    <div class="routine">
+      <span class="a d4">🍎 Snack at 10</span><span class="a d5">🤫 Quiet time at 11</span><span class="a d6">🦖 Dinosaur song</span>
+    </div>
+  </section>
+
+  <!-- 5: split screen -->
+  <section class="scene" id="s5" data-dur="8000">
+    <div class="half left">
+      <div class="tag a d1">Home office</div>
+      <h2 class="a d1" style="font-size:52px">Sarah presents</h2>
+      <div class="laptop a d2">
+        <div class="screen"><span class="live">● LIVE</span>
+          <div class="slide-bar" style="width:60%"></div><div class="slide-bar" style="width:40%"></div>
+          <div class="chart"><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="base"></div>
+      </div>
+      <p class="mid a d3" style="font-size:32px">Focused. No interruptions.</p>
+    </div>
+    <div class="half right">
+      <div class="tag a d1">Next room</div>
+      <h2 class="a d1" style="font-size:52px">Ethan is…</h2>
+      <ul class="checklist">
+        <li class="a d2"><b>🧩</b>Doing puzzles</li>
+        <li class="a d3"><b>🥪</b>Snack right on time</li>
+        <li class="a d4"><b>📚</b>Reading dinosaur books</li>
+        <li class="a d5"><b>😊</b>Laughing, safe &amp; cared for</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6: noon tower -->
+  <section class="scene" id="s6" data-dur="7000">
+    <div class="clock a d1">12:00 PM</div>
+    <h2 class="a d1" style="font-size:58px;margin-top:10px">Laptop closed. Presentation done.<br><span class="hl">No guilt.</span></h2>
+    <div class="tower" id="tower"></div>
+    <div class="stars">✨ 🏆 ✨</div>
+    <p class="big a" style="transition-delay:4.8s!important">His tallest tower <em>ever</em>.</p>
+  </section>
+
+  <!-- 7: message -->
+  <section class="scene" id="s7" data-dur="6500">
+    <h1 class="a d1">That's what<br>respite care is for.</h1>
+    <p class="big a d3" style="margin-top:46px">It doesn't replace you.<br>It gives you room to…</p>
+    <div class="three"><span class="a d4">work</span><span class="a d5">rest</span><span class="a d6">recharge</span></div>
+  </section>
+
+  <!-- 8: caregivers -->
+  <section class="scene" id="s8" data-dur="6500">
+    <div class="pill a d1">TOGETHER HOME CARE</div>
+    <h2 class="a d1" style="margin-top:30px">Our caregivers</h2>
+    <ul class="checks">
+      <li class="a d2"><span class="ck">✓</span>Trained, screened &amp; compassionate</li>
+      <li class="a d3"><span class="ck">✓</span>Follow your child's routine &amp; care plan</li>
+      <li class="a d4"><span class="ck">✓</span>Flexible: a few hours, a full day, or a regular schedule</li>
+    </ul>
+  </section>
+
+  <!-- 9: CTA -->
+  <section class="scene" id="s9" data-dur="8000">
+    <div class="cup a d1"><svg class="steam" width="120" height="80" viewBox="0 0 120 80"><g fill="none" stroke="#F07C5A" stroke-width="7" stroke-linecap="round"><path d="M30 75 q-14-18 0-36 q14-18 0-36"/><path d="M60 75 q-14-18 0-36 q14-18 0-36"/><path d="M90 75 q-14-18 0-36 q14-18 0-36"/></g></svg><div class="body"><div class="fill"></div></div><div class="handle"></div></div>
+    <h2 class="a d2" style="font-size:66px">You can't pour from an empty cup.</h2>
+    <p class="big a d3" style="margin-top:20px">Let us help you <span class="hl">refill yours.</span> 💛</p>
+    <div class="cta a d4">📞 Message us today</div>
+    <p class="tags a d6">#RespiteCare #TogetherHomeCare #WorkingParents #SpecialNeedsParenting #PeaceOfMind</p>
+  </section>
+
+  <div class="brand">Together Home Care</div>
+</div>
+</div>
+
+<div class="controls">
+  <button id="replay">↺ Replay</button>
+  <button id="pause">❚❚ Pause</button>
+</div>
+
+<script>
+(function(){
+  const stage=document.getElementById('stage'), wrap=document.getElementById('wrap');
+  const scenes=[...document.querySelectorAll('.scene')];
+  const prog=document.getElementById('prog');
+  const total=scenes.reduce((s,e)=>s+ +e.dataset.dur,0);
+  const params=new URLSearchParams(location.search);
+  const rec=params.has('rec');
+  if(rec)document.body.classList.add('rec');
+
+  function fit(){
+    if(rec){wrap.style.width='1080px';stage.style.transform='none';return;}
+    stage.style.transform='scale('+(wrap.clientWidth/1080)+')';
+  }
+  addEventListener('resize',fit);fit();
+
+  // tower blocks
+  const colors=['#F07C5A','#F5B841','#2A9D8F','#E85D75','#5B8DEF','#F07C5A','#F5B841'];
+  const tower=document.getElementById('tower');
+  colors.forEach((c,i)=>{const b=document.createElement('div');b.className='blk';
+    b.style.background=c;b.style.animationDelay=(1.2+i*.42)+'s';
+    b.style.setProperty('--r',((i%2?1:-1)*(i*.6))+'deg');b.style.width=(170-i*8)+'px';tower.appendChild(b);});
+
+  let idx=-1, timer=null, start=0, elapsedBefore=0, paused=false, sceneStart=0, sceneRemain=0;
+  function show(i){
+    scenes.forEach(s=>s.classList.remove('on'));
+    void stage.offsetWidth;
+    idx=i; scenes[i].classList.add('on');
+    sceneStart=performance.now(); sceneRemain=+scenes[i].dataset.dur;
+    schedule();
+  }
+  function schedule(){
+    clearTimeout(timer);
+    timer=setTimeout(()=>{
+      if(idx+1<scenes.length) show(idx+1);
+      else if(!rec) show(0);
+      else { window.__done=true; }
+    },sceneRemain);
+  }
+  function elapsed(){
+    let t=0;for(let j=0;j<idx;j++)t+= +scenes[j].dataset.dur;
+    const d=+scenes[idx].dataset.dur;
+    return t+(paused? d-sceneRemain : Math.min(d,(d-sceneRemain)+(performance.now()-sceneStart)));
+  }
+  (function tick(){ if(idx>=0) prog.style.width=(elapsed()/total*100)+'%'; requestAnimationFrame(tick); })();
+
+  document.getElementById('replay').onclick=()=>{paused=false;setPausedUI();show(0);};
+  const pb=document.getElementById('pause');
+  function setPausedUI(){pb.textContent=paused?'▶ Play':'❚❚ Pause';stage.style.setProperty('--ps',paused?'paused':'running');
+    document.querySelectorAll('*').forEach(e=>e.style.animationPlayState=paused?'paused':'');}
+  pb.onclick=()=>{
+    if(!paused){clearTimeout(timer);sceneRemain-= performance.now()-sceneStart;paused=true;}
+    else{paused=false;sceneStart=performance.now();schedule();}
+    setPausedUI();
+  };
+  window.__total=total;
+  show(0);
+})();
+</script>
+</body>
+</html>
