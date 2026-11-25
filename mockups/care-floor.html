@@ -176,9 +176,9 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 const BREEDS={
  golden:{n:'Golden Retriever',fur:'#d9a24a',ear:'flop',earC:'#c0832c',muz:'#ecc77f',tail:'fluffy'},
  bully:{n:'American Bully',fur:'#7f8792',ear:'rose',earC:'#6c737e',muz:'#c4c9d1',blaze:'#f4f4f2',tail:'thin',wide:1,size:1.08,jaw:1},
- maltese:{n:'Maltese',fur:'#fbfaf7',ear:'hair',earC:'#f0ebe2',muz:'#ffffff',fluff:1,bow:'#ef8fb3',tail:'fluffy',size:.9},
- samoyed:{n:'Samoyed',fur:'#ffffff',ear:'point',earC:'#ffffff',muz:'#ffffff',fluff:1.25,tail:'fluffy',smile:1},
- spitz:{n:'Japanese Spitz',fur:'#fdfdfb',ear:'point',earC:'#fdfdfb',muz:'#ffffff',fluff:1.1,tail:'fluffy',size:.94,smile:1},
+ maltese:{n:'Maltese',fur:'#fbfaf7',ear:'hair',earC:'#e9c39a',muz:'#ffffff',fluff:1,bow:'#ef8fb3',tail:'fluffy',size:.9},
+ samoyed:{n:'Samoyed',fur:'#ffffff',ear:'point',earC:'#efd9b2',crown:'#f2dfbd',muz:'#ffffff',fluff:1.25,tail:'fluffy',smile:1},
+ spitz:{n:'Japanese Spitz',fur:'#fdfdfb',ear:'point',earC:'#fdfdfb',eyePatch:'#c98a4e',dot:'#c98a4e',muz:'#ffffff',fluff:1.1,tail:'fluffy',size:.94,smile:1},
  shihtzu:{n:'Shih Tzu',fur:'#f3ece0',ear:'hair',earC:'#c99a5b',muz:'#fbf6ee',patch:'#c99a5b',fluff:.9,bow:'#e05a6b',tail:'fluffy',size:.9,flat:1},
  husky:{n:'Husky',fur:'#6f7884',ear:'point',earC:'#5e6673',muz:'#f2f4f7',mask:'#f2f4f7',eye:'#3d8fd6',tail:'fluffy'},
  mastiff:{n:'Mastiff',fur:'#d5b07a',ear:'drop',earC:'#4a3b2c',muz:'#2f2620',tail:'thin',wide:1,size:1.16,jaw:1,wrinkle:1},
@@ -243,6 +243,9 @@ function dogSVG(bid,outfit){
   if(b.stripe)o.push(`<path d="M${-HR*.12} ${hy-HR*.95} L${HR*.12} ${hy-HR*.95} L${HR*.3} ${hy+HR*.2} L${-HR*.3} ${hy+HR*.2}Z" fill="${b.stripe}"/>`);
   if(b.blaze)o.push(`<path d="M${-HR*.1} ${hy-HR*.8} L${HR*.1} ${hy-HR*.8} L${HR*.32} ${hy+HR*.25} L${-HR*.32} ${hy+HR*.25}Z" fill="${b.blaze}"/><ellipse cx="0" cy="${top+TH*.42}" rx="${4*s}" ry="${2.4*s}" fill="${b.blaze}" opacity="0"/>`);
   if(b.cap)o.push(`<path d="M${-HR*.85} ${hy-HR*.35} Q0 ${hy-HR*1.25} ${HR*.85} ${hy-HR*.35} Q0 ${hy-HR*.6} ${-HR*.85} ${hy-HR*.35}Z" fill="${b.cap}" opacity=".55"/>`);
+  if(b.crown)o.push(`<path d="M${-HR*.75} ${hy-HR*.45} Q0 ${hy-HR*1.15} ${HR*.75} ${hy-HR*.45} Q0 ${hy-HR*.7} ${-HR*.75} ${hy-HR*.45}Z" fill="${b.crown}"/>`);
+  if(b.eyePatch)o.push(`<ellipse cx="${-HR*.4}" cy="${hy-HR*.12}" rx="${HR*.34}" ry="${HR*.38}" fill="${b.eyePatch}"/>`);
+  if(b.dot)o.push(`<circle cx="${HR*.32}" cy="${hy-HR*.62}" r="${HR*.12}" fill="${b.dot}"/>`);
   if(b.patch)[-1,1].forEach(sx=>o.push(`<ellipse cx="${sx*HR*.42}" cy="${hy-HR*.12}" rx="${HR*.36}" ry="${HR*.4}" fill="${b.patch}"/>`));
   if(b.wrinkle)o.push(`<path d="M${-HR*.35} ${hy-HR*.55} q${HR*.35} ${-HR*.15} ${HR*.7} 0 M${-HR*.25} ${hy-HR*.42} q${HR*.25} ${-HR*.1} ${HR*.5} 0" stroke="rgba(0,0,0,.25)" stroke-width="${.9*s}" fill="none"/>`);
   // eyes
